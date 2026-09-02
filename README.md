@@ -2,6 +2,15 @@
 
 CRM para inmobiliarias. React 19 + Vite + Tailwind v4 + React Router.
 
+**En vivo:** https://propmatch-crm-taupe.vercel.app
+**Repo:** https://github.com/Valentinbarrera/propmatch-crm (privado)
+
+Cada push a `master` redespliega solo.
+
+> El deploy es publico: cualquiera con el link entra, porque el login todavia
+> no valida nada (ver mas abajo). Los datos son de ejemplo, no hay informacion
+> real de clientes.
+
 Porteado del prototipo de Figma Make `PropMatch-SaaS-CRM-Dashboard`,
 conservando el sistema visual completo.
 
