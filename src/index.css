@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — valores extraídos 1:1 del prototipo de Figma Make.
+   Ningún color cambia: lo único que cambia es que ahora viven en un solo lugar
+   en vez de estar repetidos inline en cada archivo.
+   ──────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Marca */
+  --color-brand-purple: #7C3AED;
+  --color-brand-pink: #EC4899;
+  --color-brand-violet: #A855F7;
+  --color-brand-indigo: #8B5CF6;
+
+  /* Superficies */
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #FDFCFF;   /* fondo de headers y sidebar */
+  --color-lavender: #F5F3FF;        /* fondo de chips / search / iconos */
+  --color-lilac: #EDE9FE;           /* borde estándar de cards */
+  --color-light-pink: #FDE7F5;
+
+  /* Divisores */
+  --color-divider: #F3F0FF;
+  --color-divider-soft: #F9F7FF;
+
+  /* Texto */
+  --color-ink: #1F0A3C;             /* títulos */
+  --color-ink-soft: #7C6A99;        /* subtítulos */
+  --color-lilac-text: #A78BFA;      /* labels de tabla, metadatos */
+  --color-lilac-faint: #C4B5FD;     /* placeholders, timestamps */
+
+  /* Estados */
+  --color-state-green-bg: #F0FDF4;
+  --color-state-green-text: #16A34A;
+  --color-state-green-border: #BBF7D0;
+  --color-state-amber-bg: #FFFBEB;
+  --color-state-amber-text: #D97706;
+  --color-state-amber-border: #FDE68A;
+  --color-state-blue-bg: #EFF6FF;
+  --color-state-blue-text: #2563EB;
+  --color-state-blue-border: #BFDBFE;
+}
+
+@layer theme {
+  :root {
+    /* Gradientes de marca — usados en botones, avatares y scores */
+    --gradient-brand: linear-gradient(135deg, #7C3AED, #EC4899);
+    --gradient-brand-h: linear-gradient(90deg, #7C3AED, #EC4899);
+    --gradient-brand-wide: linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #EC4899 100%);
+    --gradient-nav-active: linear-gradient(135deg, #EDE9FE 0%, #FDE7F5 100%);
+    --gradient-soft: linear-gradient(135deg, #F5F3FF, #FDE7F5);
+
+    /* Sombras */
+    --shadow-card: 0 1px 8px rgba(124, 58, 237, 0.06);
+    --shadow-card-lg: 0 2px 12px rgba(124, 58, 237, 0.07);
+    --shadow-cta: 0 4px 14px rgba(124, 58, 237, 0.3);
+    --shadow-pop: 0 8px 24px rgba(124, 58, 237, 0.12);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  color: var(--color-ink);
+}
+
+/* El prototipo ocultaba TODAS las barras de scroll (`scrollbar-width: none`).
+   En un CRM con tablas largas y un kanban horizontal eso esconde que hay más
+   contenido, así que las dejamos visibles pero finas y en tono de marca. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #DDD6FE transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #DDD6FE;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #C4B5FD;
+}
+
+/* Utilidades del texto con gradiente (se repetía inline en ~40 lugares) */
+.text-gradient-brand {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.text-gradient-brand-h {
+  background: var(--gradient-brand-h);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
