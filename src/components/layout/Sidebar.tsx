@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { useAuth } from "@/features/auth/AuthProvider";
-import { usePendingMatchCount } from "@/features/matches/usePendingMatchCount";
+import { useStore } from "@/data/store";
 import {
   AgendaIcon,
   ContactsIcon,
@@ -10,7 +9,7 @@ import {
   PropertiesIcon,
   ReportesIcon,
   SettingsIcon,
-  LogoutIcon,
+  ChevronRightIcon,
   type IconProps,
 } from "@/components/ui/icons";
 
@@ -32,8 +31,8 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const { profile, agency, signOut } = useAuth();
-  const pendingMatches = usePendingMatchCount();
+  const { profile, agency, matches } = useStore();
+  const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
 
   return (
     <aside
@@ -60,7 +59,7 @@ export function Sidebar() {
               Match
             </span>
           </div>
-          {agency && (
+          {agency.name && (
             <p className="text-xs truncate -mt-0.5" style={{ color: "#A78BFA" }}>
               {agency.name}
             </p>
@@ -133,27 +132,22 @@ export function Sidebar() {
 
       {/* Pie */}
       <div className="px-3 pb-4 space-y-0.5 border-t pt-4" style={{ borderColor: "#EDE9FE" }}>
-        <NavLink
-          to="/configuracion"
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all"
-          style={({ isActive }) =>
-            isActive
-              ? { background: "var(--gradient-nav-active)", color: "#7C3AED", fontWeight: 600 }
-              : { color: "#6B7280", fontWeight: 500 }
-          }
+        {/* Configuración todavía no tiene pantalla; se deja el ítem visible
+            como en el prototipo, pero deshabilitado en lugar de llevar a una
+            ruta que no existe. */}
+        <button
+          disabled
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left opacity-60 cursor-not-allowed"
+          style={{ color: "#6B7280", fontWeight: 500 }}
         >
-          {({ isActive }) => (
-            <>
-              <span
-                className="w-8 h-8 flex items-center justify-center rounded-lg"
-                style={isActive ? { background: "var(--gradient-brand)" } : { background: "#F3F4F6" }}
-              >
-                <SettingsIcon size={16} color={isActive ? "#fff" : "#9CA3AF"} />
-              </span>
-              <span>Configuración</span>
-            </>
-          )}
-        </NavLink>
+          <span
+            className="w-8 h-8 flex items-center justify-center rounded-lg"
+            style={{ background: "#F3F4F6" }}
+          >
+            <SettingsIcon size={16} color="#9CA3AF" />
+          </span>
+          <span>Configuración</span>
+        </button>
 
         {/* Usuario */}
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-violet-50">
@@ -161,28 +155,21 @@ export function Sidebar() {
             className="w-8 h-8 rounded-full flex items-center justify-center text-xs flex-shrink-0"
             style={{ background: "var(--gradient-brand)", color: "white", fontWeight: 700 }}
           >
-            {profile?.initials ?? "?"}
+            {profile.initials}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm truncate" style={{ color: "#1F2937", fontWeight: 600 }}>
-              {profile?.full_name ?? "—"}
+              {profile.full_name}
             </p>
             <p className="text-xs truncate" style={{ color: "#9CA3AF" }}>
-              {profile?.role === "owner"
+              {profile.role === "owner"
                 ? "Dueño"
-                : profile?.role === "admin"
+                : profile.role === "admin"
                   ? "Administrador"
                   : "Agente inmobiliario"}
             </p>
           </div>
-          <button
-            onClick={signOut}
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
-            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-violet-100 flex-shrink-0"
-          >
-            <LogoutIcon size={14} color="#C4B5FD" />
-          </button>
+          <ChevronRightIcon size={14} />
         </div>
       </div>
     </aside>

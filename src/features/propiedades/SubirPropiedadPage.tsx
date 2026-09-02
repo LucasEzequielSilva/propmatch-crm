@@ -1,9 +1,218 @@
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { EmptyState } from "@/components/ui/states";
+import { Card } from "@/components/ui/Card";
+import {
+  CheckIcon,
+  HomeIcon,
+  MapPinIcon,
+  MatchesSolidIcon,
+  PlusIcon,
+  StarIcon,
+} from "@/components/ui/icons";
+import { useStore, type NewPropertyInput } from "@/data/store";
+import { FEATURE_CHIPS, ZONES } from "@/data/seed";
+import { computeMatch, MATCH_THRESHOLD } from "@/lib/matching";
+import { PROPERTY_STATUS_LABEL, PROPERTY_TYPE_LABEL, money } from "@/lib/format";
+import type {
+  ClientProfile,
+  CurrencyCode,
+  OperationType,
+  Property,
+  PropertyStatus,
+  PropertyType,
+} from "@/types/db";
+
+const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
+const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
+const OPERATIONS: { value: OperationType; label: string }[] = [
+  { value: "venta", label: "Venta" },
+  { value: "alquiler", label: "Alquiler" },
+  { value: "alquiler_temporal", label: "Temporal" },
+];
+const CLIENT_PROFILES: { value: ClientProfile; label: string }[] = [
+  { value: "inversor", label: "Inversor" },
+  { value: "primera_vivienda", label: "Primera vivienda" },
+  { value: "familia", label: "Familia" },
+  { value: "estudiante", label: "Estudiante" },
+  { value: "profesional", label: "Profesional" },
+];
+
+const MAX_PHOTO_MB = 10;
 
 export default function SubirPropiedadPage() {
   const navigate = useNavigate();
+  const { addProperty, profiles, profile, requirements } = useStore();
+
+  // Bloque 1 — información principal
+  const [type, setType] = useState<PropertyType>("casa");
+  const [operation, setOperation] = useState<OperationType>("venta");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  // Bloque 2 — ubicación
+  const [street, setStreet] = useState("");
+  const [streetNumber, setStreetNumber] = useState("");
+  const [locality, setLocality] = useState("City Bell");
+  const [province, setProvince] = useState("Buenos Aires");
+
+  // Bloque 3 — características
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [surfaceTotal, setSurfaceTotal] = useState("");
+  const [surfaceCovered, setSurfaceCovered] = useState("");
+  const [bedrooms, setBedrooms] = useState(3);
+  const [bathrooms, setBathrooms] = useState(2);
+  const [garages, setGarages] = useState(1);
+  const [age, setAge] = useState("");
+
+  // Bloque 4 — fotos
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  // Bloque 5 — comercial
+  const [expenses, setExpenses] = useState("");
+  const [taxes, setTaxes] = useState("");
+  const [commission, setCommission] = useState("3");
+  const [status, setStatus] = useState<PropertyStatus>("disponible");
+  const [agentId, setAgentId] = useState(profile.id);
+
+  // Bloque 6 — preferencias de match
+  const [clientProfiles, setClientProfiles] = useState<Set<ClientProfile>>(new Set(["familia"]));
+  const [features, setFeatures] = useState<Set<string>>(new Set(["Jardín", "Cochera"]));
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [showExit, setShowExit] = useState(false);
+
+  const touched =
+    title.trim() !== "" || description.trim() !== "" || price.trim() !== "" || photos.length > 0;
+
+  /**
+   * Potencial de match en vivo.
+   *
+   * En el prototipo este bloque decía "Alto · podría coincidir con 18 contactos"
+   * como texto fijo. Acá corre el mismo motor que usa la pantalla de Matches
+   * contra los requerimientos reales, mientras se completa el formulario.
+   */
+  const potential = useMemo(() => {
+    const priceNum = Number(price) || null;
+    if (!priceNum) return null;
+
+    const draft: Property = {
+      id: "draft",
+      agency_id: "",
+      owner_agent_id: agentId,
+      owner_contact_id: null,
+      title,
+      description,
+      type,
+      operation,
+      status: "disponible",
+      street,
+      street_number: streetNumber,
+      locality,
+      province,
+      zone: locality,
+      lat: null,
+      lng: null,
+      price: priceNum,
+      currency,
+      expenses: null,
+      taxes: null,
+      commission_pct: null,
+      surface_total: Number(surfaceTotal) || null,
+      surface_covered: Number(surfaceCovered) || null,
+      rooms: bedrooms + 1,
+      bedrooms,
+      bathrooms,
+      garages,
+      age_years: null,
+      features: [...features],
+      is_featured: false,
+      published_to_marketplace: false,
+      published_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const hits = requirements
+      .filter((r) => r.is_active && r.operation === operation)
+      .map((r) => computeMatch(r, draft).score)
+      .filter((s) => s >= MATCH_THRESHOLD);
+
+    return {
+      count: hits.length,
+      best: hits.length ? Math.max(...hits) : 0,
+      level: hits.length >= 6 ? "Alto" : hits.length >= 3 ? "Medio" : hits.length ? "Bajo" : "Sin coincidencias",
+    };
+  }, [
+    price, currency, type, operation, locality, province, street, streetNumber,
+    surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, features,
+    requirements, title, description, agentId,
+  ]);
+
+  function validate(): boolean {
+    const e: Record<string, string> = {};
+    if (!title.trim()) e.title = "El título es obligatorio";
+    if (!price.trim()) e.price = "El precio es obligatorio";
+    else if (Number.isNaN(Number(price))) e.price = "El precio debe ser un número";
+    if (!street.trim()) e.street = "La dirección es obligatoria";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function handleSave() {
+    if (!validate()) {
+      setToast({ kind: "error", text: "Revisá los campos marcados e intentá nuevamente." });
+      return;
+    }
+
+    const input: NewPropertyInput = {
+      title: title.trim(),
+      description: description.trim() || null,
+      type,
+      operation,
+      status,
+      street: street.trim() || null,
+      street_number: streetNumber.trim() || null,
+      locality,
+      province,
+      price: Number(price),
+      currency,
+      expenses: expenses ? Number(expenses) : null,
+      taxes: taxes ? Number(taxes) : null,
+      commission_pct: commission ? Number(commission) : null,
+      surface_total: surfaceTotal ? Number(surfaceTotal) : null,
+      surface_covered: surfaceCovered ? Number(surfaceCovered) : null,
+      bedrooms,
+      bathrooms,
+      garages,
+      age_years: age ? Number(age) : null,
+      features: [...features],
+      owner_agent_id: agentId,
+      photos,
+    };
+
+    addProperty(input);
+    setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
+    setTimeout(() => navigate("/propiedades"), 900);
+  }
+
+  function addFiles(files: FileList | null) {
+    if (!files) return;
+    const accepted: string[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+        setToast({ kind: "error", text: `"${file.name}" supera los ${MAX_PHOTO_MB} MB.` });
+        continue;
+      }
+      accepted.push(URL.createObjectURL(file));
+    }
+    if (accepted.length) setPhotos((prev) => [...prev, ...accepted]);
+  }
 
   return (
     <>
@@ -12,14 +221,742 @@ export default function SubirPropiedadPage() {
         breadcrumb={["Propiedades", "Nueva propiedad"]}
         subtitle="Agregá una nueva propiedad a tu cartera."
         compact
-      />
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
-        <EmptyState
-          title="Pendiente de conexión"
-          description="El formulario del prototipo se conecta a properties, property_photos y property_match_prefs."
-          action={{ label: "Volver a Propiedades", onClick: () => navigate("/propiedades") }}
-        />
+      >
+        <button
+          onClick={() => (touched ? setShowExit(true) : navigate("/propiedades"))}
+          className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
+          style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSave}
+          className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+          style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
+        >
+          Guardar propiedad
+        </button>
+      </AppHeader>
+
+      <div className="flex-1 overflow-y-auto px-8 pb-28">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+          <div className="space-y-6 min-w-0">
+            {/* Bloque 1 */}
+            <Section title="Información de la propiedad" icon={<HomeIcon size={16} color="#7C3AED" />}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Tipo de propiedad">
+                  <select value={type} onChange={(e) => setType(e.target.value as PropertyType)} className={selectClass}>
+                    {PROP_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {PROPERTY_TYPE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Operación">
+                  <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "#F5F3FF" }}>
+                    {OPERATIONS.map((op) => (
+                      <button
+                        key={op.value}
+                        type="button"
+                        onClick={() => setOperation(op.value)}
+                        className="flex-1 px-3 py-1.5 rounded-lg text-sm transition-all"
+                        style={
+                          operation === op.value
+                            ? {
+                                background: "var(--gradient-brand)",
+                                color: "white",
+                                fontWeight: 600,
+                                boxShadow: "0 2px 8px rgba(124,58,237,0.25)",
+                              }
+                            : { color: "#7C6A99", fontWeight: 500 }
+                        }
+                      >
+                        {op.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              </div>
+
+              <Field label="Título de la propiedad" error={errors.title}>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Casa moderna con jardín en City Bell"
+                  className={inputClass(!!errors.title)}
+                />
+              </Field>
+
+              <Field label="Descripción">
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Describí las principales características de la propiedad…"
+                  className={`${inputClass(false)} resize-none`}
+                />
+              </Field>
+            </Section>
+
+            {/* Bloque 2 */}
+            <Section title="Ubicación" icon={<MapPinIcon size={16} color="#7C3AED" />}>
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="sm:col-span-3">
+                  <Field label="Dirección" error={errors.street}>
+                    <input
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      placeholder="Calle 13"
+                      className={inputClass(!!errors.street)}
+                    />
+                  </Field>
+                </div>
+                <Field label="Número">
+                  <input
+                    value={streetNumber}
+                    onChange={(e) => setStreetNumber(e.target.value)}
+                    placeholder="450"
+                    className={inputClass(false)}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Localidad">
+                  <select value={locality} onChange={(e) => setLocality(e.target.value)} className={selectClass}>
+                    {ZONES.map((z) => (
+                      <option key={z} value={z}>
+                        {z}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Provincia">
+                  <input
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value)}
+                    className={inputClass(false)}
+                  />
+                </Field>
+              </div>
+
+              {/* Mapa: placeholder visual, igual que en el prototipo */}
+              <div
+                className="rounded-xl overflow-hidden relative h-40 flex items-center justify-center"
+                style={{
+                  background:
+                    "repeating-linear-gradient(45deg, #F9F7FF, #F9F7FF 12px, #F5F3FF 12px, #F5F3FF 24px)",
+                  border: "1px solid #EDE9FE",
+                }}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ background: "var(--gradient-brand)", boxShadow: "0 4px 14px rgba(124,58,237,0.35)" }}
+                  >
+                    <MapPinIcon size={18} color="white" />
+                  </div>
+                  <span
+                    className="text-xs px-3 py-1 rounded-full"
+                    style={{ background: "white", color: "#7C3AED", fontWeight: 600, border: "1px solid #EDE9FE" }}
+                  >
+                    {locality}, {province}
+                  </span>
+                </div>
+              </div>
+            </Section>
+
+            {/* Bloque 3 */}
+            <Section title="Características" icon={<HomeIcon size={16} color="#7C3AED" />}>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <Field label="Precio" error={errors.price}>
+                    <input
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
+                      inputMode="numeric"
+                      placeholder="185000"
+                      className={inputClass(!!errors.price)}
+                    />
+                  </Field>
+                </div>
+                <Field label="Moneda">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+                    className={selectClass}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="ARS">ARS</option>
+                  </select>
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Superficie total (m²)">
+                  <input
+                    value={surfaceTotal}
+                    onChange={(e) => setSurfaceTotal(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder="220"
+                    className={inputClass(false)}
+                  />
+                </Field>
+                <Field label="Superficie cubierta (m²)">
+                  <input
+                    value={surfaceCovered}
+                    onChange={(e) => setSurfaceCovered(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder="180"
+                    className={inputClass(false)}
+                  />
+                </Field>
+                <Field label="Antigüedad (años)">
+                  <input
+                    value={age}
+                    onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder="0"
+                    className={inputClass(false)}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Stepper label="Dormitorios" value={bedrooms} onChange={setBedrooms} />
+                <Stepper label="Baños" value={bathrooms} onChange={setBathrooms} />
+                <Stepper label="Cocheras" value={garages} onChange={setGarages} />
+              </div>
+            </Section>
+
+            {/* Bloque 4 */}
+            <Section title="Fotos de la propiedad" icon={<StarIcon size={16} color="#7C3AED" />}>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  addFiles(e.dataTransfer.files);
+                }}
+                onClick={() => fileInput.current?.click()}
+                className="rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center cursor-pointer transition-all"
+                style={{
+                  borderColor: dragOver ? "#7C3AED" : "#DDD6FE",
+                  background: dragOver ? "#F5F3FF" : "#FDFCFF",
+                }}
+              >
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  hidden
+                  onChange={(e) => addFiles(e.target.files)}
+                />
+                <div
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+                  style={{ background: "var(--gradient-soft)", border: "1px solid #EDE9FE" }}
+                >
+                  <StarIcon size={20} color="#7C3AED" />
+                </div>
+                <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                  Arrastrá las fotos acá
+                </p>
+                <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
+                  o <span style={{ color: "#7C3AED", fontWeight: 600 }}>seleccionar archivos</span>
+                </p>
+                <p className="text-xs mt-2" style={{ color: "#C4B5FD" }}>
+                  JPG, PNG o WEBP · Máximo {MAX_PHOTO_MB} MB
+                </p>
+              </div>
+
+              {photos.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+                  {photos.map((url, idx) => (
+                    <div
+                      key={url}
+                      className="relative rounded-xl overflow-hidden group"
+                      style={{ aspectRatio: "3/2", background: "#F5F3FF" }}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      {idx === 0 && (
+                        <span
+                          className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full"
+                          style={{
+                            background: "var(--gradient-brand)",
+                            color: "white",
+                            fontWeight: 700,
+                            fontSize: 10,
+                          }}
+                        >
+                          Portada
+                        </span>
+                      )}
+                      <div className="absolute inset-x-2 bottom-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {idx !== 0 && (
+                          <button
+                            onClick={() =>
+                              setPhotos((prev) => [prev[idx], ...prev.filter((_, i) => i !== idx)])
+                            }
+                            className="flex-1 py-1 rounded-lg text-xs backdrop-blur-sm"
+                            style={{ background: "rgba(255,255,255,0.9)", color: "#7C3AED", fontWeight: 600 }}
+                          >
+                            Portada
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                          className="flex-1 py-1 rounded-lg text-xs backdrop-blur-sm"
+                          style={{ background: "rgba(255,255,255,0.9)", color: "#E11D48", fontWeight: 600 }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Bloque 5 */}
+            <Section title="Información comercial" icon={<HomeIcon size={16} color="#7C3AED" />}>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Expensas">
+                  <input
+                    value={expenses}
+                    onChange={(e) => setExpenses(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder="45000"
+                    className={inputClass(false)}
+                  />
+                </Field>
+                <Field label="Impuestos">
+                  <input
+                    value={taxes}
+                    onChange={(e) => setTaxes(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder="12000"
+                    className={inputClass(false)}
+                  />
+                </Field>
+                <Field label="Comisión (%)">
+                  <input
+                    value={commission}
+                    onChange={(e) => setCommission(e.target.value.replace(/[^\d.]/g, ""))}
+                    inputMode="decimal"
+                    className={inputClass(false)}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Estado de la propiedad">
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as PropertyStatus)}
+                    className={selectClass}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {PROPERTY_STATUS_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Agente responsable">
+                  <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectClass}>
+                    {profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </Section>
+          </div>
+
+          {/* Columna derecha: preferencias de match */}
+          <div className="space-y-6 lg:sticky lg:top-0">
+            <Section
+              title="Preferencias para Match"
+              icon={<MatchesSolidIcon size={16} color="#7C3AED" />}
+              subtitle="Definí qué tipo de cliente podría encajar mejor con esta propiedad."
+            >
+              <Field label="Tipo de cliente">
+                <div className="flex flex-wrap gap-2">
+                  {CLIENT_PROFILES.map((cp) => {
+                    const active = clientProfiles.has(cp.value);
+                    return (
+                      <Chip
+                        key={cp.value}
+                        label={cp.label}
+                        active={active}
+                        onClick={() =>
+                          setClientProfiles((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(cp.value)) next.delete(cp.value);
+                            else next.add(cp.value);
+                            return next;
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              </Field>
+
+              <Field label="Características de la propiedad">
+                <div className="flex flex-wrap gap-2">
+                  {FEATURE_CHIPS.map((f) => (
+                    <Chip
+                      key={f}
+                      label={f}
+                      active={features.has(f)}
+                      onClick={() =>
+                        setFeatures((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(f)) next.delete(f);
+                          else next.add(f);
+                          return next;
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </Field>
+
+              {/* Potencial de match en vivo */}
+              <div
+                className="rounded-xl p-4"
+                style={{ background: "var(--gradient-soft)", border: "1px solid #EDE9FE" }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "var(--gradient-brand)" }}
+                  >
+                    <MatchesSolidIcon size={14} />
+                  </div>
+                  <div>
+                    <p
+                      className="text-xs uppercase"
+                      style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
+                    >
+                      Potencial de match
+                    </p>
+                    <p className="text-sm text-gradient-brand-h" style={{ fontWeight: 800 }}>
+                      {potential?.level ?? "Cargá el precio"}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs" style={{ color: "#7C6A99" }}>
+                  {potential === null
+                    ? "Completá el precio para calcular con quién podría encajar."
+                    : potential.count === 0
+                      ? "Todavía ningún contacto de tu cartera encaja con estos datos."
+                      : `Coincide con ${potential.count} ${potential.count === 1 ? "contacto" : "contactos"} de tu cartera. Mejor compatibilidad: ${potential.best}%.`}
+                </p>
+                {potential && potential.count > 0 && (
+                  <button
+                    onClick={() => navigate("/matches")}
+                    className="w-full mt-3 py-2 rounded-lg text-xs text-white transition-all hover:opacity-90"
+                    style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                  >
+                    Ver matches
+                  </button>
+                )}
+              </div>
+            </Section>
+
+            {/* Resumen */}
+            <Card padded>
+              <p
+                className="text-xs uppercase mb-3"
+                style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+              >
+                Resumen
+              </p>
+              <div className="space-y-2">
+                <SummaryRow label="Tipo" value={PROPERTY_TYPE_LABEL[type]} />
+                <SummaryRow label="Operación" value={OPERATIONS.find((o) => o.value === operation)!.label} />
+                <SummaryRow label="Precio" value={price ? money(Number(price), currency) : "—"} />
+                <SummaryRow label="Ubicación" value={locality} />
+                <SummaryRow label="Ambientes" value={`${bedrooms + 1}`} />
+                <SummaryRow label="Fotos" value={`${photos.length}`} />
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
+
+      {/* Footer fijo */}
+      <div
+        className="flex-shrink-0 flex items-center justify-between gap-4 px-8 py-4 border-t"
+        style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
+      >
+        <span className="text-xs" style={{ color: "#A78BFA" }}>
+          {touched ? "Cambios sin guardar" : "Completá los campos obligatorios"}
+        </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => (touched ? setShowExit(true) : navigate("/propiedades"))}
+            className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
+            style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+            style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
+          >
+            Guardar propiedad
+          </button>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className="fixed bottom-6 right-6 z-50 rounded-2xl px-5 py-4 flex items-start gap-3 max-w-sm"
+          style={{
+            background: "white",
+            border: `1px solid ${toast.kind === "ok" ? "#BBF7D0" : "#FECDD3"}`,
+            boxShadow: "var(--shadow-pop)",
+          }}
+          role="status"
+        >
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: toast.kind === "ok" ? "#F0FDF4" : "#FFF1F2" }}
+          >
+            {toast.kind === "ok" ? (
+              <CheckIcon size={14} color="#16A34A" />
+            ) : (
+              <span style={{ color: "#E11D48", fontWeight: 700 }}>!</span>
+            )}
+          </div>
+          <div>
+            <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+              {toast.kind === "ok" ? "Propiedad guardada" : "No pudimos guardar la propiedad"}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+              {toast.text}
+            </p>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            aria-label="Cerrar"
+            style={{ color: "#C4B5FD", lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Confirmación de salida */}
+      {showExit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: "rgba(31,10,60,0.35)" }}
+          onClick={() => setShowExit(false)}
+        >
+          <div
+            className="rounded-2xl p-6 max-w-sm w-full"
+            style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+              ¿Salir sin guardar?
+            </p>
+            <p className="text-sm mt-1.5" style={{ color: "#7C6A99" }}>
+              Los cambios realizados todavía no fueron guardados.
+            </p>
+            <div className="flex items-center gap-3 mt-5">
+              <button
+                onClick={() => setShowExit(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
+                style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600 }}
+              >
+                Seguir editando
+              </button>
+              <button
+                onClick={() => navigate("/propiedades")}
+                className="flex-1 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90"
+                style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+              >
+                Salir sin guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
+  );
+}
+
+/* ── Piezas del formulario ───────────────────────────────────────────────── */
+
+const inputClass = (hasError: boolean) =>
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
+  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+
+const selectClass =
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
+  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+
+function Section({
+  title,
+  subtitle,
+  icon,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: "#F3F0FF" }}>
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "#F5F3FF" }}
+        >
+          {icon}
+        </div>
+        <div>
+          <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            {title}
+          </p>
+          {subtitle && (
+            <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="p-5 space-y-4">{children}</div>
+    </Card>
+  );
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+        {label}
+      </span>
+      {children}
+      {error && (
+        <span className="block text-xs mt-1.5" style={{ color: "#E11D48", fontWeight: 500 }}>
+          {error}
+        </span>
+      )}
+    </label>
+  );
+}
+
+function Stepper({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+        {label}
+      </span>
+      <div
+        className="flex items-center justify-between px-2 py-1.5 rounded-xl border"
+        style={{ borderColor: "#EDE9FE", background: "white" }}
+      >
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, value - 1))}
+          aria-label={`Restar ${label}`}
+          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
+          style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 700 }}
+        >
+          −
+        </button>
+        <span className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          aria-label={`Sumar ${label}`}
+          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
+          style={{ background: "#F5F3FF" }}
+        >
+          <PlusIcon size={12} color="#7C3AED" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-xs px-3 py-1.5 rounded-full transition-all border"
+      style={
+        active
+          ? {
+              background: "var(--gradient-brand)",
+              color: "white",
+              borderColor: "transparent",
+              fontWeight: 600,
+            }
+          : { background: "white", color: "#7C6A99", borderColor: "#EDE9FE", fontWeight: 500 }
+      }
+    >
+      {active && "✓ "}
+      {label}
+    </button>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs" style={{ color: "#A78BFA" }}>
+        {label}
+      </span>
+      <span className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+        {value}
+      </span>
+    </div>
   );
 }

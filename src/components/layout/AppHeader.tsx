@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/features/auth/AuthProvider";
+import { useStore } from "@/data/store";
 import { BellIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
 /**
@@ -46,7 +46,7 @@ export function AppHeader({
   children,
   compact = false,
 }: AppHeaderProps) {
-  const { profile } = useAuth();
+  const { profile } = useStore();
 
   return (
     <header
@@ -105,9 +105,9 @@ export function AppHeader({
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center text-sm cursor-pointer flex-shrink-0"
               style={{ background: "var(--gradient-brand)", color: "white", fontWeight: 700 }}
-              title={profile?.full_name}
+              title={profile.full_name}
             >
-              {profile?.initials ?? "?"}
+              {profile.initials}
             </div>
           </>
         )}
