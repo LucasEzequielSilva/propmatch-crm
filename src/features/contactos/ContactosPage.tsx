@@ -6,6 +6,7 @@ import { FilterDropdown, FilterTabs } from "@/components/ui/FilterTabs";
 import { Badge, Card } from "@/components/ui/Card";
 import { ScoreRing } from "@/components/ui/ScoreRing";
 import { EmptyState } from "@/components/ui/states";
+import { ContactFormModal } from "./ContactFormModal";
 import {
   ContactsIcon,
   EditIcon,
@@ -64,7 +65,8 @@ export default function ContactosPage() {
   const [type, setType] = useState<PropertyType | null>(null);
   const [zone, setZone] = useState<string | null>(null);
   const [budget, setBudget] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Contact | null>(null);
 
   const rows = useMemo<Row[]>(() => {
     const reqByContact = new Map<string, ContactRequirement>();
@@ -126,7 +128,7 @@ export default function ContactosPage() {
         title="Contactos"
         subtitle="Gestioná y conocé mejor a cada persona."
         search={{ placeholder: "Buscar contacto...", value: query, onChange: setQuery }}
-        action={{ label: "Nuevo contacto", onClick: () => {} }}
+        action={{ label: "Nuevo contacto", onClick: () => setCreating(true) }}
       />
 
       <div className="flex-1 overflow-y-auto px-8 pb-8">
@@ -195,6 +197,11 @@ export default function ContactosPage() {
                       ? "Cargá a tus clientes y qué buscan: el matching necesita ese dato para funcionar."
                       : "Probá con otros filtros o limpiá la búsqueda."
                   }
+                  action={
+                    contacts.length === 0
+                      ? { label: "Crear el primer contacto", onClick: () => setCreating(true) }
+                      : undefined
+                  }
                 />
               </Card>
             ) : (
@@ -224,11 +231,9 @@ export default function ContactosPage() {
                         key={row.contact.id}
                         row={row}
                         maxMatches={maxMatches}
-                        isSelected={selectedId === row.contact.id}
                         isLast={idx === filtered.length - 1}
-                        onSelect={() =>
-                          setSelectedId(selectedId === row.contact.id ? null : row.contact.id)
-                        }
+                        onOpen={() => navigate(`/contactos/${row.contact.id}`)}
+                        onEdit={() => setEditing(row.contact)}
                         onSeeMatches={() => navigate("/matches")}
                       />
                     ))}
@@ -245,10 +250,19 @@ export default function ContactosPage() {
               withMatches={stats.withMatches.length}
               total={contacts.length}
               onSeeAll={() => navigate("/matches")}
+              onOpenContact={(id) => navigate(`/contactos/${id}`)}
             />
           </div>
         </div>
       </div>
+
+      {creating && (
+        <ContactFormModal
+          onClose={() => setCreating(false)}
+          onSaved={(id) => navigate(`/contactos/${id}`)}
+        />
+      )}
+      {editing && <ContactFormModal contact={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -256,16 +270,16 @@ export default function ContactosPage() {
 function ContactRow({
   row,
   maxMatches,
-  isSelected,
   isLast,
-  onSelect,
+  onOpen,
+  onEdit,
   onSeeMatches,
 }: {
   row: Row;
   maxMatches: number;
-  isSelected: boolean;
   isLast: boolean;
-  onSelect: () => void;
+  onOpen: () => void;
+  onEdit: () => void;
   onSeeMatches: () => void;
 }) {
   const { contact, requirement, matchCount } = row;
@@ -274,12 +288,9 @@ function ContactRow({
 
   return (
     <tr
-      onClick={onSelect}
+      onClick={onOpen}
       className="cursor-pointer transition-all group hover:bg-[#FDFCFF]"
-      style={{
-        borderBottom: isLast ? undefined : "1px solid #F9F7FF",
-        background: isSelected ? "linear-gradient(90deg, #F5F3FF, #FDF4FF)" : undefined,
-      }}
+      style={{ borderBottom: isLast ? undefined : "1px solid #F9F7FF" }}
     >
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-3">
@@ -369,7 +380,10 @@ function ContactRow({
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
             aria-label="Editar contacto"
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-violet-100"
             style={{ background: "#F5F3FF" }}
@@ -398,11 +412,13 @@ function TopMatchesPanel({
   withMatches,
   total,
   onSeeAll,
+  onOpenContact,
 }: {
   rows: Row[];
   withMatches: number;
   total: number;
   onSeeAll: () => void;
+  onOpenContact: (id: string) => void;
 }) {
   return (
     <div
@@ -440,6 +456,7 @@ function TopMatchesPanel({
           rows.map((row, idx) => (
             <div
               key={row.contact.id}
+              onClick={() => onOpenContact(row.contact.id)}
               className="flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer hover:bg-violet-50"
               style={{ border: "1px solid #F3F0FF" }}
             >

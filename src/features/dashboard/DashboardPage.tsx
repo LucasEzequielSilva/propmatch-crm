@@ -99,8 +99,8 @@ export default function DashboardPage() {
             results={searchResults}
             coverPhoto={coverPhoto}
             onClear={() => setQuery("")}
-            onProperty={() => navigate("/propiedades")}
-            onContact={() => navigate("/contactos")}
+            onProperty={(id) => navigate(`/propiedades/${id}`)}
+            onContact={(id) => navigate(`/contactos/${id}`)}
           />
         ) : (
           <>
@@ -467,8 +467,8 @@ function SearchResults({
   };
   coverPhoto: (id: string) => string | null;
   onClear: () => void;
-  onProperty: () => void;
-  onContact: () => void;
+  onProperty: (id: string) => void;
+  onContact: (id: string) => void;
 }) {
   const empty = results.properties.length === 0 && results.contacts.length === 0;
 
@@ -494,7 +494,7 @@ function SearchResults({
                   return (
                     <button
                       key={p.id}
-                      onClick={onProperty}
+                      onClick={() => onProperty(p.id)}
                       className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-violet-50 text-left"
                     >
                       <div
@@ -528,7 +528,7 @@ function SearchResults({
                 {results.contacts.map((c) => (
                   <button
                     key={c.id}
-                    onClick={onContact}
+                    onClick={() => onContact(c.id)}
                     className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-violet-50 text-left"
                   >
                     <div

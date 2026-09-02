@@ -4,8 +4,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import ContactosPage from "@/features/contactos/ContactosPage";
+import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
 import PropiedadesPage from "@/features/propiedades/PropiedadesPage";
 import SubirPropiedadPage from "@/features/propiedades/SubirPropiedadPage";
+import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
 import MatchesPage from "@/features/matches/MatchesPage";
 import VerMatchPage from "@/features/matches/VerMatchPage";
@@ -30,9 +32,11 @@ export default function App() {
             <Route index element={<DashboardPage />} />
 
             <Route path="contactos" element={<ContactosPage />} />
+            <Route path="contactos/:contactId" element={<ContactoDetallePage />} />
 
             <Route path="propiedades" element={<PropiedadesPage />} />
             <Route path="propiedades/nueva" element={<SubirPropiedadPage />} />
+            <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
 
             <Route path="oportunidades" element={<OportunidadesPage />} />
 

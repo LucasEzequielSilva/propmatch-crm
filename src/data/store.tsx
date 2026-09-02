@@ -4,13 +4,19 @@ import type {
   ActivityType,
   Agency,
   CalendarEvent,
+  ClientProfile,
   Contact,
+  ContactKind,
   ContactRequirement,
+  ContactStatus,
+  CurrencyCode,
   Match,
+  OperationType,
   Opportunity,
   OpportunityStage,
   Profile,
   Property,
+  PropertyType,
   Task,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
@@ -76,6 +82,35 @@ function loadData(): StoreData {
   }
 }
 
+/** Qué busca un contacto. Es la mitad de la ecuación del matching. */
+export interface RequirementInput {
+  label: string | null;
+  operation: OperationType;
+  property_types: PropertyType[];
+  zones: string[];
+  budget_min: number | null;
+  budget_max: number | null;
+  currency: CurrencyCode;
+  bedrooms_min: number | null;
+  bathrooms_min: number | null;
+  surface_min: number | null;
+  surface_max: number | null;
+  features: string[];
+}
+
+export interface NewContactInput {
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  kind: ContactKind;
+  status: ContactStatus;
+  profile_type: ClientProfile | null;
+  notes: string | null;
+  owner_id: string | null;
+  /** Opcional: sin esto el contacto existe pero no genera matches. */
+  requirement: RequirementInput | null;
+}
+
 export interface NewPropertyInput {
   title: string;
   description: string | null;
@@ -118,7 +153,12 @@ interface StoreValue extends StoreData {
   // Acciones
   addProperty: (input: NewPropertyInput) => Property;
   updateProperty: (id: string, patch: Partial<Property>) => void;
-  addContact: (input: Pick<Contact, "full_name" | "email" | "phone" | "kind" | "status">) => Contact;
+  addContact: (input: NewContactInput) => Contact;
+  updateContact: (id: string, patch: Partial<Contact>) => void;
+  /** Crea o reemplaza la búsqueda activa de un contacto. */
+  saveRequirement: (contactId: string, input: RequirementInput) => void;
+  /** Búsqueda activa de un contacto, si tiene. */
+  requirementOf: (contactId: string) => ContactRequirement | undefined;
   moveOpportunity: (id: string, stage: OpportunityStage) => void;
   createOpportunityFromMatch: (matchId: string) => void;
   toggleTask: (id: string) => void;
@@ -153,31 +193,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const profile = useMemo(
     () => seedProfiles.find((p) => p.id === CURRENT_USER_ID) ?? seedProfiles[0],
-    [],
-  );
-
-  const logActivity = useCallback(
-    (type: ActivityType, title: string, detail: string | null, refs: Partial<Activity> = {}) => {
-      setData((d) => ({
-        ...d,
-        activities: [
-          {
-            id: uid("a"),
-            agency_id: seedAgency.id,
-            actor_id: CURRENT_USER_ID,
-            type,
-            title,
-            detail,
-            contact_id: null,
-            property_id: null,
-            opportunity_id: null,
-            created_at: new Date().toISOString(),
-            ...refs,
-          },
-          ...d.activities,
-        ],
-      }));
-    },
     [],
   );
 
@@ -259,32 +274,104 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const addContact = useCallback<StoreValue["addContact"]>(
-    (input) => {
-      const nowIso = new Date().toISOString();
-      const contact: Contact = {
-        id: uid("c"),
-        agency_id: seedAgency.id,
-        owner_id: CURRENT_USER_ID,
-        full_name: input.full_name,
-        email: input.email,
-        phone: input.phone,
-        kind: input.kind,
-        status: input.status,
-        source: "manual",
-        profile_type: null,
-        notes: null,
-        created_at: nowIso,
-        updated_at: nowIso,
+  const addContact = useCallback<StoreValue["addContact"]>((input) => {
+    const nowIso = new Date().toISOString();
+    const contactId = uid("c");
+
+    const contact: Contact = {
+      id: contactId,
+      agency_id: seedAgency.id,
+      owner_id: input.owner_id ?? CURRENT_USER_ID,
+      full_name: input.full_name,
+      email: input.email,
+      phone: input.phone,
+      kind: input.kind,
+      status: input.status,
+      source: "manual",
+      profile_type: input.profile_type,
+      notes: input.notes,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    // El contacto y su búsqueda se guardan juntos: si se guardaran en dos
+    // pasos, entre uno y otro habría un contacto sin criterios y el motor de
+    // matching lo ignoraría.
+    const requirement: ContactRequirement | null = input.requirement
+      ? {
+          id: uid("r"),
+          agency_id: seedAgency.id,
+          contact_id: contactId,
+          ...input.requirement,
+          rooms_min: null,
+          is_active: true,
+          created_at: nowIso,
+          updated_at: nowIso,
+        }
+      : null;
+
+    setData((d) => ({
+      ...d,
+      contacts: [contact, ...d.contacts],
+      requirements: requirement ? [requirement, ...d.requirements] : d.requirements,
+      activities: [
+        {
+          id: uid("a"),
+          agency_id: seedAgency.id,
+          actor_id: CURRENT_USER_ID,
+          type: "contacto_creado",
+          title: "Nuevo contacto agregado",
+          detail: input.full_name,
+          contact_id: contactId,
+          property_id: null,
+          opportunity_id: null,
+          created_at: nowIso,
+        },
+        ...d.activities,
+      ],
+    }));
+
+    return contact;
+  }, []);
+
+  const updateContact = useCallback<StoreValue["updateContact"]>((id, patch) => {
+    setData((d) => ({
+      ...d,
+      contacts: d.contacts.map((c) =>
+        c.id === id ? { ...c, ...patch, updated_at: new Date().toISOString() } : c,
+      ),
+    }));
+  }, []);
+
+  const saveRequirement = useCallback<StoreValue["saveRequirement"]>((contactId, input) => {
+    const nowIso = new Date().toISOString();
+    setData((d) => {
+      const existing = d.requirements.find((r) => r.contact_id === contactId && r.is_active);
+
+      const next: ContactRequirement = existing
+        ? { ...existing, ...input, rooms_min: null, updated_at: nowIso }
+        : {
+            id: uid("r"),
+            agency_id: seedAgency.id,
+            contact_id: contactId,
+            ...input,
+            rooms_min: null,
+            is_active: true,
+            created_at: nowIso,
+            updated_at: nowIso,
+          };
+
+      return {
+        ...d,
+        requirements: existing
+          ? d.requirements.map((r) => (r.id === existing.id ? next : r))
+          : [next, ...d.requirements],
+        contacts: d.contacts.map((c) =>
+          c.id === contactId ? { ...c, updated_at: nowIso } : c,
+        ),
       };
-      setData((d) => ({ ...d, contacts: [contact, ...d.contacts] }));
-      logActivity("contacto_creado", "Nuevo contacto agregado", input.full_name, {
-        contact_id: contact.id,
-      });
-      return contact;
-    },
-    [logActivity],
-  );
+    });
+  }, []);
 
   const moveOpportunity = useCallback<StoreValue["moveOpportunity"]>((id, stage) => {
     setData((d) => {
@@ -424,9 +511,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       propertyById: (id) => (id ? propertyIndex.get(id) : undefined),
       profileById: (id) => (id ? profileIndex.get(id) : undefined),
       coverPhoto: (propertyId) => data.photos[propertyId]?.[0] ?? null,
+      requirementOf: (contactId) =>
+        data.requirements.find((r) => r.contact_id === contactId && r.is_active),
       addProperty,
       updateProperty,
       addContact,
+      updateContact,
+      saveRequirement,
       moveOpportunity,
       createOpportunityFromMatch,
       toggleTask,
@@ -440,6 +531,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addProperty,
     updateProperty,
     addContact,
+    updateContact,
+    saveRequirement,
     moveOpportunity,
     createOpportunityFromMatch,
     toggleTask,

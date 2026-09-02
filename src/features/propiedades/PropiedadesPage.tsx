@@ -217,6 +217,7 @@ export default function PropiedadesPage() {
                 property={p}
                 photo={coverPhoto(p.id)}
                 stats={matchStats.get(p.id)}
+                onOpen={() => navigate(`/propiedades/${p.id}`)}
                 onToggleFeatured={() => updateProperty(p.id, { is_featured: !p.is_featured })}
               />
             ))}
@@ -226,6 +227,7 @@ export default function PropiedadesPage() {
             properties={filtered}
             coverPhoto={coverPhoto}
             matchStats={matchStats}
+            onOpen={(id) => navigate(`/propiedades/${id}`)}
             onToggleFeatured={(id, value) => updateProperty(id, { is_featured: value })}
           />
         )}
@@ -339,17 +341,20 @@ function PropertyCard({
   property: p,
   photo,
   stats,
+  onOpen,
   onToggleFeatured,
 }: {
   property: Property;
   photo: string | null;
   stats?: { count: number; best: number };
+  onOpen: () => void;
   onToggleFeatured: () => void;
 }) {
   const statusStyle = PROPERTY_STATUS_STYLE[p.status];
 
   return (
     <div
+      onClick={onOpen}
       className="rounded-2xl border overflow-hidden flex flex-col cursor-pointer group transition-all hover:shadow-xl"
       style={{ background: "white", borderColor: "#EDE9FE", boxShadow: "var(--shadow-card-lg)" }}
     >
@@ -510,11 +515,13 @@ function PropertyList({
   properties,
   coverPhoto,
   matchStats,
+  onOpen,
   onToggleFeatured,
 }: {
   properties: Property[];
   coverPhoto: (id: string) => string | null;
   matchStats: Map<string, { count: number; best: number }>;
+  onOpen: (id: string) => void;
   onToggleFeatured: (id: string, value: boolean) => void;
 }) {
   return (
@@ -544,6 +551,7 @@ function PropertyList({
             return (
               <tr
                 key={p.id}
+                onClick={() => onOpen(p.id)}
                 className="transition-all hover:bg-violet-50 cursor-pointer"
                 style={{ borderBottom: idx < properties.length - 1 ? "1px solid #F9F7FF" : undefined }}
               >
