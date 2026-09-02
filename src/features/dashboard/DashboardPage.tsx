@@ -313,7 +313,7 @@ export default function DashboardPage() {
                   />
                 </Card>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="pm-stagger grid grid-cols-1 md:grid-cols-3 gap-4">
                   {topMatches.map((match) => {
                     const contact = contactById(match.contact_id);
                     const property = propertyById(match.property_id);

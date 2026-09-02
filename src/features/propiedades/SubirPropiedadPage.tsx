@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card } from "@/components/ui/Card";
 import {
@@ -40,54 +40,98 @@ const CLIENT_PROFILES: { value: ClientProfile; label: string }[] = [
 
 const MAX_PHOTO_MB = 10;
 
+/**
+ * Alta y edición de una propiedad.
+ *
+ * Es el mismo formulario para las dos cosas: con `:propertyId` en la ruta
+ * arranca precargado y guarda sobre la propiedad existente. Duplicar la
+ * pantalla habría significado mantener dos veces los seis bloques y la
+ * validación.
+ */
 export default function SubirPropiedadPage() {
   const navigate = useNavigate();
-  const { addProperty, profiles, profile, requirements } = useStore();
+  const { propertyId } = useParams();
+  const {
+    addProperty,
+    savePropertyEdit,
+    propertyById,
+    photos: allPhotos,
+    profiles,
+    profile,
+    requirements,
+  } = useStore();
+
+  const editing = propertyById(propertyId);
+  const num = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 
   // Bloque 1 — información principal
-  const [type, setType] = useState<PropertyType>("casa");
-  const [operation, setOperation] = useState<OperationType>("venta");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [type, setType] = useState<PropertyType>(editing?.type ?? "casa");
+  const [operation, setOperation] = useState<OperationType>(editing?.operation ?? "venta");
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [description, setDescription] = useState(editing?.description ?? "");
 
   // Bloque 2 — ubicación
-  const [street, setStreet] = useState("");
-  const [streetNumber, setStreetNumber] = useState("");
-  const [locality, setLocality] = useState("City Bell");
-  const [province, setProvince] = useState("Buenos Aires");
+  const [street, setStreet] = useState(editing?.street ?? "");
+  const [streetNumber, setStreetNumber] = useState(editing?.street_number ?? "");
+  // El campo edita la ZONA, que es lo que consume el motor de matching. Se
+  // precarga con la zona guardada (la localidad puede ser más amplia: la
+  // propiedad está en "La Plata" pero su zona es "La Plata Centro").
+  const [locality, setLocality] = useState(editing?.zone ?? editing?.locality ?? "City Bell");
+  const [province, setProvince] = useState(editing?.province ?? "Buenos Aires");
 
   // Bloque 3 — características
-  const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState<CurrencyCode>("USD");
-  const [surfaceTotal, setSurfaceTotal] = useState("");
-  const [surfaceCovered, setSurfaceCovered] = useState("");
-  const [bedrooms, setBedrooms] = useState(3);
-  const [bathrooms, setBathrooms] = useState(2);
-  const [garages, setGarages] = useState(1);
-  const [age, setAge] = useState("");
+  const [price, setPrice] = useState(num(editing?.price));
+  const [currency, setCurrency] = useState<CurrencyCode>(editing?.currency ?? "USD");
+  const [surfaceTotal, setSurfaceTotal] = useState(num(editing?.surface_total));
+  const [surfaceCovered, setSurfaceCovered] = useState(num(editing?.surface_covered));
+  const [bedrooms, setBedrooms] = useState(editing?.bedrooms ?? 3);
+  const [bathrooms, setBathrooms] = useState(editing?.bathrooms ?? 2);
+  const [garages, setGarages] = useState(editing?.garages ?? 1);
+  const [age, setAge] = useState(num(editing?.age_years));
 
   // Bloque 4 — fotos
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(editing ? (allPhotos[editing.id] ?? []) : []);
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Bloque 5 — comercial
-  const [expenses, setExpenses] = useState("");
-  const [taxes, setTaxes] = useState("");
-  const [commission, setCommission] = useState("3");
-  const [status, setStatus] = useState<PropertyStatus>("disponible");
-  const [agentId, setAgentId] = useState(profile.id);
+  const [expenses, setExpenses] = useState(num(editing?.expenses));
+  const [taxes, setTaxes] = useState(num(editing?.taxes));
+  const [commission, setCommission] = useState(editing ? num(editing.commission_pct) : "3");
+  const [status, setStatus] = useState<PropertyStatus>(editing?.status ?? "disponible");
+  const [agentId, setAgentId] = useState(editing?.owner_agent_id ?? profile.id);
 
   // Bloque 6 — preferencias de match
   const [clientProfiles, setClientProfiles] = useState<Set<ClientProfile>>(new Set(["familia"]));
-  const [features, setFeatures] = useState<Set<string>>(new Set(["Jardín", "Cochera"]));
+  const [features, setFeatures] = useState<Set<string>>(
+    new Set(editing?.features ?? ["Jardín", "Cochera"]),
+  );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [showExit, setShowExit] = useState(false);
 
-  const touched =
-    title.trim() !== "" || description.trim() !== "" || price.trim() !== "" || photos.length > 0;
+  /**
+   * "Cambios sin guardar" comparando contra el estado inicial. En alta eso es
+   * el formulario vacío; en edición, la propiedad tal como estaba.
+   */
+  const snapshot = JSON.stringify([
+    type, operation, title, description, street, streetNumber, locality, province,
+    price, currency, surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, age,
+    photos, expenses, taxes, commission, status, agentId, [...features].sort(),
+  ]);
+  const initialSnapshot = useRef(snapshot);
+  const touched = snapshot !== initialSnapshot.current;
+
+  /** Cancelar vuelve a la ficha si se estaba editando, o al listado si es alta. */
+  const cancelTarget = editing ? `/propiedades/${editing.id}` : "/propiedades";
+
+  /**
+   * Si la propiedad tiene una zona que no está en la lista fija, se agrega:
+   * un <select> cuyo value no existe entre sus opciones muestra la primera y
+   * al guardar reescribiría la zona sin que nadie lo pida.
+   */
+  const zoneOptions = ZONES.includes(locality) ? ZONES : [locality, ...ZONES];
 
   /**
    * Potencial de match en vivo.
@@ -195,9 +239,16 @@ export default function SubirPropiedadPage() {
       photos,
     };
 
-    addProperty(input);
-    setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
-    setTimeout(() => navigate("/propiedades"), 900);
+    if (editing) {
+      savePropertyEdit(editing.id, input);
+      initialSnapshot.current = snapshot;
+      setToast({ kind: "ok", text: "Los cambios fueron guardados." });
+      setTimeout(() => navigate(`/propiedades/${editing.id}`), 900);
+    } else {
+      addProperty(input);
+      setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
+      setTimeout(() => navigate("/propiedades"), 900);
+    }
   }
 
   function addFiles(files: FileList | null) {
@@ -217,13 +268,17 @@ export default function SubirPropiedadPage() {
   return (
     <>
       <AppHeader
-        title="Subir propiedad"
-        breadcrumb={["Propiedades", "Nueva propiedad"]}
-        subtitle="Agregá una nueva propiedad a tu cartera."
+        title={editing ? "Editar propiedad" : "Subir propiedad"}
+        breadcrumb={["Propiedades", editing ? editing.title : "Nueva propiedad"]}
+        subtitle={
+          editing
+            ? "Los matches se recalculan solos al guardar."
+            : "Agregá una nueva propiedad a tu cartera."
+        }
         compact
       >
         <button
-          onClick={() => (touched ? setShowExit(true) : navigate("/propiedades"))}
+          onClick={() => (touched ? setShowExit(true) : navigate(cancelTarget))}
           className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
           style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
         >
@@ -234,7 +289,7 @@ export default function SubirPropiedadPage() {
           className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
           style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
         >
-          Guardar propiedad
+          {editing ? "Guardar cambios" : "Guardar propiedad"}
         </button>
       </AppHeader>
 
@@ -324,9 +379,9 @@ export default function SubirPropiedadPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Localidad">
+                <Field label="Zona">
                   <select value={locality} onChange={(e) => setLocality(e.target.value)} className={selectClass}>
-                    {ZONES.map((z) => (
+                    {zoneOptions.map((z) => (
                       <option key={z} value={z}>
                         {z}
                       </option>
@@ -702,11 +757,15 @@ export default function SubirPropiedadPage() {
         style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
       >
         <span className="text-xs" style={{ color: "#A78BFA" }}>
-          {touched ? "Cambios sin guardar" : "Completá los campos obligatorios"}
+          {touched
+            ? "Cambios sin guardar"
+            : editing
+              ? "Sin cambios"
+              : "Completá los campos obligatorios"}
         </span>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => (touched ? setShowExit(true) : navigate("/propiedades"))}
+            onClick={() => (touched ? setShowExit(true) : navigate(cancelTarget))}
             className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
             style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
           >
@@ -717,7 +776,7 @@ export default function SubirPropiedadPage() {
             className="px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
             style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
           >
-            Guardar propiedad
+            {editing ? "Guardar cambios" : "Guardar propiedad"}
           </button>
         </div>
       </div>
@@ -725,7 +784,7 @@ export default function SubirPropiedadPage() {
       {/* Toast */}
       {toast && (
         <div
-          className="fixed bottom-6 right-6 z-50 rounded-2xl px-5 py-4 flex items-start gap-3 max-w-sm"
+          className="pm-toast fixed bottom-6 right-6 z-50 rounded-2xl px-5 py-4 flex items-start gap-3 max-w-sm"
           style={{
             background: "white",
             border: `1px solid ${toast.kind === "ok" ? "#BBF7D0" : "#FECDD3"}`,
@@ -745,7 +804,11 @@ export default function SubirPropiedadPage() {
           </div>
           <div>
             <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-              {toast.kind === "ok" ? "Propiedad guardada" : "No pudimos guardar la propiedad"}
+              {toast.kind === "ok"
+                ? editing
+                  ? "Cambios guardados"
+                  : "Propiedad guardada"
+                : "No pudimos guardar la propiedad"}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
               {toast.text}
@@ -764,12 +827,12 @@ export default function SubirPropiedadPage() {
       {/* Confirmación de salida */}
       {showExit && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          className="pm-backdrop fixed inset-0 z-50 flex items-center justify-center p-6"
           style={{ background: "rgba(31,10,60,0.35)" }}
           onClick={() => setShowExit(false)}
         >
           <div
-            className="rounded-2xl p-6 max-w-sm w-full"
+            className="pm-modal rounded-2xl p-6 max-w-sm w-full"
             style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -788,7 +851,7 @@ export default function SubirPropiedadPage() {
                 Seguir editando
               </button>
               <button
-                onClick={() => navigate("/propiedades")}
+                onClick={() => navigate(cancelTarget)}
                 className="flex-1 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90"
                 style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
               >

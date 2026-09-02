@@ -200,7 +200,7 @@ export function ContactFormModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      className="pm-backdrop fixed inset-0 z-50 flex items-center justify-center p-6"
       style={{ background: "rgba(31,10,60,0.35)" }}
       onClick={onClose}
       role="dialog"
@@ -208,7 +208,7 @@ export function ContactFormModal({
       aria-label={contact ? "Editar contacto" : "Nuevo contacto"}
     >
       <div
-        className="rounded-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden"
+        className="pm-modal rounded-2xl w-full max-w-3xl max-h-[88vh] flex flex-col overflow-hidden"
         style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
         onClick={(e) => e.stopPropagation()}
       >

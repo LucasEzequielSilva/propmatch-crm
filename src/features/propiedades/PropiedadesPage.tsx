@@ -210,7 +210,7 @@ export default function PropiedadesPage() {
             }
           />
         ) : viewMode === "grid" ? (
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="pm-stagger mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filtered.map((p) => (
               <PropertyCard
                 key={p.id}

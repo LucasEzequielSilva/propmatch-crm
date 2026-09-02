@@ -5,6 +5,7 @@ import { Card, SectionHeader, Badge } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/states";
 import {
   ChevronLeftIcon,
+  EditIcon,
   HomeIcon,
   MapPinIcon,
   MatchesIcon,
@@ -99,6 +100,14 @@ export default function PropiedadDetallePage() {
         >
           <ChevronLeftIcon size={14} color="#7C3AED" />
           Volver
+        </button>
+        <button
+          onClick={() => navigate(`/propiedades/${property.id}/editar`)}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+          style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
+        >
+          <EditIcon size={13} color="white" />
+          Editar
         </button>
         <select
           value={property.status}

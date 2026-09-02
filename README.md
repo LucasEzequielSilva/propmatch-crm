@@ -12,6 +12,17 @@ conservando el sistema visual completo.
 
 No necesita backend ni variables de entorno.
 
+## Inicio de sesion
+
+La pantalla de login existe, pero NO es seguridad: sin backend no hay
+contrasenas guardadas ni tokens, y alcanza con el mail de un agente para
+entrar. Sirve para que el flujo este completo y para saber que agente esta
+usando el CRM (de eso dependen "a cargo de", el avatar del header y el ranking
+del equipo).
+
+La pantalla lista los agentes del equipo: un click completa el formulario.
+La sesion se guarda en `localStorage` bajo `propmatch.session.v1`.
+
 ## Como funcionan los datos
 
 Todo el estado vive en `src/data/`:
@@ -24,6 +35,13 @@ Todo el estado vive en `src/data/`:
 
 Los cambios sobreviven al refresh. Para volver a los datos de ejemplo:
 `localStorage.removeItem('propmatch.store.v1')` en la consola del navegador.
+
+## Animaciones
+
+Las clases viven en `src/index.css`: `pm-enter` (contenido al cambiar de ruta),
+`pm-modal` y `pm-backdrop`, `pm-toast`, `pm-stagger` (listas escalonadas) y
+`pm-dragging` (tarjeta del kanban mientras se arrastra). Todo se desactiva solo
+con `prefers-reduced-motion`.
 
 ## El motor de matching
 

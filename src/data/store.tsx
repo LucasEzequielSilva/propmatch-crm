@@ -45,6 +45,7 @@ import {
  */
 
 const STORAGE_KEY = "propmatch.store.v1";
+const SESSION_KEY = "propmatch.session.v1";
 
 interface StoreData {
   contacts: Contact[];
@@ -139,8 +140,14 @@ export interface NewPropertyInput {
 
 interface StoreValue extends StoreData {
   agency: Agency;
+  /** El agente con la sesión abierta. */
   profile: Profile;
   profiles: Profile[];
+  /** `null` mientras nadie inició sesión. */
+  currentUserId: string | null;
+  /** Devuelve el error a mostrar, o `null` si la sesión se abrió. */
+  signIn: (email: string, password: string) => string | null;
+  signOut: () => void;
   /** Derivado: se recalcula solo cuando cambian propiedades o requerimientos. */
   matches: Match[];
 
@@ -152,7 +159,10 @@ interface StoreValue extends StoreData {
 
   // Acciones
   addProperty: (input: NewPropertyInput) => Property;
+  /** Cambios puntuales (estado, destacada). */
   updateProperty: (id: string, patch: Partial<Property>) => void;
+  /** Guarda una propiedad editada desde el formulario completo, fotos incluidas. */
+  savePropertyEdit: (id: string, input: NewPropertyInput) => void;
   addContact: (input: NewContactInput) => Contact;
   updateContact: (id: string, patch: Partial<Contact>) => void;
   /** Crea o reemplaza la búsqueda activa de un contacto. */
@@ -191,9 +201,50 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [data.properties, data.requirements],
   );
 
+  /**
+   * Sesión.
+   *
+   * OJO: esto NO es autenticación. No hay backend ni contraseñas guardadas:
+   * la pantalla de login existe para que el flujo de la app esté completo y
+   * para saber qué agente está usando el CRM. Cualquiera que abra la app puede
+   * entrar con el mail de cualquier agente. Cuando haya backend, esto se
+   * reemplaza por auth de verdad.
+   */
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(SESSION_KEY);
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (currentUserId) localStorage.setItem(SESSION_KEY, currentUserId);
+      else localStorage.removeItem(SESSION_KEY);
+    } catch {
+      // Sin persistencia: la sesión dura lo que dure la pestaña.
+    }
+  }, [currentUserId]);
+
+  const signIn = useCallback<StoreValue["signIn"]>((email, password) => {
+    const found = seedProfiles.find(
+      (p) => p.email?.toLowerCase() === email.trim().toLowerCase(),
+    );
+    if (!found) return "No encontramos ninguna cuenta con ese email.";
+    if (password.trim().length < 4) return "Ingresá tu contraseña.";
+    setCurrentUserId(found.id);
+    return null;
+  }, []);
+
+  const signOut = useCallback(() => setCurrentUserId(null), []);
+
   const profile = useMemo(
-    () => seedProfiles.find((p) => p.id === CURRENT_USER_ID) ?? seedProfiles[0],
-    [],
+    () =>
+      seedProfiles.find((p) => p.id === currentUserId) ??
+      seedProfiles.find((p) => p.id === CURRENT_USER_ID) ??
+      seedProfiles[0],
+    [currentUserId],
   );
 
   const addProperty = useCallback<StoreValue["addProperty"]>(
@@ -271,6 +322,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       properties: d.properties.map((p) =>
         p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p,
       ),
+    }));
+  }, []);
+
+  const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>((id, input) => {
+    const nowIso = new Date().toISOString();
+    setData((d) => ({
+      ...d,
+      properties: d.properties.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              title: input.title,
+              description: input.description,
+              type: input.type,
+              operation: input.operation,
+              status: input.status,
+              street: input.street,
+              street_number: input.street_number,
+              locality: input.locality,
+              province: input.province,
+              zone: input.locality,
+              price: input.price,
+              currency: input.currency,
+              expenses: input.expenses,
+              taxes: input.taxes,
+              commission_pct: input.commission_pct,
+              surface_total: input.surface_total,
+              surface_covered: input.surface_covered,
+              rooms: input.bedrooms + 1,
+              bedrooms: input.bedrooms,
+              bathrooms: input.bathrooms,
+              garages: input.garages,
+              age_years: input.age_years,
+              features: input.features,
+              owner_agent_id: input.owner_agent_id,
+              updated_at: nowIso,
+            }
+          : p,
+      ),
+      photos: { ...d.photos, [id]: input.photos },
     }));
   }, []);
 
@@ -494,6 +585,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
     setData(seedData());
     setReviewed(new Set());
+    setCurrentUserId(null);
   }, []);
 
   const value = useMemo<StoreValue>(() => {
@@ -506,6 +598,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       agency: seedAgency,
       profile,
       profiles: seedProfiles,
+      currentUserId,
+      signIn,
+      signOut,
       matches: matchesWithReview,
       contactById: (id) => (id ? contactIndex.get(id) : undefined),
       propertyById: (id) => (id ? propertyIndex.get(id) : undefined),
@@ -515,6 +610,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         data.requirements.find((r) => r.contact_id === contactId && r.is_active),
       addProperty,
       updateProperty,
+      savePropertyEdit,
       addContact,
       updateContact,
       saveRequirement,
@@ -528,8 +624,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     data,
     profile,
     matchesWithReview,
+    currentUserId,
+    signIn,
+    signOut,
     addProperty,
     updateProperty,
+    savePropertyEdit,
     addContact,
     updateContact,
     saveRequirement,

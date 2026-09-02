@@ -129,7 +129,7 @@ export default function MatchesPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="px-8">
           {/* Resumen */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="pm-stagger mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
             <OverviewCard
               value={String(stats.total)}
               label="Matches activos"

@@ -1,7 +1,8 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { StoreProvider } from "@/data/store";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
 
+import LoginPage from "@/features/auth/LoginPage";
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import ContactosPage from "@/features/contactos/ContactosPage";
 import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
@@ -28,23 +29,30 @@ export default function App() {
     <StoreProvider>
       <BrowserRouter>
         <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<DashboardPage />} />
+          <Route path="/login" element={<PublicOnly />}>
+            <Route index element={<LoginPage />} />
+          </Route>
 
-            <Route path="contactos" element={<ContactosPage />} />
-            <Route path="contactos/:contactId" element={<ContactoDetallePage />} />
+          <Route element={<RequireSession />}>
+            <Route element={<AppLayout />}>
+              <Route index element={<DashboardPage />} />
 
-            <Route path="propiedades" element={<PropiedadesPage />} />
-            <Route path="propiedades/nueva" element={<SubirPropiedadPage />} />
-            <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
+              <Route path="contactos" element={<ContactosPage />} />
+              <Route path="contactos/:contactId" element={<ContactoDetallePage />} />
 
-            <Route path="oportunidades" element={<OportunidadesPage />} />
+              <Route path="propiedades" element={<PropiedadesPage />} />
+              <Route path="propiedades/nueva" element={<SubirPropiedadPage />} />
+              <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
+              <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
 
-            <Route path="matches" element={<MatchesPage />} />
-            <Route path="matches/:matchId" element={<VerMatchPage />} />
+              <Route path="oportunidades" element={<OportunidadesPage />} />
 
-            <Route path="agenda" element={<AgendaPage />} />
-            <Route path="reportes" element={<ReportesPage />} />
+              <Route path="matches" element={<MatchesPage />} />
+              <Route path="matches/:matchId" element={<VerMatchPage />} />
+
+              <Route path="agenda" element={<AgendaPage />} />
+              <Route path="reportes" element={<ReportesPage />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -52,4 +60,18 @@ export default function App() {
       </BrowserRouter>
     </StoreProvider>
   );
+}
+
+/** Área privada: sin sesión abierta, al login. */
+function RequireSession() {
+  const { currentUserId } = useStore();
+  if (!currentUserId) return <Navigate to="/login" replace />;
+  return <Outlet />;
+}
+
+/** Con la sesión ya abierta, el login no tiene sentido. */
+function PublicOnly() {
+  const { currentUserId } = useStore();
+  if (currentUserId) return <Navigate to="/" replace />;
+  return <Outlet />;
 }

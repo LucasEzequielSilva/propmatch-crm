@@ -399,6 +399,7 @@ function OpportunityCard({
   onDragEnd: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const { opp, contactName, propertyTitle, propertyType, matchScore } = card;
 
   return (
@@ -407,11 +408,15 @@ function OpportunityCard({
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", opp.id);
         e.dataTransfer.effectAllowed = "move";
+        setIsDragging(true);
         onDragStart();
       }}
-      onDragEnd={onDragEnd}
+      onDragEnd={() => {
+        setIsDragging(false);
+        onDragEnd();
+      }}
       onClick={() => setExpanded((v) => !v)}
-      className="rounded-2xl bg-white border overflow-hidden cursor-grab active:cursor-grabbing transition-all hover:shadow-lg"
+      className={`rounded-2xl bg-white border overflow-hidden cursor-grab active:cursor-grabbing transition-all hover:shadow-lg ${isDragging ? "pm-dragging" : ""}`}
       style={{
         borderColor: "#EDE9FE",
         boxShadow: "0 1px 6px rgba(124,58,237,0.07)",

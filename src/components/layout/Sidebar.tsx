@@ -9,7 +9,7 @@ import {
   PropertiesIcon,
   ReportesIcon,
   SettingsIcon,
-  ChevronRightIcon,
+  LogoutIcon,
   type IconProps,
 } from "@/components/ui/icons";
 
@@ -31,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const { profile, agency, matches } = useStore();
+  const { profile, agency, matches, signOut } = useStore();
   const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
 
   return (
@@ -169,7 +169,14 @@ export function Sidebar() {
                   : "Agente inmobiliario"}
             </p>
           </div>
-          <ChevronRightIcon size={14} />
+          <button
+            onClick={signOut}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-violet-100 flex-shrink-0"
+          >
+            <LogoutIcon size={14} color="#C4B5FD" />
+          </button>
         </div>
       </div>
     </aside>
