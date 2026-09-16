@@ -121,7 +121,10 @@ export interface MatchBreakdown {
 }
 
 export function computeMatch(req: ContactRequirement, property: Property): MatchBreakdown {
-  const budget = scoreBudget(property.price, req.budget_min, req.budget_max);
+  // Sin tipo de cambio no se pueden comparar monedas distintas: USD 200.000 no
+  // es "compatible" con ARS 150.000. Presupuesto en 0 hasta que haya conversión.
+  const sameCurrency = property.currency === req.currency;
+  const budget = sameCurrency ? scoreBudget(property.price, req.budget_min, req.budget_max) : 0;
   const location = scoreLocation(property.zone, property.locality, property.province, req.zones);
   const type = scoreType(property.type, req.property_types);
   const size = scoreSize(property, req);
@@ -182,13 +185,13 @@ export function buildMatches(
       const key = `${req.id}:${property.id}`;
       const prev = seen.get(key);
 
-      // Un match nace cuando aparece el último de los dos lados. Si se fechara
-      // "ahora", todos los matches serían siempre nuevos y el filtro "Nuevos"
-      // no distinguiría nada.
+      // Un match nace cuando aparece el último de los dos lados. Se usa la
+      // creación de la búsqueda y no su última edición: si no, cambiar un
+      // presupuesto haría "renacer" todos sus matches como nuevos.
       const bornAt =
-        new Date(property.created_at) > new Date(req.updated_at)
+        new Date(property.created_at) > new Date(req.created_at)
           ? property.created_at
-          : req.updated_at;
+          : req.created_at;
 
       out.push({
         id: prev?.id ?? `match-${req.id}-${property.id}`,

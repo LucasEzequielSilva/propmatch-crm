@@ -12,7 +12,11 @@ const SEPARATOR = ";";
 
 function escapeCell(value: Cell): string {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  let text = String(value);
+  // Excel ejecuta como fórmula lo que empieza con = + - @ (o tab/CR). Un título
+  // de propiedad como `=HYPERLINK(...)` se volvería un link al abrir el archivo.
+  // Los números propios no se tocan: un -5 legítimo es un número, no texto.
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
   // Los números van con coma decimal, como el resto de la app.
   if (!/["\n;]/.test(text)) return text;
   return `"${text.replace(/"/g, '""')}"`;

@@ -26,6 +26,13 @@ import { useStore } from "@/data/store";
 import { downloadCsv, datedFilename } from "@/lib/csv";
 import { PROPERTY_STATUS_LABEL, PROPERTY_STATUS_STYLE, PROPERTY_TYPE_LABEL, avatarGradient, initials } from "@/lib/format";
 
+/**
+ * `YYYY-MM-DD` en hora local. `toISOString` pasa por UTC: en Argentina un lead
+ * de las 22 h caía en la barra del día siguiente.
+ */
+const localDayKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 const PERIODS = [
   { value: 7, label: "Últimos 7 días" },
   { value: 30, label: "Últimos 30 días" },
@@ -53,19 +60,24 @@ export default function ReportesPage() {
 
     const leads = contacts.filter((c) => inWindow(c.created_at));
     const newMatches = matches.filter((m) => inWindow(m.created_at));
-    const openOpps = opportunities.filter((o) => o.stage !== "perdida");
-    const closed = opportunities.filter((o) => o.stage === "cierre");
+    // Abiertas = todavía en juego: ni perdidas ni cerradas.
+    const openOpps = opportunities.filter((o) => o.stage !== "perdida" && o.stage !== "cierre");
+    const closedAll = opportunities.filter((o) => o.stage === "cierre");
+    // Cerradas en el período, con el mismo criterio que el período anterior.
+    const closed = closedAll.filter((o) => o.closed_at && inWindow(o.closed_at));
 
     return {
       leads,
       newMatches,
       openOpps,
       closed,
+      closedAll,
       prev: {
         leads: contacts.filter((c) => inPrevWindow(c.created_at)).length,
         matches: matches.filter((m) => inPrevWindow(m.created_at)).length,
         opps: opportunities.filter((o) => inPrevWindow(o.created_at)).length,
-        closed: opportunities.filter((o) => o.closed_at && inPrevWindow(o.closed_at)).length,
+        closed: opportunities.filter((o) => o.stage === "cierre" && o.closed_at && inPrevWindow(o.closed_at))
+          .length,
       },
     };
   }, [contacts, matches, opportunities, since, previousSince]);
@@ -92,7 +104,7 @@ export default function ReportesPage() {
 
     for (let i = days; i >= 0; i -= step) {
       const d = new Date(Date.now() - i * 86_400_000);
-      const key = d.toISOString().slice(0, 10);
+      const key = localDayKey(d);
       buckets.set(key, {
         date: `${d.getDate()}/${d.getMonth() + 1}`,
         leads: 0,
@@ -102,7 +114,7 @@ export default function ReportesPage() {
     }
 
     const nearestKey = (iso: string) => {
-      const t = new Date(iso).toISOString().slice(0, 10);
+      const t = localDayKey(new Date(iso));
       let best: string | null = null;
       for (const key of buckets.keys()) if (key <= t) best = key;
       return best;
@@ -141,8 +153,9 @@ export default function ReportesPage() {
     ];
   }, [matches, opportunities]);
 
+  // Como el embudo: todo lo cerrado sobre todos los matches.
   const conversionRate = matches.length
-    ? Math.round((kpis.closed.length / matches.length) * 1000) / 10
+    ? Math.round((kpis.closedAll.length / matches.length) * 1000) / 10
     : 0;
 
   /** Rendimiento por propiedad, ordenado por matches generados. */
@@ -527,7 +540,7 @@ export default function ReportesPage() {
                         ["visita", "negociacion", "cierre"].includes(o.stage),
                       ).length
                         ? Math.round(
-                            (kpis.closed.length /
+                            (kpis.closedAll.length /
                               opportunities.filter((o) =>
                                 ["visita", "negociacion", "cierre"].includes(o.stage),
                               ).length) *

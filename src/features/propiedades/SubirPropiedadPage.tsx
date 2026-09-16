@@ -22,6 +22,7 @@ import type {
   PropertyStatus,
   PropertyType,
 } from "@/types/db";
+import { compressImage } from "@/lib/images";
 
 const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
 const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
@@ -251,7 +252,7 @@ export default function SubirPropiedadPage() {
     }
   }
 
-  function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | null) {
     if (!files) return;
     const accepted: string[] = [];
     for (const file of Array.from(files)) {
@@ -260,7 +261,11 @@ export default function SubirPropiedadPage() {
         setToast({ kind: "error", text: `"${file.name}" supera los ${MAX_PHOTO_MB} MB.` });
         continue;
       }
-      accepted.push(URL.createObjectURL(file));
+      try {
+        accepted.push(await compressImage(file));
+      } catch {
+        setToast({ kind: "error", text: `No pudimos leer "${file.name}".` });
+      }
     }
     if (accepted.length) setPhotos((prev) => [...prev, ...accepted]);
   }

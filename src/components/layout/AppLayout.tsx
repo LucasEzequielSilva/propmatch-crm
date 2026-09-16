@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
+import { useStore } from "@/data/store";
 import { Sidebar } from "./Sidebar";
 
 /**
@@ -13,11 +14,22 @@ import { Sidebar } from "./Sidebar";
  */
 export function AppLayout() {
   const { pathname } = useLocation();
+  const { persistFailed } = useStore();
 
   return (
     <div className="flex h-full" style={{ background: "white" }}>
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {persistFailed && (
+          <div
+            role="alert"
+            className="px-8 py-2.5 text-sm border-b"
+            style={{ background: "#FFF1F2", color: "#BE123C", borderColor: "#FECDD3", fontWeight: 600 }}
+          >
+            No se pudo guardar en este navegador (probablemente por espacio, las fotos ocupan mucho). Lo
+            último que cargaste se pierde al recargar la página.
+          </div>
+        )}
         <div key={pathname} className="pm-enter flex-1 flex flex-col overflow-hidden min-w-0">
           <Outlet />
         </div>

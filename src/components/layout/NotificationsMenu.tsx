@@ -123,7 +123,10 @@ export function NotificationsMenu() {
     today.setHours(0, 0, 0, 0);
     for (const t of tasks) {
       if (t.is_done || !t.due_date || !mine(t.owner_id)) continue;
-      if (new Date(t.due_date).getTime() >= today.getTime()) continue;
+      // `YYYY-MM-DD` con `new Date()` es medianoche UTC (21 h del día anterior
+      // en Argentina): una tarea de hoy saldría vencida. Se arma en hora local.
+      const [y, m, d] = t.due_date.slice(0, 10).split("-").map(Number);
+      if (new Date(y, m - 1, d).getTime() >= today.getTime()) continue;
       out.push({
         id: `tarea:${t.id}`,
         kind: "tarea",

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Activity,
   ActivityType,
@@ -22,6 +22,7 @@ import type {
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
+import { isDeadPhotoUrl } from "@/lib/images";
 import {
   CURRENT_USER_ID,
   seedActivities,
@@ -61,6 +62,8 @@ interface StoreData {
   activities: Activity[];
   events: CalendarEvent[];
   tasks: Task[];
+  /** Ids de matches ya revisados. Las ids son deterministas (requerimiento + propiedad). */
+  reviewedMatches: string[];
 }
 
 function seedData(): StoreData {
@@ -75,6 +78,7 @@ function seedData(): StoreData {
     activities: seedActivities,
     events: seedEvents,
     tasks: seedTasks,
+    reviewedMatches: [],
   };
 }
 
@@ -84,7 +88,12 @@ function loadData(): StoreData {
     if (!raw) return seedData();
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
-    return { ...seedData(), ...parsed };
+    const merged = { ...seedData(), ...parsed };
+    // Fotos guardadas como `blob:` antes de pasar a data URL: ya no existen.
+    merged.photos = Object.fromEntries(
+      Object.entries(merged.photos).map(([id, urls]) => [id, urls.filter((u) => !isDeadPhotoUrl(u))]),
+    );
+    return merged;
   } catch {
     return seedData();
   }
@@ -229,6 +238,8 @@ interface StoreValue extends StoreData {
   removeTask: (id: string) => void;
   markMatchReviewed: (id: string) => void;
   reset: () => void;
+  /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
+  persistFailed: boolean;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -237,12 +248,16 @@ const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2,
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<StoreData>(loadData);
+  /** `true` si el último guardado falló (cuota llena, storage bloqueado). */
+  const [persistFailed, setPersistFailed] = useState(false);
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      setPersistFailed(false);
     } catch {
-      // Sin persistencia (modo incógnito, cuota llena): la app funciona igual.
+      // La app sigue andando, pero lo nuevo se pierde al recargar: hay que avisar.
+      setPersistFailed(true);
     }
   }, [data]);
 
@@ -293,6 +308,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [data.profiles]);
 
   const signOut = useCallback(() => setCurrentUserId(null), []);
+
+  /**
+   * Quién hace cada acción. Ref y no dependencia: así las acciones no cambian
+   * de identidad al cambiar de sesión y siempre leen el agente actual.
+   */
+  const actorRef = useRef<string>(currentUserId ?? CURRENT_USER_ID);
+  actorRef.current = currentUserId ?? CURRENT_USER_ID;
 
   const profile = useMemo(
     () =>
@@ -353,7 +375,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           {
             id: uid("a"),
             agency_id: seedAgency.id,
-            actor_id: CURRENT_USER_ID,
+            actor_id: actorRef.current,
             type: "propiedad_publicada",
             title: "Propiedad publicada",
             detail: input.title,
@@ -427,7 +449,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const contact: Contact = {
       id: contactId,
       agency_id: seedAgency.id,
-      owner_id: input.owner_id ?? CURRENT_USER_ID,
+      owner_id: input.owner_id ?? actorRef.current,
       full_name: input.full_name,
       email: input.email,
       phone: input.phone,
@@ -464,7 +486,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         {
           id: uid("a"),
           agency_id: seedAgency.id,
-          actor_id: CURRENT_USER_ID,
+          actor_id: actorRef.current,
           type: "contacto_creado",
           title: "Nuevo contacto agregado",
           detail: input.full_name,
@@ -522,7 +544,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const moveOpportunity = useCallback<StoreValue["moveOpportunity"]>((id, stage) => {
     setData((d) => {
       const opp = d.opportunities.find((o) => o.id === id);
-      const contact = d.contacts.find((c) => c.id === opp?.contact_id);
+      // Soltar la tarjeta en su propia columna no es un avance.
+      if (!opp || opp.stage === stage) return d;
+      const contact = d.contacts.find((c) => c.id === opp.contact_id);
       const nowIso = new Date().toISOString();
 
       return {
@@ -534,16 +558,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 stage,
                 stage_since: nowIso,
                 updated_at: nowIso,
-                closed_at: stage === "cierre" ? nowIso : o.closed_at,
+                // Salir de cierre deshace el cierre: si no, Reportes lo seguiría contando.
+                closed_at: stage === "cierre" ? nowIso : null,
               }
             : o,
         ),
-        activities: opp
-          ? [
+        activities: [
               {
                 id: uid("a"),
                 agency_id: seedAgency.id,
-                actor_id: CURRENT_USER_ID,
+                actor_id: actorRef.current,
                 type: "etapa_avanzada" as ActivityType,
                 title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} pasó a ${STAGE_LABEL[stage]}`,
                 detail: d.properties.find((p) => p.id === opp.property_id)?.title ?? null,
@@ -553,8 +577,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 created_at: nowIso,
               },
               ...d.activities,
-            ]
-          : d.activities,
+            ],
       };
     });
   }, []);
@@ -585,7 +608,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               contact_id: match.contact_id,
               property_id: match.property_id,
               match_id: match.id,
-              owner_id: CURRENT_USER_ID,
+              owner_id: actorRef.current,
               stage: "nuevos",
               value: property?.price ?? null,
               currency: property?.currency ?? "USD",
@@ -602,7 +625,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             {
               id: uid("a"),
               agency_id: seedAgency.id,
-              actor_id: CURRENT_USER_ID,
+              actor_id: actorRef.current,
               type: "match_creado" as ActivityType,
               title: "Oportunidad creada desde un match",
               detail: `${contact?.full_name ?? ""} — ${property?.title ?? ""}`,
@@ -654,7 +677,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           {
             id: uid("a"),
             agency_id: seedAgency.id,
-            actor_id: CURRENT_USER_ID,
+            actor_id: actorRef.current,
             type: "etapa_avanzada" as ActivityType,
             title: `Oportunidad nueva en ${STAGE_LABEL[input.stage]}`,
             detail: [contact?.full_name, property?.title].filter(Boolean).join(" — ") || null,
@@ -698,7 +721,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           {
             id: uid("a"),
             agency_id: seedAgency.id,
-            actor_id: CURRENT_USER_ID,
+            actor_id: actorRef.current,
             type: EVENT_ACTIVITY[input.type],
             title: input.title,
             detail: [contact?.full_name, property?.title].filter(Boolean).join(" — ") || null,
@@ -785,7 +808,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           {
             id: uid("a"),
             agency_id: seedAgency.id,
-            actor_id: CURRENT_USER_ID,
+            actor_id: actorRef.current,
             type: "etapa_avanzada" as ActivityType,
             title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} se dio de baja`,
             detail: reason,
@@ -850,10 +873,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const markMatchReviewed = useCallback((id: string) => {
-    setReviewed((prev) => new Set(prev).add(id));
+    setData((d) =>
+      d.reviewedMatches.includes(id) ? d : { ...d, reviewedMatches: [...d.reviewedMatches, id] },
+    );
   }, []);
+
+  const reviewed = useMemo(() => new Set(data.reviewedMatches), [data.reviewedMatches]);
 
   const matchesWithReview = useMemo(
     () => matches.map((m) => (reviewed.has(m.id) ? { ...m, is_reviewed: true } : m)),
@@ -861,9 +887,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const reset = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage bloqueado: igual se vuelve a la semilla en memoria.
+    }
     setData(seedData());
-    setReviewed(new Set());
     setCurrentUserId(null);
   }, []);
 
@@ -907,6 +936,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeTask,
       markMatchReviewed,
       reset,
+      persistFailed,
     };
   }, [
     data,
@@ -937,6 +967,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeTask,
     markMatchReviewed,
     reset,
+    persistFailed,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
