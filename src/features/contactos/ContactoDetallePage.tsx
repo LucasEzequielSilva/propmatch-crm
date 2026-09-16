@@ -22,12 +22,14 @@ import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal"
 import {
   CONTACT_STATUS_LABEL,
   CONTACT_STATUS_STYLE,
+  PROPERTY_STATUS_LABEL,
   PROPERTY_TYPE_LABEL,
   avatarGradient,
   initials,
   money,
   relativeTime,
 } from "@/lib/format";
+import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
 
 /**
  * Ficha del contacto: todo lo que el agente necesita ver antes de llamarlo.
@@ -46,6 +48,7 @@ export default function ContactoDetallePage() {
     opportunities,
     events,
     activities,
+    properties,
     createOpportunityFromMatch,
   } = useStore();
 
@@ -54,6 +57,10 @@ export default function ContactoDetallePage() {
 
   const contact = contactById(contactId);
   const requirement = contact ? requirementOf(contact.id) : undefined;
+  const ownedProperties = useMemo(
+    () => (contact ? properties.filter((p) => p.owner_contact_id === contact.id) : []),
+    [properties, contact],
+  );
 
   const contactMatches = useMemo(
     () => (contact ? matches.filter((m) => m.contact_id === contact.id) : []),
@@ -405,6 +412,43 @@ export default function ContactoDetallePage() {
 
           {/* Columna derecha */}
           <div className="space-y-6">
+            {ownedProperties.length > 0 && (
+              <Card>
+                <SectionHeader
+                  inCard
+                  title="Sus propiedades"
+                  subtitle={`Es propietario de ${ownedProperties.length}`}
+                  action={{ label: "Mandar informe", onClick: () => setWhatsapp(true) }}
+                />
+                <div className="p-3 space-y-1">
+                  {ownedProperties.map((p) => {
+                    const auth = authorizationState(p.authorization_type, p.authorization_expires_at);
+                    const st = AUTHORIZATION_TONE_STYLE[auth.tone];
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => navigate(`/propiedades/${p.id}`)}
+                        className="w-full text-left p-2.5 rounded-xl transition-all hover:bg-violet-50"
+                      >
+                        <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+                          {p.title}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+                          {PROPERTY_STATUS_LABEL[p.status]} · {money(p.price, p.currency)}
+                        </p>
+                        <span
+                          className="inline-block text-xs mt-1.5 px-2 py-0.5 rounded-md"
+                          style={{ background: st.bg, color: st.text, border: `1px solid ${st.border}`, fontWeight: 600 }}
+                        >
+                          {auth.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+
             {contact.notes && (
               <Card padded>
                 <p

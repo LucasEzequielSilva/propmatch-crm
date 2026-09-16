@@ -21,6 +21,7 @@ create type contact_status    as enum ('nuevo', 'activo', 'en_seguimiento', 'vis
 create type contact_kind      as enum ('comprador', 'inquilino', 'propietario', 'inversor', 'otro');
 create type contact_source    as enum ('manual', 'web', 'portal', 'referido', 'consumer_app'); -- [FASE 2] consumer_app
 create type client_profile    as enum ('inversor', 'primera_vivienda', 'familia', 'estudiante', 'profesional');
+create type authorization_type as enum ('exclusiva', 'no_exclusiva');
 create type opportunity_stage as enum ('nuevos', 'contactados', 'visita', 'negociacion', 'cierre', 'perdida');
 create type activity_type     as enum ('contacto_creado', 'contacto_actualizado', 'propiedad_publicada', 'visita_programada', 'match_creado', 'etapa_avanzada', 'mensaje', 'llamada', 'nota');
 create type event_type        as enum ('visita', 'llamada', 'reunion', 'seguimiento');
@@ -168,6 +169,8 @@ create table properties (
   expenses            numeric(14,2),
   taxes               numeric(14,2),
   commission_pct      numeric(5,2),
+  authorization_type  authorization_type,          -- null = sin autorización firmada
+  authorization_expires_at date,
   surface_total       numeric(10,2),
   surface_covered     numeric(10,2),
   rooms               int,

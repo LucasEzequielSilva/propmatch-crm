@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { BellIcon } from "@/components/ui/icons";
 import { relativeTime } from "@/lib/format";
+import { AUTHORIZATION_WARNING_DAYS, authorizationState } from "@/lib/authorization";
+import { lastSentAbout } from "@/lib/ownerReport";
 
 /**
  * Campana del header.
@@ -17,10 +19,17 @@ const SEEN_KEY = "propmatch.notifications.seen.v1";
 /** Días sin moverse de etapa para considerar una oportunidad frenada. */
 const STALE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
+/** Una propiedad cuenta como "nueva" para avisar a los clientes durante estos días. */
+const NEW_PROPERTY_DAYS = 7;
+/** Score mínimo para que valga la pena avisarle a un cliente. */
+const NOTIFY_SCORE = 70;
+/** Autorizaciones vencidas hace más que esto ya no se avisan (se asume que se perdió). */
+const EXPIRED_GRACE_DAYS = 30;
+
 /** Hasta cuántos matches se listan uno por uno antes de agruparlos. */
 const MAX_MATCH_ITEMS = 3;
 
-type Kind = "match" | "evento" | "tarea" | "oportunidad";
+type Kind = "match" | "evento" | "tarea" | "oportunidad" | "autorizacion" | "avisar";
 
 interface Notification {
   id: string;
@@ -39,6 +48,8 @@ const KIND_STYLE: Record<Kind, { icon: string; bg: string; color: string }> = {
   evento: { icon: "◷", bg: "#EFF6FF", color: "#2563EB" },
   tarea: { icon: "!", bg: "#FFF1F2", color: "#E11D48" },
   oportunidad: { icon: "⏸", bg: "#FFFBEB", color: "#D97706" },
+  autorizacion: { icon: "✎", bg: "#FFF1F2", color: "#BE123C" },
+  avisar: { icon: "➚", bg: "#F0FDF4", color: "#16A34A" },
 };
 
 function loadSeen(): Set<string> {
@@ -59,7 +70,8 @@ function saveSeen(seen: Set<string>) {
 }
 
 export function NotificationsMenu() {
-  const { matches, events, tasks, opportunities, contactById, propertyById, currentUserId } = useStore();
+  const { matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId } =
+    useStore();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(loadSeen);
@@ -70,6 +82,53 @@ export function NotificationsMenu() {
   const items = useMemo<Notification[]>(() => {
     const now = Date.now();
     const out: Notification[] = [];
+
+    for (const p of properties) {
+      if (p.status !== "disponible" && p.status !== "reservada") continue;
+      if (!mine(p.owner_agent_id)) continue;
+
+      // Autorización por vencer o recién vencida.
+      const auth = authorizationState(p.authorization_type, p.authorization_expires_at);
+      if (
+        auth.daysLeft !== null &&
+        auth.daysLeft <= AUTHORIZATION_WARNING_DAYS &&
+        auth.daysLeft >= -EXPIRED_GRACE_DAYS
+      ) {
+        out.push({
+          id: `autorizacion:${p.id}:${p.authorization_expires_at}`,
+          kind: "autorizacion",
+          title: auth.daysLeft < 0 ? "Autorización vencida" : "Autorización por vencer",
+          detail: `${p.title} · ${auth.label.split(" · ")[1]}`,
+          // Lo más urgente arriba: se ordena como si fuera de hoy.
+          at: new Date(now + (auth.daysLeft < 0 ? 1 : 0)).toISOString(),
+          when: contactById(p.owner_contact_id)?.full_name ?? "Sin propietario cargado",
+          to: `/propiedades/${p.id}`,
+        });
+      }
+
+      // Propiedad nueva con clientes a los que todavía no se les avisó.
+      if (p.status === "disponible" && now - new Date(p.created_at).getTime() <= NEW_PROPERTY_DAYS * DAY) {
+        const pending = matches.filter(
+          (m) =>
+            m.property_id === p.id &&
+            m.score >= NOTIFY_SCORE &&
+            !lastSentAbout(activities, m.contact_id, p.id) &&
+            !opportunities.some((o) => o.contact_id === m.contact_id && o.property_id === p.id),
+        );
+        if (pending.length) {
+          out.push({
+            // El conteo va en el id: si aparece otro interesado, vuelve a avisar.
+            id: `avisar:${p.id}:${pending.length}`,
+            kind: "avisar",
+            title: `${pending.length} ${pending.length === 1 ? "cliente espera" : "clientes esperan"} esta propiedad`,
+            detail: p.title,
+            at: p.created_at,
+            when: "Avisales por WhatsApp",
+            to: `/propiedades/${p.id}?compartir=1`,
+          });
+        }
+      }
+    }
 
     const excellent = matches
       .filter((m) => !m.is_reviewed && !m.is_dismissed && m.score >= 90)
@@ -161,7 +220,7 @@ export function NotificationsMenu() {
       if (fa !== fb) return fa ? -1 : 1;
       return fa ? ta - tb : tb - ta;
     });
-  }, [matches, events, tasks, opportunities, contactById, propertyById, currentUserId]);
+  }, [matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId]);
 
   const unread = items.filter((n) => !seen.has(n.id)).length;
 

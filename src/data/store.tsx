@@ -89,6 +89,13 @@ function loadData(): StoreData {
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
     const merged = { ...seedData(), ...parsed };
+    // Campos que se sumaron después: los registros guardados no los tienen.
+    merged.properties = merged.properties.map((p) => ({
+      ...p,
+      owner_contact_id: p.owner_contact_id ?? null,
+      authorization_type: p.authorization_type ?? null,
+      authorization_expires_at: p.authorization_expires_at ?? null,
+    }));
     // Fotos guardadas como `blob:` antes de pasar a data URL: ya no existen.
     merged.photos = Object.fromEntries(
       Object.entries(merged.photos).map(([id, urls]) => [id, urls.filter((u) => !isDeadPhotoUrl(u))]),
@@ -151,6 +158,9 @@ export interface NewPropertyInput {
   age_years: number | null;
   features: string[];
   owner_agent_id: string | null;
+  owner_contact_id: string | null;
+  authorization_type: Property["authorization_type"];
+  authorization_expires_at: string | null;
   photos: string[];
 }
 
@@ -342,7 +352,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         id,
         agency_id: seedAgency.id,
         owner_agent_id: input.owner_agent_id,
-        owner_contact_id: null,
+        owner_contact_id: input.owner_contact_id,
+        authorization_type: input.authorization_type,
+        authorization_expires_at: input.authorization_expires_at,
         title: input.title,
         description: input.description,
         type: input.type,
@@ -444,6 +456,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               age_years: input.age_years,
               features: input.features,
               owner_agent_id: input.owner_agent_id,
+              owner_contact_id: input.owner_contact_id,
+              authorization_type: input.authorization_type,
+              authorization_expires_at: input.authorization_expires_at,
               updated_at: nowIso,
             }
           : p,

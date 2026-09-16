@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/states";
@@ -24,6 +24,9 @@ import {
 } from "@/lib/format";
 import type { PropertyStatus } from "@/types/db";
 import { ShareListingModal } from "@/components/share/ShareListingModal";
+import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal";
+import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
+import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
 
 const OPERATION_LABEL: Record<string, string> = {
@@ -48,13 +51,18 @@ export default function PropiedadDetallePage() {
     photos,
     matches,
     opportunities,
+    events,
+    activities,
     updateProperty,
     createOpportunityFromMatch,
   } = useStore();
 
   const property = propertyById(propertyId);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [sharing, setSharing] = useState(false);
+  // Recién cargada y con matches, la propiedad abre directo el "avisales".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [sharing, setSharing] = useState(searchParams.get("compartir") === "1");
+  const [reportOpen, setReportOpen] = useState(false);
 
   const gallery = property ? (photos[property.id] ?? []) : [];
 
@@ -86,6 +94,10 @@ export default function PropiedadDetallePage() {
 
   const statusStyle = PROPERTY_STATUS_STYLE[property.status];
   const agent = profileById(property.owner_agent_id);
+  const owner = contactById(property.owner_contact_id);
+  const auth = authorizationState(property.authorization_type, property.authorization_expires_at);
+  const authStyle = AUTHORIZATION_TONE_STYLE[auth.tone];
+  const report = ownerReport(property.id, { matches, opportunities, events, activities });
   const cover = gallery[activePhoto] ?? null;
 
   return (
@@ -135,7 +147,16 @@ export default function PropiedadDetallePage() {
         </select>
       </AppHeader>
 
-      {sharing && <ShareListingModal property={property} onClose={() => setSharing(false)} />}
+      {sharing && (
+        <ShareListingModal
+          property={property}
+          onClose={() => {
+            setSharing(false);
+            if (searchParams.has("compartir")) setSearchParams({}, { replace: true });
+          }}
+        />
+      )}
+      {reportOpen && owner && <WhatsAppModal contact={owner} property={property} onClose={() => setReportOpen(false)} />}
 
       <div className="flex-1 overflow-y-auto px-8 pb-10">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
@@ -369,6 +390,72 @@ export default function PropiedadDetallePage() {
 
           {/* Columna derecha */}
           <div className="space-y-6">
+            {/* Propietario y autorización */}
+            <Card>
+              <SectionHeader
+                inCard
+                title="Propietario"
+                subtitle="Uso interno: no aparece en la ficha"
+                action={{ label: owner ? "Cambiar" : "Cargar", onClick: () => navigate(`/propiedades/${property.id}/editar`) }}
+              />
+              <div className="p-5 space-y-4">
+                {owner ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => navigate(`/contactos/${owner.id}`)}
+                      className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarGradient(owner.full_name)} flex items-center justify-center text-white flex-shrink-0 text-xs`}
+                      style={{ fontWeight: 700 }}
+                      aria-label={`Ver ${owner.full_name}`}
+                    >
+                      {initials(owner.full_name)}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <button
+                        onClick={() => navigate(`/contactos/${owner.id}`)}
+                        className="text-sm truncate block text-left hover:underline"
+                        style={{ color: "#1F0A3C", fontWeight: 700 }}
+                      >
+                        {owner.full_name}
+                      </button>
+                      <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
+                        {owner.phone ?? "Sin teléfono"}
+                      </p>
+                    </div>
+                    <WhatsAppButton compact label="Mandar informe por WhatsApp" onClick={() => setReportOpen(true)} />
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: "#A78BFA" }}>
+                    Todavía no cargaste quién es el dueño.
+                  </p>
+                )}
+
+                <span
+                  className="inline-block text-xs px-3 py-1.5 rounded-lg"
+                  style={{ background: authStyle.bg, color: authStyle.text, border: `1px solid ${authStyle.border}`, fontWeight: 700 }}
+                >
+                  {auth.label}
+                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "Interesados", value: report.interested },
+                    { label: "Avisados", value: report.sentTo },
+                    { label: "En conversación", value: report.inProgress },
+                    { label: "Visitas", value: report.visitsDone + report.visitsUpcoming },
+                  ].map((k) => (
+                    <div key={k.label} className="rounded-xl px-3 py-2.5" style={{ background: "#FAFAFF", border: "1px solid #F3F0FF" }}>
+                      <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+                        {k.value}
+                      </p>
+                      <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                        {k.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
             {/* Personas compatibles */}
             <Card>
               <div className="px-5 py-4 relative overflow-hidden" style={{ background: "var(--gradient-brand-wide)" }}>

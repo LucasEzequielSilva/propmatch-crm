@@ -5,6 +5,8 @@ import { buildSharedListing, listingUrl, localOnlyPhotos } from "@/lib/share";
 import { firstName, normalizeWhatsappNumber, whatsappLink } from "@/lib/whatsapp";
 import { OPERATION_LABEL, money } from "@/lib/format";
 import type { Contact, Property } from "@/types/db";
+import { ownerReport } from "@/lib/ownerReport";
+import { authorizationState } from "@/lib/authorization";
 
 /**
  * Mensaje de WhatsApp a un contacto.
@@ -17,9 +19,10 @@ import type { Contact, Property } from "@/types/db";
 
 const WA_GREEN = "#25D366";
 
-type Template = "propiedad" | "saludo" | "visita" | "seguimiento";
+type Template = "informe" | "propiedad" | "saludo" | "visita" | "seguimiento";
 
 const TEMPLATE_LABEL: Record<Template, string> = {
+  informe: "Informe al propietario",
   propiedad: "Enviar propiedad",
   saludo: "Primer contacto",
   visita: "Confirmar visita",
@@ -36,7 +39,12 @@ export function WhatsAppModal({
   property?: Property;
   onClose: () => void;
 }) {
-  const { agency, profile, matches, properties, photos, events, profileById, logActivity } = useStore();
+  const { agency, profile, matches, properties, photos, events, opportunities, activities, profileById, logActivity } =
+    useStore();
+
+  /** Propiedades de las que este contacto es dueño: habilitan el informe. */
+  const owned = useMemo(() => properties.filter((p) => p.owner_contact_id === contact.id), [properties, contact.id]);
+  const templates = (Object.keys(TEMPLATE_LABEL) as Template[]).filter((t) => t !== "informe" || owned.length > 0);
 
   /** Propiedades para ofrecer: primero las que matchean con el contacto. */
   const options = useMemo(() => {
@@ -59,8 +67,16 @@ export function WhatsAppModal({
     [events, contact.id],
   );
 
-  const [template, setTemplate] = useState<Template>(initialProperty || options.length ? "propiedad" : "saludo");
-  const [propertyId, setPropertyId] = useState(initialProperty?.id ?? options[0]?.property.id ?? "");
+  const [template, setTemplate] = useState<Template>(
+    owned.length && (!initialProperty || initialProperty.owner_contact_id === contact.id)
+      ? "informe"
+      : initialProperty || options.length
+        ? "propiedad"
+        : "saludo",
+  );
+  const [propertyId, setPropertyId] = useState(
+    initialProperty?.id ?? (owned.length ? owned[0].id : options[0]?.property.id) ?? "",
+  );
   const property = properties.find((p) => p.id === propertyId);
   const [link, setLink] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -84,6 +100,27 @@ export function WhatsAppModal({
 
   const suggested = useMemo(() => {
     switch (template) {
+      case "informe": {
+        if (!property) return `Hola ${name}! Soy ${me} de ${agency.name}.`;
+        const r = ownerReport(property.id, { matches, opportunities, events, activities });
+        const auth = authorizationState(property.authorization_type, property.authorization_expires_at);
+        const lines = [
+          `Hola ${name}! Soy ${me} de ${agency.name}. Te paso cómo viene ${property.title}:`,
+          ``,
+          `👥 ${r.interested} ${r.interested === 1 ? "cliente de nuestra cartera busca" : "clientes de nuestra cartera buscan"} algo así`,
+          r.sentTo ? `📲 Se la enviamos a ${r.sentTo} ${r.sentTo === 1 ? "interesado" : "interesados"}` : null,
+          r.inProgress ? `🤝 ${r.inProgress} en conversación` : null,
+          r.visitsDone || r.visitsUpcoming
+            ? `🏠 ${r.visitsDone} ${r.visitsDone === 1 ? "visita hecha" : "visitas hechas"}${r.visitsUpcoming ? ` y ${r.visitsUpcoming} ${r.visitsUpcoming === 1 ? "agendada" : "agendadas"}` : ""}`
+            : null,
+          auth.tone === "expired" || auth.tone === "warning"
+            ? `\n📝 La autorización ${auth.tone === "expired" ? "ya venció" : `vence en ${auth.daysLeft} días`}: ¿coordinamos para renovarla?`
+            : null,
+          ``,
+          `Cualquier duda, escribime por acá.`,
+        ];
+        return lines.filter((l) => l !== null).join("\n");
+      }
       case "propiedad": {
         if (!property) return `Hola ${name}! Soy ${me} de ${agency.name}.`;
         const where = [property.zone, property.locality].filter(Boolean)[0];
@@ -111,7 +148,7 @@ export function WhatsAppModal({
       case "seguimiento":
         return `Hola ${name}! ¿Cómo estás? Quería saber si pudiste pensar en las propiedades que te pasé o si preferís que te busque otras opciones.`;
     }
-  }, [template, property, link, name, me, agency.name, nextVisit]);
+  }, [template, property, link, name, me, agency.name, nextVisit, matches, opportunities, events, activities]);
 
   // Mientras el agente no toque el texto, sigue a la plantilla (y al link cuando llega).
   useEffect(() => {
@@ -132,8 +169,10 @@ export function WhatsAppModal({
     logActivity({
       type: "mensaje",
       title: `WhatsApp a ${name}: ${TEMPLATE_LABEL[template].toLowerCase()}`,
-      detail: template === "propiedad" && property ? property.title : text.slice(0, 90),
+      detail: (template === "propiedad" || template === "informe") && property ? property.title : text.slice(0, 90),
       contact_id: contact.id,
+      // Solo "enviar propiedad" cuenta como aviso a un interesado; el informe
+      // va al dueño y no debe sumar en "se la enviamos a N".
       property_id: template === "propiedad" ? (property?.id ?? null) : null,
     });
     onClose();
@@ -177,12 +216,15 @@ export function WhatsAppModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(TEMPLATE_LABEL) as Template[]).map((t) => (
+            {templates.map((t) => (
               <button
                 key={t}
                 onClick={() => {
                   setTemplate(t);
                   setEdited(false);
+                  if (t === "informe" && !owned.some((p) => p.id === propertyId)) setPropertyId(owned[0]?.id ?? "");
+                  if (t === "propiedad" && !options.some((o) => o.property.id === propertyId))
+                    setPropertyId(options[0]?.property.id ?? "");
                 }}
                 className="text-xs px-3.5 py-2 rounded-xl border transition-all"
                 style={
@@ -195,6 +237,28 @@ export function WhatsAppModal({
               </button>
             ))}
           </div>
+
+          {template === "informe" && owned.length > 1 && (
+            <label className="block">
+              <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                Propiedad
+              </span>
+              <select
+                value={propertyId}
+                onChange={(e) => {
+                  setPropertyId(e.target.value);
+                  setEdited(false);
+                }}
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+              >
+                {owned.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {template === "propiedad" && (
             <label className="block">

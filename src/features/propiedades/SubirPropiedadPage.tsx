@@ -23,6 +23,8 @@ import type {
   PropertyType,
 } from "@/types/db";
 import { compressImage } from "@/lib/images";
+import { AUTHORIZATION_LABEL, AUTHORIZATION_TONE_STYLE, authorizationState, dateInputFromNow } from "@/lib/authorization";
+import type { AuthorizationType } from "@/types/db";
 
 const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
 const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
@@ -60,6 +62,8 @@ export default function SubirPropiedadPage() {
     profiles,
     profile,
     requirements,
+    contacts,
+    addContact,
   } = useStore();
 
   const editing = propertyById(propertyId);
@@ -102,6 +106,13 @@ export default function SubirPropiedadPage() {
   const [status, setStatus] = useState<PropertyStatus>(editing?.status ?? "disponible");
   const [agentId, setAgentId] = useState(editing?.owner_agent_id ?? profile.id);
 
+  // Bloque 5b — propietario y autorización
+  const [ownerId, setOwnerId] = useState(editing?.owner_contact_id ?? "");
+  const [authType, setAuthType] = useState<AuthorizationType | "">(editing?.authorization_type ?? "");
+  const [authExpires, setAuthExpires] = useState(editing?.authorization_expires_at ?? "");
+  /** `null` mientras no se está cargando un propietario nuevo. */
+  const [newOwner, setNewOwner] = useState<{ name: string; phone: string } | null>(null);
+
   // Bloque 6 — preferencias de match
   const [clientProfiles, setClientProfiles] = useState<Set<ClientProfile>>(new Set(["familia"]));
   const [features, setFeatures] = useState<Set<string>>(
@@ -120,6 +131,7 @@ export default function SubirPropiedadPage() {
     type, operation, title, description, street, streetNumber, locality, province,
     price, currency, surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, age,
     photos, expenses, taxes, commission, status, agentId, [...features].sort(),
+    ownerId, authType, authExpires,
   ]);
   const initialSnapshot = useRef(snapshot);
   const touched = snapshot !== initialSnapshot.current;
@@ -149,7 +161,9 @@ export default function SubirPropiedadPage() {
       id: "draft",
       agency_id: "",
       owner_agent_id: agentId,
-      owner_contact_id: null,
+      owner_contact_id: ownerId || null,
+      authorization_type: authType || null,
+      authorization_expires_at: authExpires || null,
       title,
       description,
       type,
@@ -204,6 +218,7 @@ export default function SubirPropiedadPage() {
     if (!price.trim()) e.price = "El precio es obligatorio";
     else if (Number.isNaN(Number(price))) e.price = "El precio debe ser un número";
     if (!street.trim()) e.street = "La dirección es obligatoria";
+    if (authType && !authExpires) e.authExpires = "Poné hasta cuándo vale la autorización";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -237,6 +252,9 @@ export default function SubirPropiedadPage() {
       age_years: age ? Number(age) : null,
       features: [...features],
       owner_agent_id: agentId,
+      owner_contact_id: ownerId || null,
+      authorization_type: authType || null,
+      authorization_expires_at: authType ? authExpires || null : null,
       photos,
     };
 
@@ -246,9 +264,18 @@ export default function SubirPropiedadPage() {
       setToast({ kind: "ok", text: "Los cambios fueron guardados." });
       setTimeout(() => navigate(`/propiedades/${editing.id}`), 900);
     } else {
-      addProperty(input);
-      setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
-      setTimeout(() => navigate("/propiedades"), 900);
+      const created = addProperty(input);
+      const count = potential?.count ?? 0;
+      if (count > 0) {
+        setToast({
+          kind: "ok",
+          text: `Propiedad agregada. Coincide con ${count} ${count === 1 ? "cliente" : "clientes"}: avisales por WhatsApp.`,
+        });
+        setTimeout(() => navigate(`/propiedades/${created.id}?compartir=1`), 1100);
+      } else {
+        setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
+        setTimeout(() => navigate("/propiedades"), 900);
+      }
     }
   }
 
@@ -639,6 +666,149 @@ export default function SubirPropiedadPage() {
                   </select>
                 </Field>
               </div>
+            </Section>
+
+            {/* Bloque 5b */}
+            <Section
+              title="Propietario y autorización"
+              subtitle="Nunca se muestra en la ficha que recibe el cliente"
+              icon={<StarIcon size={16} color="#7C3AED" />}
+            >
+              {newOwner ? (
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Nombre del propietario">
+                      <input
+                        autoFocus
+                        value={newOwner.name}
+                        onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
+                        placeholder="Graciela Benítez"
+                        className={inputClass(false)}
+                      />
+                    </Field>
+                    <Field label="Teléfono">
+                      <input
+                        value={newOwner.phone}
+                        onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
+                        placeholder="+54 221 520 1144"
+                        className={inputClass(false)}
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewOwner(null)}
+                      className="px-4 py-2 rounded-xl text-xs"
+                      style={{ color: "#7C6A99", fontWeight: 600 }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!newOwner.name.trim()}
+                      onClick={() => {
+                        const c = addContact({
+                          full_name: newOwner.name.trim(),
+                          phone: newOwner.phone.trim() || null,
+                          email: null,
+                          kind: "propietario",
+                          status: "activo",
+                          profile_type: null,
+                          notes: null,
+                          owner_id: agentId,
+                          requirement: null,
+                        });
+                        setOwnerId(c.id);
+                        setNewOwner(null);
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs text-white disabled:opacity-50"
+                      style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                    >
+                      Agregar propietario
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Field label="Propietario">
+                  <div className="flex gap-2">
+                    <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={selectClass}>
+                      <option value="">Sin propietario cargado</option>
+                      <optgroup label="Propietarios">
+                        {contacts
+                          .filter((c) => c.kind === "propietario")
+                          .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.full_name}
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Otros contactos">
+                        {contacts
+                          .filter((c) => c.kind !== "propietario")
+                          .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.full_name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setNewOwner({ name: "", phone: "" })}
+                      className="px-3.5 rounded-xl text-xs border whitespace-nowrap transition-all hover:bg-violet-50"
+                      style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+                    >
+                      + Nuevo
+                    </button>
+                  </div>
+                </Field>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Autorización">
+                  <select
+                    value={authType}
+                    onChange={(e) => {
+                      const value = e.target.value as AuthorizationType | "";
+                      setAuthType(value);
+                      // Lo más común: 90 días. Se propone solo si no había fecha.
+                      if (value && !authExpires) setAuthExpires(dateInputFromNow(90));
+                    }}
+                    className={selectClass}
+                  >
+                    <option value="">Sin autorización firmada</option>
+                    {(Object.keys(AUTHORIZATION_LABEL) as AuthorizationType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {AUTHORIZATION_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Vence el" error={errors.authExpires}>
+                  <input
+                    type="date"
+                    value={authType ? authExpires : ""}
+                    disabled={!authType}
+                    onChange={(e) => setAuthExpires(e.target.value)}
+                    className={inputClass(!!errors.authExpires) + " disabled:opacity-50"}
+                  />
+                </Field>
+              </div>
+              {authType && authExpires && (() => {
+                const st = authorizationState(authType, authExpires);
+                const style = AUTHORIZATION_TONE_STYLE[st.tone];
+                return (
+                  <p
+                    className="text-xs px-3 py-2 rounded-lg inline-block"
+                    style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}`, fontWeight: 600 }}
+                  >
+                    {st.label}
+                  </p>
+                );
+              })()}
             </Section>
           </div>
 

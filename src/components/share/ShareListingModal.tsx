@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "@/data/store";
 import { buildSharedListing, listingUrl, localOnlyPhotos } from "@/lib/share";
-import { avatarGradient, initials } from "@/lib/format";
+import { avatarGradient, initials, relativeTime } from "@/lib/format";
+import { lastSentAbout } from "@/lib/ownerReport";
 import type { Contact, Property } from "@/types/db";
 import { WhatsAppButton, WhatsAppModal } from "./WhatsAppModal";
 
@@ -11,7 +12,7 @@ import { WhatsAppButton, WhatsAppModal } from "./WhatsAppModal";
  * esta casa, ¿a quién se la paso?").
  */
 export function ShareListingModal({ property, onClose }: { property: Property; onClose: () => void }) {
-  const { agency, photos, matches, contactById, profileById } = useStore();
+  const { agency, photos, matches, activities, contactById, profileById } = useStore();
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [sendTo, setSendTo] = useState<Contact | null>(null);
@@ -43,8 +44,14 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
         .filter((m) => m.property_id === property.id)
         .map((m) => ({ match: m, contact: contactById(m.contact_id) }))
         .filter((r): r is { match: typeof r.match; contact: Contact } => !!r.contact)
-        .slice(0, 8),
-    [matches, property.id, contactById],
+        // Primero a quienes todavía no se les mandó.
+        .sort(
+          (a, b) =>
+            Number(!!lastSentAbout(activities, a.contact.id, property.id)) -
+              Number(!!lastSentAbout(activities, b.contact.id, property.id)) || b.match.score - a.match.score,
+        )
+        .slice(0, 10),
+    [matches, property.id, contactById, activities],
   );
 
   async function copy() {
@@ -152,6 +159,12 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
                       </p>
                       <p className="text-xs" style={{ color: "#7C6A99" }}>
                         {Math.round(match.score)}% de match{contact.phone ? "" : " · sin teléfono"}
+                        {(() => {
+                          const sent = lastSentAbout(activities, contact.id, property.id);
+                          return sent ? (
+                            <span style={{ color: "#16A34A", fontWeight: 600 }}> · ✓ avisado {relativeTime(sent.created_at).toLowerCase()}</span>
+                          ) : null;
+                        })()}
                       </p>
                     </div>
                     <WhatsAppButton compact label={`WhatsApp a ${contact.full_name}`} onClick={() => setSendTo(contact)} />

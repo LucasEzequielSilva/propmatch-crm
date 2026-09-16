@@ -34,6 +34,7 @@ export type OpportunityStage =
   | "cierre"
   | "perdida";
 export type EventType = "visita" | "llamada" | "reunion" | "seguimiento";
+export type AuthorizationType = "exclusiva" | "no_exclusiva";
 export type ActivityType =
   | "contacto_creado"
   | "contacto_actualizado"
@@ -138,6 +139,10 @@ export interface Property {
   garages: number | null;
   age_years: number | null;
   features: string[];
+  /** Autorización firmada por el propietario. `null` = no hay. */
+  authorization_type: AuthorizationType | null;
+  /** `YYYY-MM-DD`. */
+  authorization_expires_at: string | null;
   is_featured: boolean;
   published_to_marketplace: boolean;
   published_at: string | null;
