@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "@/data/store";
-import { BellIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { NotificationsMenu } from "./NotificationsMenu";
 
 /**
  * Header único de la aplicación.
@@ -90,17 +91,7 @@ export function AppHeader({
 
         {!compact && (
           <>
-            <button
-              className="relative w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:bg-violet-50"
-              style={{ background: "#F5F3FF" }}
-              aria-label="Notificaciones"
-            >
-              <BellIcon />
-              <span
-                className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
-                style={{ background: "#EC4899" }}
-              />
-            </button>
+            <NotificationsMenu />
 
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center text-sm cursor-pointer flex-shrink-0"
