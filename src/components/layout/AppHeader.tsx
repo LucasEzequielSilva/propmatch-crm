@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { NotificationsMenu } from "./NotificationsMenu";
@@ -47,7 +48,6 @@ export function AppHeader({
   children,
   compact = false,
 }: AppHeaderProps) {
-  const { profile } = useStore();
 
   return (
     <header
@@ -93,13 +93,7 @@ export function AppHeader({
           <>
             <NotificationsMenu />
 
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm cursor-pointer flex-shrink-0"
-              style={{ background: "var(--gradient-brand)", color: "white", fontWeight: 700 }}
-              title={profile.full_name}
-            >
-              {profile.initials}
-            </div>
+            <AccountMenu />
           </>
         )}
 
@@ -119,6 +113,77 @@ export function AppHeader({
         )}
       </div>
     </header>
+  );
+}
+
+/** Avatar del header: acceso a Configuración y a cerrar sesión. */
+function AccountMenu() {
+  const { profile, agency, signOut } = useStore();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const itemClass = "w-full text-left px-4 py-2.5 text-sm transition-all hover:bg-violet-50";
+
+  return (
+    <div ref={rootRef} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-10 h-10 rounded-full flex items-center justify-center text-sm transition-all hover:opacity-90"
+        style={{ background: "var(--gradient-brand)", color: "white", fontWeight: 700 }}
+        aria-label={`Cuenta de ${profile.full_name}`}
+        aria-expanded={open}
+      >
+        {profile.initials}
+      </button>
+
+      {open && (
+        <div
+          className="pm-modal absolute right-0 mt-2 w-60 rounded-2xl border overflow-hidden z-50"
+          style={{ background: "white", borderColor: "#EDE9FE", boxShadow: "0 12px 40px rgba(76, 29, 149, 0.15)" }}
+        >
+          <div className="px-4 py-3 border-b" style={{ borderColor: "#F5F3FF" }}>
+            <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+              {profile.full_name}
+            </p>
+            <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
+              {profile.email ?? agency.name}
+            </p>
+          </div>
+          <button
+            className={itemClass}
+            style={{ color: "#1F0A3C", fontWeight: 500 }}
+            onClick={() => {
+              setOpen(false);
+              navigate("/configuracion");
+            }}
+          >
+            Configuración
+          </button>
+          <button
+            className={itemClass + " border-t"}
+            style={{ color: "#E11D48", fontWeight: 600, borderColor: "#F5F3FF" }}
+            onClick={signOut}
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

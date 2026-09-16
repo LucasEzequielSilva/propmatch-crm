@@ -14,6 +14,7 @@ import MatchesPage from "@/features/matches/MatchesPage";
 import VerMatchPage from "@/features/matches/VerMatchPage";
 import AgendaPage from "@/features/agenda/AgendaPage";
 import ReportesPage from "@/features/reportes/ReportesPage";
+import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
 
 /**
  * Navegación.
@@ -52,6 +53,7 @@ export default function App() {
 
               <Route path="agenda" element={<AgendaPage />} />
               <Route path="reportes" element={<ReportesPage />} />
+              <Route path="configuracion" element={<ConfiguracionPage />} />
             </Route>
           </Route>
 

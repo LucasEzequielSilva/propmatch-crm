@@ -72,6 +72,8 @@ export default function AgendaPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  /** Evento abierto para editar (click en el calendario o en "Próximos"). */
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   /** `null` mientras el campo de nueva tarea está cerrado. */
   const [taskDraft, setTaskDraft] = useState<string | null>(null);
   const [taskPriority, setTaskPriority] = useState(false);
@@ -224,6 +226,7 @@ export default function AgendaPage() {
               events={weekEvents}
               selectedEvent={selectedEvent}
               onSelectEvent={setSelectedEvent}
+              onOpenEvent={setEditingEvent}
             />
           </div>
         </div>
@@ -448,6 +451,7 @@ export default function AgendaPage() {
                   return (
                     <div
                       key={ev.id}
+                      onClick={() => setEditingEvent(ev)}
                       className="flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all hover:bg-violet-50"
                       style={{ border: "1px solid #F3F0FF" }}
                     >
@@ -488,6 +492,16 @@ export default function AgendaPage() {
       </div>
 
       {formOpen && <EventFormModal onClose={() => setFormOpen(false)} />}
+      {editingEvent && (
+        <EventFormModal
+          key={editingEvent.id}
+          event={editingEvent}
+          onClose={() => {
+            setEditingEvent(null);
+            setSelectedEvent(null);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -497,11 +511,13 @@ function WeeklyCalendar({
   events,
   selectedEvent,
   onSelectEvent,
+  onOpenEvent,
 }: {
   days: { label: string; date: Date; isToday: boolean }[];
   events: CalendarEvent[];
   selectedEvent: string | null;
   onSelectEvent: (id: string | null) => void;
+  onOpenEvent: (event: CalendarEvent) => void;
 }) {
   const now = new Date();
   const nowDecimal = decimalHour(now);
@@ -609,7 +625,10 @@ function WeeklyCalendar({
                   key={ev.id}
                   event={ev}
                   isSelected={selectedEvent === ev.id}
-                  onSelect={() => onSelectEvent(selectedEvent === ev.id ? null : ev.id)}
+                  onSelect={() => {
+                    onSelectEvent(ev.id);
+                    onOpenEvent(ev);
+                  }}
                 />
               ))}
             </div>

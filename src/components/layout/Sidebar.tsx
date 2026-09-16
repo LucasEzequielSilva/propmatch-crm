@@ -132,22 +132,27 @@ export function Sidebar() {
 
       {/* Pie */}
       <div className="px-3 pb-4 space-y-0.5 border-t pt-4" style={{ borderColor: "#EDE9FE" }}>
-        {/* Configuración todavía no tiene pantalla; se deja el ítem visible
-            como en el prototipo, pero deshabilitado en lugar de llevar a una
-            ruta que no existe. */}
-        <button
-          disabled
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left opacity-60 cursor-not-allowed"
-          style={{ color: "#6B7280", fontWeight: 500 }}
+        <NavLink
+          to="/configuracion"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150"
+          style={({ isActive }) =>
+            isActive
+              ? { background: "var(--gradient-nav-active)", color: "#7C3AED", fontWeight: 600 }
+              : { color: "#6B7280", fontWeight: 500 }
+          }
         >
-          <span
-            className="w-8 h-8 flex items-center justify-center rounded-lg"
-            style={{ background: "#F3F4F6" }}
-          >
-            <SettingsIcon size={16} color="#9CA3AF" />
-          </span>
-          <span>Configuración</span>
-        </button>
+          {({ isActive }) => (
+            <>
+              <span
+                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all"
+                style={isActive ? { background: "var(--gradient-brand)" } : { background: "#F3F4F6" }}
+              >
+                <SettingsIcon size={16} color={isActive ? "#fff" : "#9CA3AF"} />
+              </span>
+              <span>Configuración</span>
+            </>
+          )}
+        </NavLink>
 
         {/* Usuario */}
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-violet-50">

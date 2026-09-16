@@ -43,7 +43,8 @@ Todo el estado vive en `src/data/`:
   unico archivo que las pantallas tocan para leer o escribir.
 
 Los cambios sobreviven al refresh. Para volver a los datos de ejemplo:
-`localStorage.removeItem('propmatch.store.v1')` en la consola del navegador.
+Configuracion > "Volver a los datos de ejemplo" (tambien cierra la sesion).
+Los datos de la inmobiliaria y el perfil propio se editan en la misma pantalla.
 
 ## Animaciones
 

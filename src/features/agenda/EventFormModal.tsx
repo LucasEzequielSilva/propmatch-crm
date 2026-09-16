@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore, type NewEventInput } from "@/data/store";
 import { AgendaIcon, EventTypeIcon } from "@/components/ui/icons";
-import type { EventType } from "@/types/db";
+import type { CalendarEvent, EventType } from "@/types/db";
 
 /**
- * Alta de un evento de agenda.
+ * Alta y edición de un evento de agenda.
  *
  * El título se sugiere solo a partir del tipo y del contacto elegido, porque
  * en la práctica un agente agenda "Visita — Martín Rodríguez" nueve de cada
@@ -44,31 +44,54 @@ function defaultStart(day?: Date): { date: string; time: string } {
   };
 }
 
+/** `Date` -> `HH:MM` en hora local. */
+const toTimeInput = (d: Date) =>
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
 export function EventFormModal({
   day,
+  event,
   onClose,
   onSaved,
 }: {
   /** Día preseleccionado: al agendar desde una celda del calendario. */
   day?: Date;
+  /** Si viene, el modal edita este evento en lugar de crear uno. */
+  event?: CalendarEvent;
   onClose: () => void;
   onSaved?: () => void;
 }) {
-  const { addEvent, contacts, properties, profiles, profile } = useStore();
+  const { addEvent, updateEvent, removeEvent, contacts, properties, profiles, profile } = useStore();
+  const isEdit = !!event;
 
-  const initial = useMemo(() => defaultStart(day), [day]);
+  const initial = useMemo(() => {
+    if (!event) return { ...defaultStart(day), duration: 60 };
+    const start = new Date(event.starts_at);
+    return {
+      date: toDateInput(start),
+      time: toTimeInput(start),
+      duration: Math.max(15, Math.round((new Date(event.ends_at).getTime() - start.getTime()) / 60_000)),
+    };
+  }, [day, event]);
 
-  const [type, setType] = useState<EventType>("visita");
-  const [title, setTitle] = useState("");
-  const [titleTouched, setTitleTouched] = useState(false);
-  const [contactId, setContactId] = useState("");
-  const [propertyId, setPropertyId] = useState("");
+  const [type, setType] = useState<EventType>(event?.type ?? "visita");
+  const [title, setTitle] = useState(event?.title ?? "");
+  // Al editar, el título ya es del agente: no se pisa con la sugerencia.
+  const [titleTouched, setTitleTouched] = useState(isEdit);
+  const [contactId, setContactId] = useState(event?.contact_id ?? "");
+  const [propertyId, setPropertyId] = useState(event?.property_id ?? "");
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
-  const [duration, setDuration] = useState(60);
-  const [ownerId, setOwnerId] = useState(profile.id);
-  const [notes, setNotes] = useState("");
+  const [duration, setDuration] = useState(initial.duration);
+  const [ownerId, setOwnerId] = useState(event?.owner_id ?? profile.id);
+  const [notes, setNotes] = useState(event?.notes ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  /** Un evento puede durar algo que no está en la lista: se ofrece igual. */
+  const durationOptions = DURATIONS.includes(duration)
+    ? DURATIONS
+    : [...DURATIONS, duration].sort((a, b) => a - b);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -122,7 +145,8 @@ export function EventFormModal({
       owner_id: ownerId,
     };
 
-    addEvent(input);
+    if (event) updateEvent(event.id, input);
+    else addEvent(input);
     onSaved?.();
     onClose();
   }
@@ -134,7 +158,7 @@ export function EventFormModal({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Nuevo evento"
+      aria-label={isEdit ? "Editar evento" : "Nuevo evento"}
     >
       <div
         className="pm-modal rounded-2xl w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden"
@@ -154,10 +178,12 @@ export function EventFormModal({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-lg tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              Nuevo evento
+              {isEdit ? "Editar evento" : "Nuevo evento"}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
-              Queda en el calendario y en el historial del contacto.
+              {isEdit
+                ? "Los cambios se ven al instante en el calendario."
+                : "Queda en el calendario y en el historial del contacto."}
             </p>
           </div>
           <button
@@ -223,9 +249,9 @@ export function EventFormModal({
                   onChange={(e) => setDuration(Number(e.target.value))}
                   className={selectClass}
                 >
-                  {DURATIONS.map((d) => (
+                  {durationOptions.map((d) => (
                     <option key={d} value={d}>
-                      {d < 60 ? `${d} min` : d === 60 ? "1 hora" : `${d / 60} horas`}
+                      {d < 60 ? `${d} min` : d === 60 ? "1 hora" : d % 60 === 0 ? `${d / 60} horas` : `${d} min`}
                     </option>
                   ))}
                 </select>
@@ -305,6 +331,43 @@ export function EventFormModal({
           className="px-6 py-4 border-t flex items-center justify-end gap-3 flex-shrink-0"
           style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
         >
+          {event && (
+            <div className="mr-auto flex items-center gap-2">
+              {confirmDelete ? (
+                <>
+                  <span className="text-xs" style={{ color: "#E11D48", fontWeight: 600 }}>
+                    ¿Borrar el evento?
+                  </span>
+                  <button
+                    onClick={() => {
+                      removeEvent(event.id);
+                      onSaved?.();
+                      onClose();
+                    }}
+                    className="px-3 py-2 rounded-lg text-xs text-white transition-all hover:opacity-90"
+                    style={{ background: "#E11D48", fontWeight: 600 }}
+                  >
+                    Sí, borrar
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="px-3 py-2 rounded-lg text-xs transition-all hover:bg-violet-50"
+                    style={{ color: "#7C6A99", fontWeight: 600 }}
+                  >
+                    No
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="px-3 py-2 rounded-lg text-xs transition-all hover:bg-rose-50"
+                  style={{ color: "#E11D48", fontWeight: 600 }}
+                >
+                  Borrar evento
+                </button>
+              )}
+            </div>
+          )}
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50"
@@ -317,7 +380,7 @@ export function EventFormModal({
             className="px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
             style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
           >
-            Agendar
+            {isEdit ? "Guardar cambios" : "Agendar"}
           </button>
         </div>
       </div>

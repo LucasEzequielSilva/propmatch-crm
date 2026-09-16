@@ -21,6 +21,7 @@ import type {
   Task,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
+import { initials } from "@/lib/format";
 import {
   CURRENT_USER_ID,
   seedActivities,
@@ -49,6 +50,9 @@ const STORAGE_KEY = "propmatch.store.v1";
 const SESSION_KEY = "propmatch.session.v1";
 
 interface StoreData {
+  /** Editables desde Configuración, por eso viven con el resto de los datos. */
+  agency: Agency;
+  profiles: Profile[];
   contacts: Contact[];
   requirements: ContactRequirement[];
   properties: Property[];
@@ -61,6 +65,8 @@ interface StoreData {
 
 function seedData(): StoreData {
   return {
+    agency: seedAgency,
+    profiles: seedProfiles,
     contacts: seedContacts,
     requirements: seedRequirements,
     properties: seedProperties,
@@ -151,6 +157,9 @@ export interface NewEventInput {
   owner_id: string | null;
 }
 
+export type AgencyInput = Pick<Agency, "name" | "phone" | "email" | "city" | "province">;
+export type ProfileInput = Pick<Profile, "full_name" | "email" | "phone">;
+
 export interface NewTaskInput {
   text: string;
   is_priority: boolean;
@@ -210,6 +219,11 @@ interface StoreValue extends StoreData {
   reopenOpportunity: (id: string) => void;
   createOpportunityFromMatch: (matchId: string) => void;
   addEvent: (input: NewEventInput) => CalendarEvent;
+  updateEvent: (id: string, input: NewEventInput) => void;
+  removeEvent: (id: string) => void;
+  updateAgency: (input: AgencyInput) => void;
+  /** Recalcula las iniciales si cambia el nombre. */
+  updateProfile: (id: string, input: ProfileInput) => void;
   addTask: (input: NewTaskInput) => Task;
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
@@ -269,23 +283,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [currentUserId]);
 
   const signIn = useCallback<StoreValue["signIn"]>((email, password) => {
-    const found = seedProfiles.find(
+    const found = data.profiles.find(
       (p) => p.email?.toLowerCase() === email.trim().toLowerCase(),
     );
     if (!found) return "No encontramos ninguna cuenta con ese email.";
     if (password.trim().length < 4) return "Ingresá tu contraseña.";
     setCurrentUserId(found.id);
     return null;
-  }, []);
+  }, [data.profiles]);
 
   const signOut = useCallback(() => setCurrentUserId(null), []);
 
   const profile = useMemo(
     () =>
-      seedProfiles.find((p) => p.id === currentUserId) ??
-      seedProfiles.find((p) => p.id === CURRENT_USER_ID) ??
-      seedProfiles[0],
-    [currentUserId],
+      data.profiles.find((p) => p.id === currentUserId) ??
+      data.profiles.find((p) => p.id === CURRENT_USER_ID) ??
+      data.profiles[0],
+    [currentUserId, data.profiles],
   );
 
   const addProperty = useCallback<StoreValue["addProperty"]>(
@@ -701,6 +715,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return event;
   }, []);
 
+  const updateEvent = useCallback<StoreValue["updateEvent"]>((id, input) => {
+    setData((d) => ({
+      ...d,
+      events: d.events.map((e) => (e.id === id ? { ...e, ...input } : e)),
+    }));
+  }, []);
+
+  const removeEvent = useCallback<StoreValue["removeEvent"]>((id) => {
+    setData((d) => ({ ...d, events: d.events.filter((e) => e.id !== id) }));
+  }, []);
+
+  const updateAgency = useCallback<StoreValue["updateAgency"]>((input) => {
+    setData((d) => ({ ...d, agency: { ...d.agency, ...input } }));
+  }, []);
+
+  const updateProfile = useCallback<StoreValue["updateProfile"]>((id, input) => {
+    setData((d) => ({
+      ...d,
+      profiles: d.profiles.map((p) =>
+        p.id === id ? { ...p, ...input, initials: initials(input.full_name) } : p,
+      ),
+    }));
+  }, []);
+
   const setOpportunityPriority = useCallback<StoreValue["setOpportunityPriority"]>(
     (id, note) => {
       const nowIso = new Date().toISOString();
@@ -832,13 +870,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<StoreValue>(() => {
     const contactIndex = new Map(data.contacts.map((c) => [c.id, c]));
     const propertyIndex = new Map(data.properties.map((p) => [p.id, p]));
-    const profileIndex = new Map(seedProfiles.map((p) => [p.id, p]));
+    const profileIndex = new Map(data.profiles.map((p) => [p.id, p]));
 
     return {
       ...data,
-      agency: seedAgency,
       profile,
-      profiles: seedProfiles,
       currentUserId,
       signIn,
       signOut,
@@ -862,6 +898,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       reopenOpportunity,
       createOpportunityFromMatch,
       addEvent,
+      updateEvent,
+      removeEvent,
+      updateAgency,
+      updateProfile,
       addTask,
       toggleTask,
       removeTask,
@@ -888,6 +928,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     reopenOpportunity,
     createOpportunityFromMatch,
     addEvent,
+    updateEvent,
+    removeEvent,
+    updateAgency,
+    updateProfile,
     addTask,
     toggleTask,
     removeTask,
