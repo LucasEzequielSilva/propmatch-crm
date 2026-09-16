@@ -54,7 +54,7 @@ export default function VerMatchPage() {
     return (
       <>
         <AppHeader title="Detalle del match" breadcrumb={["Matches", "Detalle"]} compact />
-        <div className="flex-1 overflow-y-auto px-8">
+        <div className="flex-1 overflow-y-auto px-4 md:px-8">
           <EmptyState
             icon={<MatchesIcon size={24} color="#7C3AED" />}
             title="Este match ya no existe"
@@ -93,7 +93,7 @@ export default function VerMatchPage() {
         <WhatsAppModal contact={fullContact} property={fullProperty} onClose={() => setWhatsapp(false)} />
       )}
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         {/* Hero */}
         <div
           className="mt-8 rounded-2xl border overflow-hidden relative"

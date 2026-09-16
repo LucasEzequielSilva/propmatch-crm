@@ -286,7 +286,7 @@ export function NotificationsMenu() {
 
       {open && (
         <div
-          className="pm-modal absolute right-0 mt-2 w-80 rounded-2xl border overflow-hidden z-50"
+          className="pm-modal fixed md:absolute left-3 right-3 top-16 md:left-auto md:top-auto md:right-0 md:mt-2 md:w-80 rounded-2xl border overflow-hidden z-50"
           style={{ background: "white", borderColor: "#EDE9FE", boxShadow: "0 12px 40px rgba(76, 29, 149, 0.15)" }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "#F5F3FF" }}>

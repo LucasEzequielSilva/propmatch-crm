@@ -167,8 +167,9 @@ export default function AgendaPage() {
         action={{ label: "Nuevo evento", onClick: () => setFormOpen(true) }}
       />
 
-      <div className="flex-1 flex overflow-hidden flex-col xl:flex-row">
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      {/* En celular todo scrollea junto (semana en lista + panel de hoy). */}
+      <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto md:overflow-hidden">
+        <div className="md:flex-1 flex flex-col md:overflow-hidden min-w-0 flex-shrink-0 md:flex-shrink">
           {/* Barra del calendario */}
           <div
             className="flex items-center justify-between px-6 py-3 border-b flex-shrink-0 gap-4 flex-wrap"
@@ -220,7 +221,9 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <MobileWeekList days={days} events={weekEvents} onOpenEvent={setEditingEvent} contactName={(id) => contactById(id)?.full_name ?? null} />
+
+          <div className="hidden md:block flex-1 overflow-auto">
             <WeeklyCalendar
               days={days}
               events={weekEvents}
@@ -233,7 +236,7 @@ export default function AgendaPage() {
 
         {/* Panel de hoy */}
         <div
-          className="w-full xl:w-72 flex-shrink-0 overflow-y-auto border-t xl:border-t-0 xl:border-l"
+          className="w-full xl:w-72 flex-shrink-0 md:overflow-y-auto border-t xl:border-t-0 xl:border-l"
           style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
         >
           <div className="px-5 py-5 relative overflow-hidden" style={{ background: "var(--gradient-brand-wide)" }}>
@@ -802,6 +805,80 @@ function NextEventCard({
           Ver oportunidad →
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Semana en lista, para celular: la grilla de 7 columnas por hora necesita
+ * 720 px. Un agente en la calle quiere ver "qué tengo hoy y mañana", en orden.
+ */
+function MobileWeekList({
+  days,
+  events,
+  onOpenEvent,
+  contactName,
+}: {
+  days: { label: string; date: Date; isToday: boolean }[];
+  events: CalendarEvent[];
+  onOpenEvent: (event: CalendarEvent) => void;
+  contactName: (id: string | null) => string | null;
+}) {
+  return (
+    <div className="md:hidden px-4 py-3 space-y-4" style={{ background: "white" }}>
+      {days.map((day) => {
+        const dayEvents = events
+          .filter((e) => new Date(e.starts_at).toDateString() === day.date.toDateString())
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+        return (
+          <div key={day.date.toISOString()}>
+            <p
+              className="text-xs uppercase mb-2 flex items-center gap-2"
+              style={{ color: day.isToday ? "#7C3AED" : "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
+            >
+              {day.date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" })}
+              {day.isToday && (
+                <span className="normal-case tracking-normal px-2 py-0.5 rounded-full text-white text-[10px]" style={{ background: "var(--gradient-brand)" }}>
+                  Hoy
+                </span>
+              )}
+            </p>
+            {dayEvents.length === 0 ? (
+              <p className="text-xs pl-1" style={{ color: "#D1C4F5" }}>
+                Sin eventos
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {dayEvents.map((ev) => {
+                  const s = TYPE_STYLES[ev.type];
+                  const who = contactName(ev.contact_id);
+                  return (
+                    <button
+                      key={ev.id}
+                      onClick={() => onOpenEvent(ev)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl text-left"
+                      style={{ background: s.bg, borderLeft: `3px solid ${s.border}` }}
+                    >
+                      <span className="text-sm w-12 flex-shrink-0" style={{ color: s.text, fontWeight: 800 }}>
+                        {fmtHour(new Date(ev.starts_at))}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm truncate" style={{ color: s.text, fontWeight: 700 }}>
+                          {ev.title}
+                        </span>
+                        <span className="block text-xs truncate" style={{ color: s.sub }}>
+                          {TYPE_LABELS[ev.type]}
+                          {who ? ` · ${who}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

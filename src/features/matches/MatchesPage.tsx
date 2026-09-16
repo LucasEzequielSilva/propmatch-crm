@@ -127,9 +127,9 @@ export default function MatchesPage() {
       />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="px-8">
+        <div className="px-4 md:px-8">
           {/* Resumen */}
-          <div className="pm-stagger mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="pm-stagger hidden md:grid mt-8 grid-cols-3 gap-5">
             <OverviewCard
               value={String(stats.total)}
               label="Matches activos"
@@ -178,7 +178,7 @@ export default function MatchesPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="px-8">
+          <div className="px-4 md:px-8">
             <EmptyState
               icon={<MatchesIcon size={24} color="#7C3AED" />}
               title={all.length === 0 ? "Todavía no hay matches" : "Sin resultados"}
@@ -195,10 +195,7 @@ export default function MatchesPage() {
             />
           </div>
         ) : (
-          <div
-            className="mt-5 px-8 pb-8 grid gap-5 items-start"
-            style={{ gridTemplateColumns: "minmax(0, 1fr) 360px" }}
-          >
+          <div className="mt-5 px-4 md:px-8 pb-8 grid gap-5 items-start grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-4 min-w-0">
               <div>
                 <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -224,7 +221,12 @@ export default function MatchesPage() {
               ))}
             </div>
 
-            {selected && <WhyMatchPanel item={selected} onCreateOpp={() => createOpportunityFromMatch(selected.match.id)} />}
+            {/* En celular el análisis está en "Ver detalle": al costado no entra. */}
+            {selected && (
+              <div className="hidden lg:block">
+                <WhyMatchPanel item={selected} onCreateOpp={() => createOpportunityFromMatch(selected.match.id)} />
+              </div>
+            )}
           </div>
         )}
       </div>

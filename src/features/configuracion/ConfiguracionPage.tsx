@@ -30,7 +30,7 @@ export default function ConfiguracionPage() {
       <AppHeader title="Configuración" subtitle="Datos de la inmobiliaria, tu perfil y el equipo." />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="pm-stagger px-8 py-8 grid gap-6 lg:grid-cols-2 max-w-6xl">
+        <div className="pm-stagger px-4 md:px-8 py-8 grid gap-6 lg:grid-cols-2 max-w-6xl">
           <AgencyCard
             key={`agency-${agency.name}-${agency.phone}-${agency.email}-${agency.city}-${agency.province}`}
             initial={agency}

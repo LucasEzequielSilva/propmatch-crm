@@ -119,9 +119,9 @@ export default function PropiedadesPage() {
         </button>
       </AppHeader>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
         {/* KPIs — calculados sobre la cartera, no escritos a mano */}
-        <div className="mt-8 grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="hidden md:grid mt-8 grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             value={String(stats.active.length)}
             label="Propiedades activas"

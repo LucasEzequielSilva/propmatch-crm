@@ -371,7 +371,7 @@ export default function ReportesPage() {
         </button>
       </AppHeader>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         {!hasData ? (
           <EmptyState
             icon={<OpportunitiesIcon size={24} color="#7C3AED" />}

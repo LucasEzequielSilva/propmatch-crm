@@ -50,13 +50,15 @@ export function AppHeader({
 }: AppHeaderProps) {
 
   return (
+    // En celular: título + campana/avatar/acción en la primera fila, y buscador
+    // y botones extra en una segunda fila a lo ancho. En escritorio, una fila.
     <header
-      className="flex items-center justify-between gap-4 px-8 py-5 border-b flex-shrink-0"
+      className="flex flex-wrap md:flex-nowrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-8 py-3 md:py-5 border-b flex-shrink-0"
       style={{ borderColor: "#EDE9FE", backgroundColor: "#FDFCFF" }}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1 md:flex-initial order-1">
         {breadcrumb && breadcrumb.length > 0 && (
-          <p className="text-xs mb-1" style={{ color: "#A78BFA", fontWeight: 500 }}>
+          <p className="hidden md:block text-xs mb-1" style={{ color: "#A78BFA", fontWeight: 500 }}>
             {breadcrumb.map((crumb, i) => (
               <span key={crumb}>
                 {i > 0 && <span style={{ color: "#DDD6FE" }}> / </span>}
@@ -73,22 +75,25 @@ export function AppHeader({
             ))}
           </p>
         )}
-        <h1 className="text-2xl tracking-tight truncate" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+        <h1 className="text-xl md:text-2xl tracking-tight truncate" style={{ color: "#1F0A3C", fontWeight: 800 }}>
           {title}
           {titleAccent}
         </h1>
         {subtitle && (
-          <p className="text-sm mt-0.5" style={{ color: "#7C6A99" }}>
+          <p className="text-xs md:text-sm mt-0.5 truncate md:whitespace-normal" style={{ color: "#7C6A99" }}>
             {subtitle}
           </p>
         )}
       </div>
 
-      <div className="flex items-center gap-3 flex-shrink-0">
-        {children}
+      {(children || search) && (
+        <div className="order-3 md:order-2 w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 [&>*]:flex-shrink-0">
+          {children}
+          {search && <HeaderSearch {...search} />}
+        </div>
+      )}
 
-        {search && <HeaderSearch {...search} />}
-
+      <div className="order-2 md:order-3 flex items-center gap-2 md:gap-3 flex-shrink-0">
         {!compact && (
           <>
             <NotificationsMenu />
@@ -100,7 +105,8 @@ export function AppHeader({
         {action && (
           <button
             onClick={action.onClick}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 whitespace-nowrap"
+            aria-label={action.label}
+            className="flex items-center gap-2 h-10 px-3 md:px-5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 whitespace-nowrap"
             style={{
               background: "var(--gradient-brand)",
               fontWeight: 600,
@@ -108,7 +114,7 @@ export function AppHeader({
             }}
           >
             <PlusIcon />
-            {action.label}
+            <span className="hidden md:inline">{action.label}</span>
           </button>
         )}
       </div>
@@ -210,8 +216,8 @@ function HeaderSearch({
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm focus-within:ring-2 focus-within:ring-[#DDD6FE] transition-all"
-      style={{ background: "#F5F3FF", width: 220 }}
+      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm focus-within:ring-2 focus-within:ring-[#DDD6FE] transition-all flex-1 md:flex-none w-full md:w-[220px] !flex-shrink"
+      style={{ background: "#F5F3FF" }}
     >
       <SearchIcon />
       <input

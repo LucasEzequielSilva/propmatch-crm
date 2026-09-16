@@ -132,8 +132,8 @@ export default function OportunidadesPage() {
       />
 
       <div className="flex-1 overflow-y-auto pb-8">
-        <div className="px-8">
-          <div className="mt-8 grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="px-4 md:px-8">
+          <div className="hidden md:grid mt-8 grid-cols-2 xl:grid-cols-4 gap-4">
             <StatCard
               value={moneyCompact(totals.pipeline)}
               label="Valor total del pipeline"
@@ -186,7 +186,7 @@ export default function OportunidadesPage() {
         </div>
 
         {opportunities.length === 0 ? (
-          <div className="px-8">
+          <div className="px-4 md:px-8">
             <EmptyState
               icon={<OpportunitiesIcon size={24} color="#7C3AED" />}
               title="El pipeline está vacío"
@@ -196,7 +196,7 @@ export default function OportunidadesPage() {
           </div>
         ) : (
           <>
-            <div className="mt-7 px-8">
+            <div className="mt-7 px-4 md:px-8">
               <SectionHeader
                 title="Pipeline de ventas"
                 subtitle={`${filtered.length} oportunidades · arrastrá una tarjeta para moverla de etapa`}
@@ -205,7 +205,7 @@ export default function OportunidadesPage() {
 
             {/* Kanban con scroll horizontal */}
             <div className="overflow-x-auto pb-2">
-              <div className="flex gap-4 px-8" style={{ minWidth: "max-content" }}>
+              <div className="flex gap-4 px-4 md:px-8" style={{ minWidth: "max-content" }}>
                 {STAGES.map((stage) => {
                   const stageCards = filtered.filter((c) => c.opp.stage === stage.id);
                   const stageTotal = stageCards.reduce((s, c) => s + (c.opp.value ?? 0), 0);
@@ -234,12 +234,12 @@ export default function OportunidadesPage() {
             </div>
 
             {lost.length > 0 && (
-              <div className="px-8 mt-6">
+              <div className="px-4 md:px-8 mt-6">
                 <LostSection cards={lost} onReopen={reopenOpportunity} />
               </div>
             )}
 
-            <div className="px-8 mt-8 grid gap-5 grid-cols-1 xl:grid-cols-5">
+            <div className="px-4 md:px-8 mt-8 grid gap-5 grid-cols-1 xl:grid-cols-5">
               <div className="xl:col-span-3">
                 <PrioritySection
                   cards={priority}

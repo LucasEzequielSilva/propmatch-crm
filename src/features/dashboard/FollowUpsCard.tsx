@@ -86,7 +86,7 @@ export function FollowUpsCard() {
           {visible.map((f) => {
             const p = PRIORITY_STYLE[f.priority];
             return (
-              <div key={f.contact.id} className="flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-violet-50">
+              <div key={f.contact.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 p-2.5 rounded-xl transition-all hover:bg-violet-50">
                 <button
                   onClick={() => navigate(`/contactos/${f.contact.id}`)}
                   className={`relative w-10 h-10 rounded-full bg-gradient-to-br ${avatarGradient(f.contact.full_name)} flex items-center justify-center text-xs text-white flex-shrink-0`}
@@ -112,7 +112,7 @@ export function FollowUpsCard() {
                     {f.reason}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-1.5 w-full sm:w-auto pl-[52px] sm:pl-0 flex-shrink-0">
                   <WhatsAppButton compact label={`WhatsApp a ${f.contact.full_name}`} onClick={() => setWriting(f)} />
                   <button
                     onClick={() => markDone(f)}

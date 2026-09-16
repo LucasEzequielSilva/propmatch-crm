@@ -325,7 +325,7 @@ export default function SubirPropiedadPage() {
         </button>
       </AppHeader>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-28">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-28">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
           <div className="space-y-6 min-w-0">
             {/* Bloque 1 */}
@@ -928,7 +928,7 @@ export default function SubirPropiedadPage() {
 
       {/* Footer fijo */}
       <div
-        className="flex-shrink-0 flex items-center justify-between gap-4 px-8 py-4 border-t"
+        className="flex-shrink-0 flex items-center justify-between gap-4 px-4 md:px-8 py-4 border-t"
         style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
       >
         <span className="text-xs" style={{ color: "#A78BFA" }}>

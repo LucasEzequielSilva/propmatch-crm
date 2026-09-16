@@ -94,7 +94,7 @@ export default function DashboardPage() {
         action={{ label: "Agregar", onClick: () => navigate("/propiedades/nueva") }}
       />
 
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
         {searchResults ? (
           <SearchResults
             results={searchResults}
@@ -104,9 +104,9 @@ export default function DashboardPage() {
             onContact={(id) => navigate(`/contactos/${id}`)}
           />
         ) : (
-          <>
+          <div className="flex flex-col">
             {/* KPIs */}
-            <div className="mt-8 grid grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="order-2 md:order-1 mt-6 md:mt-8 grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
               <StatCard
                 value={String(kpis.activeProps.length)}
                 label="Propiedades activas"
@@ -155,12 +155,12 @@ export default function DashboardPage() {
               />
             </div>
 
-            {/* Seguimiento: lo primero que hay que hacer hoy */}
-            <div className="mt-8">
+            {/* Seguimiento: lo primero que hay que hacer hoy. En celular, antes que los números. */}
+            <div className="order-1 md:order-2 mt-4 md:mt-8">
               <FollowUpsCard />
             </div>
 
-            <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="order-3 mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
               {/* Oportunidades recientes */}
               <div className="xl:col-span-2 min-w-0">
                 <Card>
@@ -304,7 +304,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Matches */}
-            <div className="mt-8">
+            <div className="order-4 mt-8">
               <SectionHeader
                 title="Matches para revisar"
                 subtitle="Clientes con alta compatibilidad de propiedades"
@@ -444,7 +444,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
       </div>
     </>

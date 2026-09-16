@@ -22,6 +22,7 @@ import {
   CONTACT_STATUS_LABEL,
   CONTACT_STATUS_STYLE,
   PROPERTY_TYPE_LABEL,
+  moneyCompact,
   avatarGradient,
   initials,
   money,
@@ -139,8 +140,9 @@ export default function ContactosPage() {
         </button>
       </AppHeader>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-8">
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
+        {/* En celular la lista va primero: los totales ya están en Inicio. */}
+        <div className="hidden md:grid mt-8 grid-cols-3 gap-4">
           <StatCard
             value={String(contacts.length)}
             label="Total contactos"
@@ -175,7 +177,7 @@ export default function ContactosPage() {
           />
         </div>
 
-        <div className="mt-7 flex gap-6 items-start flex-col xl:flex-row">
+        <div className="mt-4 md:mt-7 flex gap-6 items-start flex-col xl:flex-row">
           <div className="flex-1 min-w-0 w-full">
             {/* Filtros */}
             <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
@@ -213,8 +215,14 @@ export default function ContactosPage() {
                 />
               </Card>
             ) : (
+              <>
+              <div className="md:hidden space-y-2 pm-stagger">
+                {filtered.map((row) => (
+                  <ContactCardMobile key={row.contact.id} row={row} onOpen={() => navigate(`/contactos/${row.contact.id}`)} />
+                ))}
+              </div>
               <div
-                className="rounded-2xl border overflow-hidden overflow-x-auto"
+                className="hidden md:block rounded-2xl border overflow-hidden overflow-x-auto"
                 style={{ borderColor: "#EDE9FE", boxShadow: "var(--shadow-card)" }}
               >
                 <table className="w-full bg-white" style={{ minWidth: 900 }}>
@@ -248,6 +256,7 @@ export default function ContactosPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
 
@@ -533,5 +542,58 @@ function TopMatchesPanel({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Fila de contacto para celular: lo mínimo para decidir a quién abrir. */
+function ContactCardMobile({ row, onOpen }: { row: Row; onOpen: () => void }) {
+  const { contact, requirement, matchCount } = row;
+  const statusStyle = CONTACT_STATUS_STYLE[contact.status];
+  const busca = requirement
+    ? [
+        requirement.property_types.map((t) => PROPERTY_TYPE_LABEL[t]).join("/"),
+        requirement.zones[0],
+        requirement.budget_max ? moneyCompact(requirement.budget_max, requirement.currency) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Sin búsqueda cargada";
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full flex items-center gap-3 p-3 rounded-2xl border text-left active:scale-[0.99] transition-all"
+      style={{ borderColor: "#EDE9FE", background: "white" }}
+    >
+      <div
+        className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarGradient(contact.full_name)} flex items-center justify-center text-sm text-white flex-shrink-0`}
+        style={{ fontWeight: 700 }}
+      >
+        {initials(contact.full_name)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            {contact.full_name}
+          </p>
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0"
+            style={{ background: statusStyle.bg, color: statusStyle.text, fontWeight: 700 }}
+          >
+            {CONTACT_STATUS_LABEL[contact.status as ContactStatus]}
+          </span>
+        </div>
+        <p className="text-xs truncate mt-0.5" style={{ color: "#7C6A99" }}>
+          {busca}
+        </p>
+      </div>
+      {matchCount > 0 && (
+        <span
+          className="text-xs px-2 py-1 rounded-full flex-shrink-0"
+          style={{ background: "var(--gradient-soft)", color: "#7C3AED", fontWeight: 700 }}
+        >
+          {matchCount} ♥
+        </span>
+      )}
+    </button>
   );
 }

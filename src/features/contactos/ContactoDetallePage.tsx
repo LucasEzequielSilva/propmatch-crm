@@ -94,7 +94,7 @@ export default function ContactoDetallePage() {
     return (
       <>
         <AppHeader title="Contacto" breadcrumb={["Contactos"]} compact />
-        <div className="flex-1 overflow-y-auto px-8">
+        <div className="flex-1 overflow-y-auto px-4 md:px-8">
           <EmptyState
             icon={<ContactsIcon size={24} color="#7C3AED" />}
             title="Este contacto no existe"
@@ -154,7 +154,7 @@ export default function ContactoDetallePage() {
         </button>
       </AppHeader>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         {/* Encabezado */}
         <div
           className="mt-8 rounded-2xl border overflow-hidden"
@@ -337,7 +337,7 @@ export default function ContactoDetallePage() {
                     return (
                       <div
                         key={match.id}
-                        className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-violet-50 cursor-pointer"
+                        className="flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 rounded-xl transition-all hover:bg-violet-50 cursor-pointer"
                         style={{ border: "1px solid #F3F0FF" }}
                         onClick={() => navigate(`/matches/${match.id}`)}
                       >
@@ -361,7 +361,7 @@ export default function ContactoDetallePage() {
                             {money(property.price, property.currency)}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto sm:flex-shrink-0">
                           <div
                             className="text-xs px-2.5 py-1 rounded-full"
                             style={{

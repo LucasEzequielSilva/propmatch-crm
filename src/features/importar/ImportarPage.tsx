@@ -127,7 +127,7 @@ export default function ImportarPage() {
         compact
       />
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         {/* Pasos */}
         <div className="mt-8 flex flex-wrap items-center gap-3">
           {(["contactos", "propiedades"] as Kind[]).map((k) => (

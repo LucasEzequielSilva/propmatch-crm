@@ -80,7 +80,7 @@ export default function PropiedadDetallePage() {
     return (
       <>
         <AppHeader title="Propiedad" breadcrumb={["Propiedades"]} compact />
-        <div className="flex-1 overflow-y-auto px-8">
+        <div className="flex-1 overflow-y-auto px-4 md:px-8">
           <EmptyState
             icon={<HomeIcon size={24} color="#7C3AED" />}
             title="Esta propiedad no existe"
@@ -158,7 +158,7 @@ export default function PropiedadDetallePage() {
       )}
       {reportOpen && owner && <WhatsAppModal contact={owner} property={property} onClose={() => setReportOpen(false)} />}
 
-      <div className="flex-1 overflow-y-auto px-8 pb-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
           <div className="space-y-6 min-w-0">
             {/* Galería */}

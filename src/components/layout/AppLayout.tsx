@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { Sidebar } from "./Sidebar";
+import { MobileNav } from "./MobileNav";
 
 /**
  * Marco de la aplicación: sidebar fijo + área de contenido.
@@ -19,11 +20,12 @@ export function AppLayout() {
   return (
     <div className="flex h-full" style={{ background: "white" }}>
       <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+      {/* En celular el lugar de la barra inferior se descuenta del contenido. */}
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
         {persistFailed && (
           <div
             role="alert"
-            className="px-8 py-2.5 text-sm border-b"
+            className="px-4 md:px-8 py-2.5 text-sm border-b"
             style={{ background: "#FFF1F2", color: "#BE123C", borderColor: "#FECDD3", fontWeight: 600 }}
           >
             No se pudo guardar en este navegador (probablemente por espacio, las fotos ocupan mucho). Lo
@@ -34,6 +36,7 @@ export function AppLayout() {
           <Outlet />
         </div>
       </main>
+      <MobileNav />
     </div>
   );
 }
