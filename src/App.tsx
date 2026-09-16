@@ -15,6 +15,7 @@ import VerMatchPage from "@/features/matches/VerMatchPage";
 import AgendaPage from "@/features/agenda/AgendaPage";
 import ReportesPage from "@/features/reportes/ReportesPage";
 import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
+import FichaPage from "@/features/ficha/FichaPage";
 
 /**
  * Navegación.
@@ -30,6 +31,9 @@ export default function App() {
     <StoreProvider>
       <BrowserRouter>
         <Routes>
+          {/* Ficha que recibe el cliente: pública, sin sesión y sin el layout del CRM. */}
+          <Route path="/ficha" element={<FichaPage />} />
+
           <Route path="/login" element={<PublicOnly />}>
             <Route index element={<LoginPage />} />
           </Route>

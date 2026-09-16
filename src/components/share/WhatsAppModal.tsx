@@ -1,0 +1,295 @@
+import { useEffect, useMemo, useState } from "react";
+import { useStore } from "@/data/store";
+import { WhatsAppIcon } from "@/components/ui/icons";
+import { buildSharedListing, listingUrl, localOnlyPhotos } from "@/lib/share";
+import { firstName, normalizeWhatsappNumber, whatsappLink } from "@/lib/whatsapp";
+import { OPERATION_LABEL, money } from "@/lib/format";
+import type { Contact, Property } from "@/types/db";
+
+/**
+ * Mensaje de WhatsApp a un contacto.
+ *
+ * El agente elige una plantilla, la retoca y la manda desde su propio
+ * WhatsApp (web o app). No hay API de WhatsApp de por medio: es el mismo
+ * WhatsApp que ya usa, así que no hay que pagar ni aprobar nada. A cambio, el
+ * CRM no sabe si el mensaje salió; registra que se abrió el chat.
+ */
+
+const WA_GREEN = "#25D366";
+
+type Template = "propiedad" | "saludo" | "visita" | "seguimiento";
+
+const TEMPLATE_LABEL: Record<Template, string> = {
+  propiedad: "Enviar propiedad",
+  saludo: "Primer contacto",
+  visita: "Confirmar visita",
+  seguimiento: "Seguimiento",
+};
+
+export function WhatsAppModal({
+  contact,
+  property: initialProperty,
+  onClose,
+}: {
+  contact: Contact;
+  /** Propiedad preseleccionada (al abrir desde un match o desde la ficha). */
+  property?: Property;
+  onClose: () => void;
+}) {
+  const { agency, profile, matches, properties, photos, events, profileById, logActivity } = useStore();
+
+  /** Propiedades para ofrecer: primero las que matchean con el contacto. */
+  const options = useMemo(() => {
+    const matched = matches
+      .filter((m) => m.contact_id === contact.id)
+      .map((m) => ({ property: properties.find((p) => p.id === m.property_id), score: m.score }))
+      .filter((o): o is { property: Property; score: number } => !!o.property);
+    const ids = new Set(matched.map((o) => o.property.id));
+    const rest = properties
+      .filter((p) => p.status === "disponible" && !ids.has(p.id))
+      .map((property) => ({ property, score: null as number | null }));
+    return [...matched, ...rest];
+  }, [matches, properties, contact.id]);
+
+  const nextVisit = useMemo(
+    () =>
+      events
+        .filter((e) => e.contact_id === contact.id && new Date(e.starts_at).getTime() > Date.now())
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0],
+    [events, contact.id],
+  );
+
+  const [template, setTemplate] = useState<Template>(initialProperty || options.length ? "propiedad" : "saludo");
+  const [propertyId, setPropertyId] = useState(initialProperty?.id ?? options[0]?.property.id ?? "");
+  const property = properties.find((p) => p.id === propertyId);
+  const [link, setLink] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [edited, setEdited] = useState(false);
+
+  const number = normalizeWhatsappNumber(contact.phone);
+  const name = firstName(contact.full_name);
+  const me = firstName(profile.full_name);
+
+  // La ficha se arma de forma asíncrona (comprime), por eso el link llega después.
+  useEffect(() => {
+    let alive = true;
+    setLink(null);
+    if (!property) return;
+    const listing = buildSharedListing(property, photos[property.id] ?? [], agency, profileById(property.owner_agent_id));
+    listingUrl(listing).then((url) => alive && setLink(url));
+    return () => {
+      alive = false;
+    };
+  }, [property, photos, agency, profileById]);
+
+  const suggested = useMemo(() => {
+    switch (template) {
+      case "propiedad": {
+        if (!property) return `Hola ${name}! Soy ${me} de ${agency.name}.`;
+        const where = [property.zone, property.locality].filter(Boolean)[0];
+        return [
+          `Hola ${name}! Soy ${me} de ${agency.name}.`,
+          `Te comparto una propiedad que coincide con lo que estás buscando:`,
+          ``,
+          `🏠 ${property.title}`,
+          `${OPERATION_LABEL[property.operation]} · ${money(property.price, property.currency)}${where ? ` · ${where}` : ""}`,
+          ``,
+          `Fotos y detalles: ${link ?? "…"}`,
+          ``,
+          `¿Querés que coordinemos una visita?`,
+        ].join("\n");
+      }
+      case "saludo":
+        return `Hola ${name}! Soy ${me} de ${agency.name}. Recibimos tu consulta y quería ayudarte con tu búsqueda. ¿Tenés un minuto para contarme qué estás buscando?`;
+      case "visita": {
+        if (!nextVisit) return `Hola ${name}! Te escribo para coordinar la visita. ¿Qué día y horario te queda cómodo?`;
+        const d = new Date(nextVisit.starts_at);
+        const day = d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+        const hour = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+        return `Hola ${name}! Te confirmo "${nextVisit.title}" el ${day} a las ${hour} h. Cualquier cambio avisame por acá. ¡Nos vemos!`;
+      }
+      case "seguimiento":
+        return `Hola ${name}! ¿Cómo estás? Quería saber si pudiste pensar en las propiedades que te pasé o si preferís que te busque otras opciones.`;
+    }
+  }, [template, property, link, name, me, agency.name, nextVisit]);
+
+  // Mientras el agente no toque el texto, sigue a la plantilla (y al link cuando llega).
+  useEffect(() => {
+    if (!edited) setText(suggested);
+  }, [suggested, edited]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const waitingLink = template === "propiedad" && !!property && !link;
+  const skippedPhotos = property && template === "propiedad" ? localOnlyPhotos(photos[property.id] ?? []) : 0;
+
+  function send() {
+    window.open(whatsappLink(contact.phone, text), "_blank", "noopener");
+    logActivity({
+      type: "mensaje",
+      title: `WhatsApp a ${name}: ${TEMPLATE_LABEL[template].toLowerCase()}`,
+      detail: template === "propiedad" && property ? property.title : text.slice(0, 90),
+      contact_id: contact.id,
+      property_id: template === "propiedad" ? (property?.id ?? null) : null,
+    });
+    onClose();
+  }
+
+  return (
+    <div
+      className="pm-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+      style={{ background: "rgba(31,10,60,0.35)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`WhatsApp a ${contact.full_name}`}
+    >
+      <div
+        className="pm-modal rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+        style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-5 border-b flex items-center gap-3" style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: WA_GREEN }}>
+            <WhatsAppIcon size={20} color="white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-lg tracking-tight truncate" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+              WhatsApp a {contact.full_name}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: number ? "#7C6A99" : "#E11D48" }}>
+              {number ? `+${number}` : "Sin teléfono válido: vas a elegir el chat a mano"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
+            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(TEMPLATE_LABEL) as Template[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTemplate(t);
+                  setEdited(false);
+                }}
+                className="text-xs px-3.5 py-2 rounded-xl border transition-all"
+                style={
+                  t === template
+                    ? { background: "#1F0A3C", color: "white", borderColor: "transparent", fontWeight: 600 }
+                    : { background: "white", color: "#7C6A99", borderColor: "#EDE9FE", fontWeight: 500 }
+                }
+              >
+                {TEMPLATE_LABEL[t]}
+              </button>
+            ))}
+          </div>
+
+          {template === "propiedad" && (
+            <label className="block">
+              <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                Propiedad
+              </span>
+              <select
+                value={propertyId}
+                onChange={(e) => {
+                  setPropertyId(e.target.value);
+                  setEdited(false);
+                }}
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+              >
+                {options.map(({ property: p, score }) => (
+                  <option key={p.id} value={p.id}>
+                    {score !== null ? `${Math.round(score)}% · ` : ""}
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+              {skippedPhotos > 0 && (
+                <span className="block text-xs mt-1.5" style={{ color: "#B45309" }}>
+                  {skippedPhotos === 1 ? "1 foto subida desde la compu no" : `${skippedPhotos} fotos subidas desde la compu no`}{" "}
+                  entra en la ficha hasta que el CRM tenga servidor de fotos.
+                </span>
+              )}
+            </label>
+          )}
+
+          <label className="block">
+            <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+              Mensaje
+            </span>
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setEdited(true);
+                setText(e.target.value);
+              }}
+              rows={9}
+              className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none bg-[#F0FDF4] text-[#1F0A3C] border-[#BBF7D0] focus:border-[#25D366] focus:ring-4 focus:ring-[#DCFCE7]"
+              style={{ lineHeight: 1.5 }}
+            />
+          </label>
+        </div>
+
+        <div className="px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}>
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={send}
+            disabled={!text.trim() || waitingLink}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+            style={{ background: WA_GREEN, fontWeight: 700 }}
+          >
+            <WhatsAppIcon size={15} color="white" />
+            {waitingLink ? "Armando ficha…" : "Abrir WhatsApp"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Botón verde reutilizable. */
+export function WhatsAppButton({
+  onClick,
+  label = "WhatsApp",
+  compact = false,
+}: {
+  onClick: () => void;
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`flex items-center justify-center gap-2 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 ${
+        compact ? "w-9 h-9" : "px-4 py-2"
+      }`}
+      style={{ background: WA_GREEN, fontWeight: 600 }}
+      aria-label={compact ? label : undefined}
+      title={compact ? label : undefined}
+    >
+      <WhatsAppIcon size={compact ? 16 : 14} color="white" />
+      {!compact && label}
+    </button>
+  );
+}

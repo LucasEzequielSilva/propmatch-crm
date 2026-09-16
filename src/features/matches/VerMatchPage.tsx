@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -15,6 +15,8 @@ import {
   PhoneIcon,
 } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
+import { WhatsAppModal } from "@/components/share/WhatsAppModal";
+import { WhatsAppIcon } from "@/components/ui/icons";
 import { useHydratedMatches, type HydratedMatch } from "./MatchesPage";
 import {
   PROPERTY_TYPE_LABEL,
@@ -30,7 +32,8 @@ import type { ContactRequirement, Property } from "@/types/db";
 export default function VerMatchPage() {
   const navigate = useNavigate();
   const { matchId } = useParams();
-  const { createOpportunityFromMatch, activities } = useStore();
+  const { createOpportunityFromMatch, activities, contactById, propertyById } = useStore();
+  const [whatsapp, setWhatsapp] = useState(false);
   const all = useHydratedMatches();
 
   const item = all.find((m) => m.match.id === matchId);
@@ -64,6 +67,8 @@ export default function VerMatchPage() {
   }
 
   const { match, contact, requirement, property, photo, hasOpportunity } = item;
+  const fullContact = contactById(contact.id);
+  const fullProperty = propertyById(property.id);
   const state = matchState(match.score);
 
   return (
@@ -83,6 +88,10 @@ export default function VerMatchPage() {
           Volver
         </button>
       </AppHeader>
+
+      {whatsapp && fullContact && fullProperty && (
+        <WhatsAppModal contact={fullContact} property={fullProperty} onClose={() => setWhatsapp(false)} />
+      )}
 
       <div className="flex-1 overflow-y-auto px-8 pb-10">
         {/* Hero */}
@@ -136,6 +145,16 @@ export default function VerMatchPage() {
                 >
                   {hasOpportunity ? "✓ Oportunidad creada" : "Crear oportunidad"}
                 </button>
+                {fullContact && fullProperty && (
+                  <button
+                    onClick={() => setWhatsapp(true)}
+                    className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
+                    style={{ background: "#25D366", fontWeight: 600 }}
+                  >
+                    <WhatsAppIcon size={14} color="white" />
+                    Enviar por WhatsApp
+                  </button>
+                )}
                 {contact.phone && (
                   <a
                     href={`tel:${contact.phone}`}

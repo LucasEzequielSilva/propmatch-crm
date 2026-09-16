@@ -166,6 +166,14 @@ export interface NewEventInput {
   owner_id: string | null;
 }
 
+export interface LogActivityInput {
+  type: ActivityType;
+  title: string;
+  detail: string | null;
+  contact_id: string | null;
+  property_id: string | null;
+}
+
 export type AgencyInput = Pick<Agency, "name" | "phone" | "email" | "city" | "province">;
 export type ProfileInput = Pick<Profile, "full_name" | "email" | "phone">;
 
@@ -231,6 +239,8 @@ interface StoreValue extends StoreData {
   updateEvent: (id: string, input: NewEventInput) => void;
   removeEvent: (id: string) => void;
   updateAgency: (input: AgencyInput) => void;
+  /** Deja constancia en el historial (por ejemplo, un WhatsApp enviado). */
+  logActivity: (input: LogActivityInput) => void;
   /** Recalcula las iniciales si cambia el nombre. */
   updateProfile: (id: string, input: ProfileInput) => void;
   addTask: (input: NewTaskInput) => Task;
@@ -749,6 +759,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, events: d.events.filter((e) => e.id !== id) }));
   }, []);
 
+  const logActivity = useCallback<StoreValue["logActivity"]>((input) => {
+    const nowIso = new Date().toISOString();
+    setData((d) => ({
+      ...d,
+      activities: [
+        {
+          id: uid("a"),
+          agency_id: seedAgency.id,
+          actor_id: actorRef.current,
+          opportunity_id: null,
+          created_at: nowIso,
+          ...input,
+        },
+        ...d.activities,
+      ],
+    }));
+  }, []);
+
   const updateAgency = useCallback<StoreValue["updateAgency"]>((input) => {
     setData((d) => ({ ...d, agency: { ...d.agency, ...input } }));
   }, []);
@@ -931,6 +959,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeEvent,
       updateAgency,
       updateProfile,
+      logActivity,
       addTask,
       toggleTask,
       removeTask,
@@ -962,6 +991,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeEvent,
     updateAgency,
     updateProfile,
+    logActivity,
     addTask,
     toggleTask,
     removeTask,

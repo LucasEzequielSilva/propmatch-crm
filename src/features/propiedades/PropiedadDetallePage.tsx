@@ -23,6 +23,8 @@ import {
   relativeTime,
 } from "@/lib/format";
 import type { PropertyStatus } from "@/types/db";
+import { ShareListingModal } from "@/components/share/ShareListingModal";
+import { WhatsAppIcon } from "@/components/ui/icons";
 
 const OPERATION_LABEL: Record<string, string> = {
   venta: "Venta",
@@ -52,6 +54,7 @@ export default function PropiedadDetallePage() {
 
   const property = propertyById(propertyId);
   const [activePhoto, setActivePhoto] = useState(0);
+  const [sharing, setSharing] = useState(false);
 
   const gallery = property ? (photos[property.id] ?? []) : [];
 
@@ -102,6 +105,14 @@ export default function PropiedadDetallePage() {
           Volver
         </button>
         <button
+          onClick={() => setSharing(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+          style={{ background: "#25D366", fontWeight: 600 }}
+        >
+          <WhatsAppIcon size={14} color="white" />
+          Compartir ficha
+        </button>
+        <button
           onClick={() => navigate(`/propiedades/${property.id}/editar`)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
           style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
@@ -123,6 +134,8 @@ export default function PropiedadDetallePage() {
           ))}
         </select>
       </AppHeader>
+
+      {sharing && <ShareListingModal property={property} onClose={() => setSharing(false)} />}
 
       <div className="flex-1 overflow-y-auto px-8 pb-10">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
