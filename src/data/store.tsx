@@ -64,6 +64,8 @@ interface StoreData {
   tasks: Task[];
   /** Ids de matches ya revisados. Las ids son deterministas (requerimiento + propiedad). */
   reviewedMatches: string[];
+  /** Seguimientos pospuestos: contacto -> hasta cuándo (ISO). */
+  followUpSnoozes: Record<string, string>;
 }
 
 function seedData(): StoreData {
@@ -79,6 +81,7 @@ function seedData(): StoreData {
     events: seedEvents,
     tasks: seedTasks,
     reviewedMatches: [],
+    followUpSnoozes: {},
   };
 }
 
@@ -254,6 +257,8 @@ interface StoreValue extends StoreData {
   importProperties: (inputs: NewPropertyInput[]) => string[];
   /** Deshace una importación: borra lo creado y todo lo que cuelga de eso. */
   undoImport: (ids: { contacts?: string[]; properties?: string[] }) => void;
+  /** Saca a un contacto de "para contactar hoy" por unos días. */
+  snoozeFollowUp: (contactId: string, days: number) => void;
   /** Deja constancia en el historial (por ejemplo, un WhatsApp enviado). */
   logActivity: (input: LogActivityInput) => void;
   /** Recalcula las iniciales si cambia el nombre. */
@@ -923,6 +928,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const snoozeFollowUp = useCallback<StoreValue["snoozeFollowUp"]>((contactId, days) => {
+    const until = new Date(Date.now() + days * 86_400_000).toISOString();
+    setData((d) => ({ ...d, followUpSnoozes: { ...d.followUpSnoozes, [contactId]: until } }));
+  }, []);
+
   const logActivity = useCallback<StoreValue["logActivity"]>((input) => {
     const nowIso = new Date().toISOString();
     setData((d) => ({
@@ -1124,6 +1134,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateAgency,
       updateProfile,
       logActivity,
+      snoozeFollowUp,
       importContacts,
       importProperties,
       undoImport,
@@ -1159,6 +1170,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     updateAgency,
     updateProfile,
     logActivity,
+    snoozeFollowUp,
     importContacts,
     importProperties,
     undoImport,

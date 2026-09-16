@@ -30,6 +30,8 @@ import {
   relativeTime,
 } from "@/lib/format";
 import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
+import { lastTouch, touchLabel } from "@/lib/followups";
+import { useFollowUps } from "@/data/useFollowUps";
 
 /**
  * Ficha del contacto: todo lo que el agente necesita ver antes de llamarlo.
@@ -54,6 +56,7 @@ export default function ContactoDetallePage() {
 
   const [editing, setEditing] = useState(false);
   const [whatsapp, setWhatsapp] = useState(false);
+  const allFollowUps = useFollowUps(false);
 
   const contact = contactById(contactId);
   const requirement = contact ? requirementOf(contact.id) : undefined;
@@ -174,6 +177,29 @@ export default function ContactoDetallePage() {
                   {CONTACT_STATUS_LABEL[contact.status]}
                 </Badge>
               </div>
+              {(() => {
+                const pending = allFollowUps.find((f) => f.contact.id === contact.id);
+                const touch = lastTouch(contact.id, { activities, events }, Date.now());
+                return (
+                  <p className="text-xs mt-1.5 flex flex-wrap items-center gap-2">
+                    <span style={{ color: "#7C6A99" }}>
+                      Último contacto: <strong style={{ color: "#1F0A3C" }}>{touchLabel(touch)}</strong>
+                    </span>
+                    {pending && (
+                      <span
+                        className="px-2 py-0.5 rounded-md"
+                        style={{
+                          background: pending.priority === 1 ? "#FFF1F2" : "#FFFBEB",
+                          color: pending.priority === 1 ? "#BE123C" : "#B45309",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {pending.reason}
+                      </span>
+                    )}
+                  </p>
+                );
+              })()}
               <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
                 {KIND_LABEL[contact.kind]}
                 {owner && ` · a cargo de ${owner.full_name}`}
@@ -563,7 +589,17 @@ export default function ContactoDetallePage() {
       </div>
 
       {editing && <ContactFormModal contact={contact} onClose={() => setEditing(false)} />}
-      {whatsapp && <WhatsAppModal contact={contact} onClose={() => setWhatsapp(false)} />}
+      {whatsapp && (() => {
+        const pending = allFollowUps.find((f) => f.contact.id === contact.id);
+        return (
+          <WhatsAppModal
+            contact={contact}
+            template={pending?.template}
+            property={pending?.propertyId ? properties.find((p) => p.id === pending.propertyId) : undefined}
+            onClose={() => setWhatsapp(false)}
+          />
+        );
+      })()}
     </>
   );
 }

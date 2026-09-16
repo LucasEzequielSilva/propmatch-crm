@@ -23,6 +23,7 @@ import {
   relativeTime,
 } from "@/lib/format";
 import type { OpportunityStage } from "@/types/db";
+import { FollowUpsCard } from "./FollowUpsCard";
 
 const STAGE_BADGE: Record<OpportunityStage, { bg: string; text: string; border: string }> = {
   nuevos: { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
@@ -152,6 +153,11 @@ export default function DashboardPage() {
                 bar="linear-gradient(90deg, #A855F7, #EC4899)"
                 barWidth={90}
               />
+            </div>
+
+            {/* Seguimiento: lo primero que hay que hacer hoy */}
+            <div className="mt-8">
+              <FollowUpsCard />
             </div>
 
             <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">

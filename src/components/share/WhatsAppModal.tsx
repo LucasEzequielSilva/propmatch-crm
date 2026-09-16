@@ -19,25 +19,31 @@ import { authorizationState } from "@/lib/authorization";
 
 const WA_GREEN = "#25D366";
 
-type Template = "informe" | "propiedad" | "saludo" | "visita" | "seguimiento";
+export type Template = "informe" | "propiedad" | "saludo" | "visita" | "postvisita" | "seguimiento";
 
 const TEMPLATE_LABEL: Record<Template, string> = {
   informe: "Informe al propietario",
   propiedad: "Enviar propiedad",
   saludo: "Primer contacto",
   visita: "Confirmar visita",
+  postvisita: "Después de la visita",
   seguimiento: "Seguimiento",
 };
 
 export function WhatsAppModal({
   contact,
   property: initialProperty,
+  template: initialTemplate,
   onClose,
+  onSent,
 }: {
   contact: Contact;
   /** Propiedad preseleccionada (al abrir desde un match o desde la ficha). */
   property?: Property;
+  /** Plantilla con la que abre (por ejemplo, la que sugiere el seguimiento). */
+  template?: Template;
   onClose: () => void;
+  onSent?: () => void;
 }) {
   const { agency, profile, matches, properties, photos, events, opportunities, activities, profileById, logActivity } =
     useStore();
@@ -68,11 +74,12 @@ export function WhatsAppModal({
   );
 
   const [template, setTemplate] = useState<Template>(
-    owned.length && (!initialProperty || initialProperty.owner_contact_id === contact.id)
+    initialTemplate ??
+    (owned.length && (!initialProperty || initialProperty.owner_contact_id === contact.id)
       ? "informe"
       : initialProperty || options.length
         ? "propiedad"
-        : "saludo",
+        : "saludo"),
   );
   const [propertyId, setPropertyId] = useState(
     initialProperty?.id ?? (owned.length ? owned[0].id : options[0]?.property.id) ?? "",
@@ -145,6 +152,10 @@ export function WhatsAppModal({
         const hour = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
         return `Hola ${name}! Te confirmo "${nextVisit.title}" el ${day} a las ${hour} h. Cualquier cambio avisame por acá. ¡Nos vemos!`;
       }
+      case "postvisita":
+        return property
+          ? `Hola ${name}! ¿Qué te pareció ${property.title}? Contame qué te gustó y qué no, así te busco opciones que encajen mejor.`
+          : `Hola ${name}! ¿Qué te pareció la visita? Contame qué te gustó y qué no, así te busco opciones que encajen mejor.`;
       case "seguimiento":
         return `Hola ${name}! ¿Cómo estás? Quería saber si pudiste pensar en las propiedades que te pasé o si preferís que te busque otras opciones.`;
     }
@@ -175,6 +186,7 @@ export function WhatsAppModal({
       // va al dueño y no debe sumar en "se la enviamos a N".
       property_id: template === "propiedad" ? (property?.id ?? null) : null,
     });
+    onSent?.();
     onClose();
   }
 

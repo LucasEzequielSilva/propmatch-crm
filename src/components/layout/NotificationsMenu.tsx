@@ -5,6 +5,7 @@ import { BellIcon } from "@/components/ui/icons";
 import { relativeTime } from "@/lib/format";
 import { AUTHORIZATION_WARNING_DAYS, authorizationState } from "@/lib/authorization";
 import { lastSentAbout } from "@/lib/ownerReport";
+import { useFollowUps } from "@/data/useFollowUps";
 
 /**
  * Campana del header.
@@ -29,7 +30,7 @@ const EXPIRED_GRACE_DAYS = 30;
 /** Hasta cuántos matches se listan uno por uno antes de agruparlos. */
 const MAX_MATCH_ITEMS = 3;
 
-type Kind = "match" | "evento" | "tarea" | "oportunidad" | "autorizacion" | "avisar";
+type Kind = "match" | "evento" | "tarea" | "oportunidad" | "autorizacion" | "avisar" | "seguimiento";
 
 interface Notification {
   id: string;
@@ -50,6 +51,7 @@ const KIND_STYLE: Record<Kind, { icon: string; bg: string; color: string }> = {
   oportunidad: { icon: "⏸", bg: "#FFFBEB", color: "#D97706" },
   autorizacion: { icon: "✎", bg: "#FFF1F2", color: "#BE123C" },
   avisar: { icon: "➚", bg: "#F0FDF4", color: "#16A34A" },
+  seguimiento: { icon: "☎", bg: "#FFF1F2", color: "#E11D48" },
 };
 
 function loadSeen(): Set<string> {
@@ -73,6 +75,7 @@ export function NotificationsMenu() {
   const { matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId } =
     useStore();
   const navigate = useNavigate();
+  const followUps = useFollowUps();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(loadSeen);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -82,6 +85,23 @@ export function NotificationsMenu() {
   const items = useMemo<Notification[]>(() => {
     const now = Date.now();
     const out: Notification[] = [];
+
+    const urgentFollowUps = followUps.filter((f) => f.priority === 1);
+    if (urgentFollowUps.length) {
+      out.push({
+        // Cambia con la gente incluida: alguien nuevo vuelve a encender el punto.
+        id: `seguimiento:${urgentFollowUps.map((f) => f.contact.id).sort().join(",")}`,
+        kind: "seguimiento",
+        title: `${urgentFollowUps.length} ${urgentFollowUps.length === 1 ? "contacto espera" : "contactos esperan"} respuesta`,
+        detail: urgentFollowUps
+          .slice(0, 3)
+          .map((f) => f.contact.full_name)
+          .join(", "),
+        at: new Date(now + 2).toISOString(),
+        when: "Ver en Inicio",
+        to: "/",
+      });
+    }
 
     for (const p of properties) {
       if (p.status !== "disponible" && p.status !== "reservada") continue;
@@ -220,7 +240,7 @@ export function NotificationsMenu() {
       if (fa !== fb) return fa ? -1 : 1;
       return fa ? ta - tb : tb - ta;
     });
-  }, [matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId]);
+  }, [matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId, followUps]);
 
   const unread = items.filter((n) => !seen.has(n.id)).length;
 
