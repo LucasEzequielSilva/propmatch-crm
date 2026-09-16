@@ -129,7 +129,15 @@ export default function ContactosPage() {
         subtitle="Gestioná y conocé mejor a cada persona."
         search={{ placeholder: "Buscar contacto...", value: query, onChange: setQuery }}
         action={{ label: "Nuevo contacto", onClick: () => setCreating(true) }}
-      />
+      >
+        <button
+          onClick={() => navigate("/importar?tipo=contactos")}
+          className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
+          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+        >
+          Importar Excel
+        </button>
+      </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-8 pb-8">
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">

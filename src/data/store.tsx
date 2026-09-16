@@ -249,6 +249,11 @@ interface StoreValue extends StoreData {
   updateEvent: (id: string, input: NewEventInput) => void;
   removeEvent: (id: string) => void;
   updateAgency: (input: AgencyInput) => void;
+  /** Alta masiva desde un Excel. Devuelve los ids creados, para poder deshacer. */
+  importContacts: (inputs: NewContactInput[]) => string[];
+  importProperties: (inputs: NewPropertyInput[]) => string[];
+  /** Deshace una importación: borra lo creado y todo lo que cuelga de eso. */
+  undoImport: (ids: { contacts?: string[]; properties?: string[] }) => void;
   /** Deja constancia en el historial (por ejemplo, un WhatsApp enviado). */
   logActivity: (input: LogActivityInput) => void;
   /** Recalcula las iniciales si cambia el nombre. */
@@ -774,6 +779,150 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, events: d.events.filter((e) => e.id !== id) }));
   }, []);
 
+  const importContacts = useCallback<StoreValue["importContacts"]>((inputs) => {
+    const nowIso = new Date().toISOString();
+    const contacts: Contact[] = [];
+    const requirements: ContactRequirement[] = [];
+    for (const input of inputs) {
+      const id = uid("c");
+      contacts.push({
+        id,
+        agency_id: seedAgency.id,
+        owner_id: input.owner_id ?? actorRef.current,
+        full_name: input.full_name,
+        email: input.email,
+        phone: input.phone,
+        kind: input.kind,
+        status: input.status,
+        source: "manual",
+        profile_type: input.profile_type,
+        notes: input.notes,
+        created_at: nowIso,
+        updated_at: nowIso,
+      });
+      if (input.requirement) {
+        requirements.push({
+          id: uid("r"),
+          agency_id: seedAgency.id,
+          contact_id: id,
+          ...input.requirement,
+          rooms_min: null,
+          is_active: true,
+          created_at: nowIso,
+          updated_at: nowIso,
+        });
+      }
+    }
+    setData((d) => ({
+      ...d,
+      contacts: [...contacts, ...d.contacts],
+      requirements: [...requirements, ...d.requirements],
+      activities: [
+        {
+          id: uid("a"),
+          agency_id: seedAgency.id,
+          actor_id: actorRef.current,
+          type: "nota",
+          title: `Importación de ${contacts.length} ${contacts.length === 1 ? "contacto" : "contactos"}`,
+          detail: requirements.length ? `${requirements.length} con búsqueda cargada` : null,
+          contact_id: null,
+          property_id: null,
+          opportunity_id: null,
+          created_at: nowIso,
+        },
+        ...d.activities,
+      ],
+    }));
+    return contacts.map((c) => c.id);
+  }, []);
+
+  const importProperties = useCallback<StoreValue["importProperties"]>((inputs) => {
+    const nowIso = new Date().toISOString();
+    const properties: Property[] = inputs.map((input) => ({
+      id: uid("p"),
+      agency_id: seedAgency.id,
+      owner_agent_id: input.owner_agent_id,
+      owner_contact_id: input.owner_contact_id,
+      authorization_type: input.authorization_type,
+      authorization_expires_at: input.authorization_expires_at,
+      title: input.title,
+      description: input.description,
+      type: input.type,
+      operation: input.operation,
+      status: input.status,
+      street: input.street,
+      street_number: input.street_number,
+      locality: input.locality,
+      province: input.province,
+      zone: input.locality,
+      lat: null,
+      lng: null,
+      price: input.price,
+      currency: input.currency,
+      expenses: input.expenses,
+      taxes: input.taxes,
+      commission_pct: input.commission_pct,
+      surface_total: input.surface_total,
+      surface_covered: input.surface_covered,
+      rooms: input.bedrooms ? input.bedrooms + 1 : null,
+      bedrooms: input.bedrooms,
+      bathrooms: input.bathrooms,
+      garages: input.garages,
+      age_years: input.age_years,
+      features: input.features,
+      is_featured: false,
+      published_to_marketplace: false,
+      published_at: nowIso,
+      created_at: nowIso,
+      updated_at: nowIso,
+    }));
+    const photoMap = Object.fromEntries(properties.map((p, i) => [p.id, inputs[i].photos]));
+    setData((d) => ({
+      ...d,
+      properties: [...properties, ...d.properties],
+      photos: { ...d.photos, ...photoMap },
+      activities: [
+        {
+          id: uid("a"),
+          agency_id: seedAgency.id,
+          actor_id: actorRef.current,
+          type: "nota",
+          title: `Importación de ${properties.length} ${properties.length === 1 ? "propiedad" : "propiedades"}`,
+          detail: null,
+          contact_id: null,
+          property_id: null,
+          opportunity_id: null,
+          created_at: nowIso,
+        },
+        ...d.activities,
+      ],
+    }));
+    return properties.map((p) => p.id);
+  }, []);
+
+  const undoImport = useCallback<StoreValue["undoImport"]>(({ contacts = [], properties = [] }) => {
+    const c = new Set(contacts);
+    const p = new Set(properties);
+    setData((d) => ({
+      ...d,
+      contacts: d.contacts.filter((x) => !c.has(x.id)),
+      requirements: d.requirements.filter((x) => !c.has(x.contact_id)),
+      properties: d.properties
+        .filter((x) => !p.has(x.id))
+        .map((x) => (x.owner_contact_id && c.has(x.owner_contact_id) ? { ...x, owner_contact_id: null } : x)),
+      photos: Object.fromEntries(Object.entries(d.photos).filter(([id]) => !p.has(id))),
+      opportunities: d.opportunities.filter((o) => !c.has(o.contact_id) && !(o.property_id && p.has(o.property_id))),
+      events: d.events.map((e) => ({
+        ...e,
+        contact_id: e.contact_id && c.has(e.contact_id) ? null : e.contact_id,
+        property_id: e.property_id && p.has(e.property_id) ? null : e.property_id,
+      })),
+      activities: d.activities.filter(
+        (a) => !(a.contact_id && c.has(a.contact_id)) && !(a.property_id && p.has(a.property_id)),
+      ),
+    }));
+  }, []);
+
   const logActivity = useCallback<StoreValue["logActivity"]>((input) => {
     const nowIso = new Date().toISOString();
     setData((d) => ({
@@ -975,6 +1124,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateAgency,
       updateProfile,
       logActivity,
+      importContacts,
+      importProperties,
+      undoImport,
       addTask,
       toggleTask,
       removeTask,
@@ -1007,6 +1159,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     updateAgency,
     updateProfile,
     logActivity,
+    importContacts,
+    importProperties,
+    undoImport,
     addTask,
     toggleTask,
     removeTask,

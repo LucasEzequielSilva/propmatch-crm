@@ -109,7 +109,15 @@ export default function PropiedadesPage() {
         subtitle="Gestioná todas tus propiedades desde un solo lugar."
         search={{ placeholder: "Buscar propiedad...", value: query, onChange: setQuery }}
         action={{ label: "Nueva propiedad", onClick: () => navigate("/propiedades/nueva") }}
-      />
+      >
+        <button
+          onClick={() => navigate("/importar?tipo=propiedades")}
+          className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
+          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+        >
+          Importar Excel
+        </button>
+      </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-8 pb-8">
         {/* KPIs — calculados sobre la cartera, no escritos a mano */}

@@ -16,6 +16,7 @@ import AgendaPage from "@/features/agenda/AgendaPage";
 import ReportesPage from "@/features/reportes/ReportesPage";
 import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
 import FichaPage from "@/features/ficha/FichaPage";
+import ImportarPage from "@/features/importar/ImportarPage";
 
 /**
  * Navegación.
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="agenda" element={<AgendaPage />} />
               <Route path="reportes" element={<ReportesPage />} />
               <Route path="configuracion" element={<ConfiguracionPage />} />
+              <Route path="importar" element={<ImportarPage />} />
             </Route>
           </Route>
 
