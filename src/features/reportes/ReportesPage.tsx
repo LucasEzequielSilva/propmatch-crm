@@ -23,6 +23,7 @@ import {
   TrendUpIcon,
 } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
+import { downloadCsv, datedFilename } from "@/lib/csv";
 import { PROPERTY_STATUS_LABEL, PROPERTY_STATUS_STYLE, PROPERTY_TYPE_LABEL, avatarGradient, initials } from "@/lib/format";
 
 const PERIODS = [
@@ -182,6 +183,38 @@ export default function ReportesPage() {
     [profiles, opportunities],
   );
 
+  /**
+   * Exporta lo que se está viendo: mismas cifras, mismo período. Un CSV y no
+   * un PDF porque el uso real es pegarlo en una planilla y seguir trabajando.
+   */
+  function exportCsv() {
+    const periodLabel = PERIODS.find((p) => p.value === days)?.label ?? `Últimos ${days} días`;
+    const rows: (string | number | null)[][] = [
+      ["Reporte PropMatch", periodLabel],
+      ["Generado", new Date().toLocaleString("es-AR")],
+      [],
+      ["Indicador", "Valor"],
+      ["Leads nuevos", kpis.leads.length],
+      ["Matches generados", kpis.newMatches.length],
+      ["Oportunidades abiertas", kpis.openOpps.length],
+      ["Operaciones cerradas", kpis.closed.length],
+      ["Tasa de conversión (%)", conversionRate],
+      [],
+      ["Embudo", "Cantidad"],
+      ...funnel.map((f) => [f.label, f.value]),
+      [],
+      ["Propiedad", "Matches", "Oportunidades", "Visitas"],
+      ...propertyPerf.map((r) => [r.property.title, r.matchCount, r.opps, r.visits]),
+      [],
+      ["Agente", "Oportunidades", "Cerradas", "Conversión (%)"],
+      ...team.map((r) => [r.agent.full_name, r.opps, r.conv, r.rate]),
+      [],
+      ["Fecha", "Leads", "Oportunidades", "Cierres"],
+      ...series.map((pt) => [pt.date, pt.leads, pt.ops, pt.conv]),
+    ];
+    downloadCsv(datedFilename("reporte-propmatch"), rows);
+  }
+
   /** Insights derivados de los datos, no textos fijos. */
   const insights = useMemo(() => {
     const out: {
@@ -316,6 +349,7 @@ export default function ReportesPage() {
         </div>
 
         <button
+          onClick={exportCsv}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50"
           style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
         >

@@ -10,6 +10,7 @@ import type {
   ContactRequirement,
   ContactStatus,
   CurrencyCode,
+  EventType,
   Match,
   OperationType,
   Opportunity,
@@ -138,6 +139,35 @@ export interface NewPropertyInput {
   photos: string[];
 }
 
+export interface NewEventInput {
+  type: EventType;
+  title: string;
+  contact_id: string | null;
+  property_id: string | null;
+  /** ISO. La pantalla arma el día y la hora; el store no interpreta zonas. */
+  starts_at: string;
+  ends_at: string;
+  notes: string | null;
+  owner_id: string | null;
+}
+
+export interface NewTaskInput {
+  text: string;
+  is_priority: boolean;
+  due_date: string | null;
+  contact_id: string | null;
+  owner_id: string | null;
+}
+
+export interface NewOpportunityInput {
+  contact_id: string;
+  property_id: string | null;
+  stage: OpportunityStage;
+  value: number | null;
+  currency: CurrencyCode;
+  owner_id: string | null;
+}
+
 interface StoreValue extends StoreData {
   agency: Agency;
   /** El agente con la sesión abierta. */
@@ -169,9 +199,20 @@ interface StoreValue extends StoreData {
   saveRequirement: (contactId: string, input: RequirementInput) => void;
   /** Búsqueda activa de un contacto, si tiene. */
   requirementOf: (contactId: string) => ContactRequirement | undefined;
+  /** Alta manual, sin pasar por un match. */
+  addOpportunity: (input: NewOpportunityInput) => Opportunity;
   moveOpportunity: (id: string, stage: OpportunityStage) => void;
+  /** Marca o desmarca una operación como urgente. `null` la desmarca. */
+  setOpportunityPriority: (id: string, note: string | null) => void;
+  /** Saca la operación del pipeline dejando escrito el motivo. */
+  markOpportunityLost: (id: string, reason: string | null) => void;
+  /** Vuelve a abrir una operación perdida, en la primera etapa. */
+  reopenOpportunity: (id: string) => void;
   createOpportunityFromMatch: (matchId: string) => void;
+  addEvent: (input: NewEventInput) => CalendarEvent;
+  addTask: (input: NewTaskInput) => Task;
   toggleTask: (id: string) => void;
+  removeTask: (id: string) => void;
   markMatchReviewed: (id: string) => void;
   reset: () => void;
 }
@@ -564,6 +605,206 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [matches],
   );
 
+  /**
+   * Alta manual de una oportunidad: la misma pieza que `createOpportunityFromMatch`
+   * pero arrancando de un contacto elegido a mano, sin match detrás.
+   */
+  const addOpportunity = useCallback<StoreValue["addOpportunity"]>((input) => {
+    const nowIso = new Date().toISOString();
+    const id = uid("o");
+    const opportunity: Opportunity = {
+      id,
+      agency_id: seedAgency.id,
+      contact_id: input.contact_id,
+      property_id: input.property_id,
+      match_id: null,
+      owner_id: input.owner_id,
+      stage: input.stage,
+      value: input.value,
+      currency: input.currency,
+      is_priority: false,
+      priority_note: null,
+      stage_since: nowIso,
+      closed_at: input.stage === "cierre" ? nowIso : null,
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    setData((d) => {
+      const contact = d.contacts.find((c) => c.id === input.contact_id);
+      const property = d.properties.find((p) => p.id === input.property_id);
+      return {
+        ...d,
+        opportunities: [opportunity, ...d.opportunities],
+        activities: [
+          {
+            id: uid("a"),
+            agency_id: seedAgency.id,
+            actor_id: CURRENT_USER_ID,
+            type: "etapa_avanzada" as ActivityType,
+            title: `Oportunidad nueva en ${STAGE_LABEL[input.stage]}`,
+            detail: [contact?.full_name, property?.title].filter(Boolean).join(" — ") || null,
+            contact_id: input.contact_id,
+            property_id: input.property_id,
+            opportunity_id: id,
+            created_at: nowIso,
+          },
+          ...d.activities,
+        ],
+      };
+    });
+
+    return opportunity;
+  }, []);
+
+  const addEvent = useCallback<StoreValue["addEvent"]>((input) => {
+    const nowIso = new Date().toISOString();
+    const event: CalendarEvent = {
+      id: uid("e"),
+      agency_id: seedAgency.id,
+      owner_id: input.owner_id,
+      type: input.type,
+      title: input.title,
+      contact_id: input.contact_id,
+      property_id: input.property_id,
+      opportunity_id: null,
+      starts_at: input.starts_at,
+      ends_at: input.ends_at,
+      notes: input.notes,
+      created_at: nowIso,
+    };
+
+    setData((d) => {
+      const contact = d.contacts.find((c) => c.id === input.contact_id);
+      const property = d.properties.find((p) => p.id === input.property_id);
+      return {
+        ...d,
+        events: [...d.events, event],
+        activities: [
+          {
+            id: uid("a"),
+            agency_id: seedAgency.id,
+            actor_id: CURRENT_USER_ID,
+            type: EVENT_ACTIVITY[input.type],
+            title: input.title,
+            detail: [contact?.full_name, property?.title].filter(Boolean).join(" — ") || null,
+            contact_id: input.contact_id,
+            property_id: input.property_id,
+            opportunity_id: null,
+            created_at: nowIso,
+          },
+          ...d.activities,
+        ],
+      };
+    });
+
+    return event;
+  }, []);
+
+  const setOpportunityPriority = useCallback<StoreValue["setOpportunityPriority"]>(
+    (id, note) => {
+      const nowIso = new Date().toISOString();
+      setData((d) => ({
+        ...d,
+        opportunities: d.opportunities.map((o) =>
+          o.id === id
+            ? { ...o, is_priority: note !== null, priority_note: note, updated_at: nowIso }
+            : o,
+        ),
+      }));
+    },
+    [],
+  );
+
+  /**
+   * Perder una operación no es "una etapa más": deja de contar en el pipeline
+   * y el motivo queda en el historial, que es lo único que después sirve para
+   * entender por qué se cae la gente.
+   */
+  const markOpportunityLost = useCallback<StoreValue["markOpportunityLost"]>((id, reason) => {
+    const nowIso = new Date().toISOString();
+    setData((d) => {
+      const opp = d.opportunities.find((o) => o.id === id);
+      if (!opp) return d;
+      const contact = d.contacts.find((c) => c.id === opp.contact_id);
+
+      return {
+        ...d,
+        opportunities: d.opportunities.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                stage: "perdida",
+                stage_since: nowIso,
+                updated_at: nowIso,
+                closed_at: nowIso,
+                is_priority: false,
+                priority_note: reason,
+              }
+            : o,
+        ),
+        activities: [
+          {
+            id: uid("a"),
+            agency_id: seedAgency.id,
+            actor_id: CURRENT_USER_ID,
+            type: "etapa_avanzada" as ActivityType,
+            title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} se dio de baja`,
+            detail: reason,
+            contact_id: opp.contact_id,
+            property_id: opp.property_id,
+            opportunity_id: opp.id,
+            created_at: nowIso,
+          },
+          ...d.activities,
+        ],
+      };
+    });
+  }, []);
+
+  const reopenOpportunity = useCallback<StoreValue["reopenOpportunity"]>((id) => {
+    const nowIso = new Date().toISOString();
+    setData((d) => ({
+      ...d,
+      opportunities: d.opportunities.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              stage: "nuevos",
+              stage_since: nowIso,
+              updated_at: nowIso,
+              closed_at: null,
+              priority_note: null,
+            }
+          : o,
+      ),
+    }));
+  }, []);
+
+  const addTask = useCallback<StoreValue["addTask"]>((input) => {
+    const task: Task = {
+      id: uid("t"),
+      agency_id: seedAgency.id,
+      owner_id: input.owner_id,
+      text: input.text,
+      is_priority: input.is_priority,
+      is_done: false,
+      due_date: input.due_date,
+      contact_id: input.contact_id,
+      created_at: new Date().toISOString(),
+    };
+    // Las urgentes arriba: es el orden en el que la pantalla las muestra.
+    setData((d) => ({
+      ...d,
+      tasks: input.is_priority ? [task, ...d.tasks] : [...d.tasks, task],
+    }));
+    return task;
+  }, []);
+
+  const removeTask = useCallback<StoreValue["removeTask"]>((id) => {
+    setData((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
+  }, []);
+
   const toggleTask = useCallback<StoreValue["toggleTask"]>((id) => {
     setData((d) => ({
       ...d,
@@ -614,9 +855,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addContact,
       updateContact,
       saveRequirement,
+      addOpportunity,
       moveOpportunity,
+      setOpportunityPriority,
+      markOpportunityLost,
+      reopenOpportunity,
       createOpportunityFromMatch,
+      addEvent,
+      addTask,
       toggleTask,
+      removeTask,
       markMatchReviewed,
       reset,
     };
@@ -633,9 +881,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addContact,
     updateContact,
     saveRequirement,
+    addOpportunity,
     moveOpportunity,
+    setOpportunityPriority,
+    markOpportunityLost,
+    reopenOpportunity,
     createOpportunityFromMatch,
+    addEvent,
+    addTask,
     toggleTask,
+    removeTask,
     markMatchReviewed,
     reset,
   ]);
@@ -648,6 +903,14 @@ export function useStore(): StoreValue {
   if (!ctx) throw new Error("useStore debe usarse dentro de <StoreProvider>");
   return ctx;
 }
+
+/** Qué queda escrito en el historial según el tipo de evento agendado. */
+const EVENT_ACTIVITY: Record<EventType, ActivityType> = {
+  visita: "visita_programada",
+  llamada: "llamada",
+  reunion: "nota",
+  seguimiento: "nota",
+};
 
 export const STAGE_LABEL: Record<OpportunityStage, string> = {
   nuevos: "Nuevos",

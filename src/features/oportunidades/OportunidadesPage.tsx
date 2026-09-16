@@ -19,6 +19,7 @@ import {
   StarOutlineIcon,
 } from "@/components/ui/icons";
 import { useStore, STAGE_LABEL } from "@/data/store";
+import { OpportunityFormModal } from "./OpportunityFormModal";
 import {
   PROPERTY_TYPE_LABEL,
   avatarGradient,
@@ -57,9 +58,21 @@ interface Card_ {
 
 export default function OportunidadesPage() {
   const navigate = useNavigate();
-  const { opportunities, contactById, propertyById, matches, moveOpportunity, activities } = useStore();
+  const {
+    opportunities,
+    contactById,
+    propertyById,
+    matches,
+    moveOpportunity,
+    setOpportunityPriority,
+    markOpportunityLost,
+    reopenOpportunity,
+    activities,
+  } = useStore();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState<string | null>(null);
+  /** Etapa en la que abre el alta manual, o `null` con el modal cerrado. */
+  const [newIn, setNewIn] = useState<OpportunityStage | null>(null);
 
   const cards = useMemo<Card_[]>(() => {
     const scoreByPair = new Map(matches.map((m) => [`${m.contact_id}:${m.property_id}`, m.score]));
@@ -98,6 +111,7 @@ export default function OportunidadesPage() {
   }, [opportunities]);
 
   const priority = filtered.filter((c) => c.opp.is_priority);
+  const lost = filtered.filter((c) => c.opp.stage === "perdida");
   const recentActivity = activities.slice(0, 5);
 
   function advance(id: string) {
@@ -114,7 +128,7 @@ export default function OportunidadesPage() {
         title="Oportunidades"
         subtitle="Seguí cada operación y acercate al cierre."
         search={{ placeholder: "Buscar oportunidad...", value: query, onChange: setQuery }}
-        action={{ label: "Nueva oportunidad", onClick: () => navigate("/matches") }}
+        action={{ label: "Nueva oportunidad", onClick: () => setNewIn("nuevos") }}
       />
 
       <div className="flex-1 overflow-y-auto pb-8">
@@ -210,15 +224,27 @@ export default function OportunidadesPage() {
                         setDragging(null);
                       }}
                       onAdvance={advance}
+                      onAdd={() => setNewIn(stage.id)}
+                      onPriority={setOpportunityPriority}
+                      onLose={markOpportunityLost}
                     />
                   );
                 })}
               </div>
             </div>
 
+            {lost.length > 0 && (
+              <div className="px-8 mt-6">
+                <LostSection cards={lost} onReopen={reopenOpportunity} />
+              </div>
+            )}
+
             <div className="px-8 mt-8 grid gap-5 grid-cols-1 xl:grid-cols-5">
               <div className="xl:col-span-3">
-                <PrioritySection cards={priority} />
+                <PrioritySection
+                  cards={priority}
+                  onOpen={(contactId) => navigate(`/contactos/${contactId}`)}
+                />
               </div>
               <div className="xl:col-span-2">
                 <Card className="h-full">
@@ -267,7 +293,91 @@ export default function OportunidadesPage() {
           </>
         )}
       </div>
+
+      {newIn && <OpportunityFormModal stage={newIn} onClose={() => setNewIn(null)} />}
     </>
+  );
+}
+
+/**
+ * Las operaciones perdidas no se borran ni vuelven al tablero: quedan acá,
+ * plegadas, con el motivo a la vista y la puerta abierta a reactivarlas. Sin
+ * esta lista, marcar "perdida" sería tirar la tarjeta a un agujero negro.
+ */
+function LostSection({
+  cards,
+  onReopen,
+}: {
+  cards: Card_[];
+  onReopen: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const total = cards.reduce((sum, c) => sum + (c.opp.value ?? 0), 0);
+
+  return (
+    <Card>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-5 py-3.5 flex items-center gap-3 transition-all hover:bg-rose-50/40"
+      >
+        <div
+          className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: "#FFF1F2" }}
+        >
+          <AlertCircleIcon color="#E11D48" />
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            Operaciones perdidas
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+            {cards.length} {cards.length === 1 ? "operación" : "operaciones"} · {money(total)} que
+            no entran en el pipeline
+          </p>
+        </div>
+        <span
+          className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+          style={{ background: "#FFF1F2", color: "#E11D48", fontWeight: 600 }}
+        >
+          {open ? "Ocultar" : "Ver"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 pt-1 grid gap-3 sm:grid-cols-2">
+          {cards.map(({ opp, contactName, propertyTitle }) => (
+            <div
+              key={opp.id}
+              className="rounded-xl p-3.5 flex items-start gap-2.5"
+              style={{ background: "#FFF8F8", border: "1px solid #FECDD3" }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                  {contactName}
+                </p>
+                <p className="text-xs truncate mt-0.5" style={{ color: "#7C6A99" }}>
+                  {propertyTitle}
+                </p>
+                <p className="text-xs mt-1.5" style={{ color: "#9F1239" }}>
+                  {opp.priority_note ?? "Sin motivo registrado"}
+                </p>
+                <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                  {relativeTime(opp.closed_at ?? opp.updated_at)}
+                </p>
+              </div>
+              <button
+                onClick={() => onReopen(opp.id)}
+                className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0 transition-all hover:opacity-80"
+                style={{ background: "#EDE9FE", color: "#7C3AED", fontWeight: 600 }}
+                title="Vuelve al pipeline en Nuevos"
+              >
+                Reactivar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -290,6 +400,9 @@ function KanbanColumn({
   onDragEnd,
   onDrop,
   onAdvance,
+  onAdd,
+  onPriority,
+  onLose,
 }: {
   stage: (typeof STAGES)[number];
   cards: Card_[];
@@ -300,6 +413,9 @@ function KanbanColumn({
   onDragEnd: () => void;
   onDrop: (id: string) => void;
   onAdvance: (id: string) => void;
+  onAdd: () => void;
+  onPriority: (id: string, note: string | null) => void;
+  onLose: (id: string, reason: string | null) => void;
 }) {
   const [isOver, setIsOver] = useState(false);
 
@@ -364,10 +480,13 @@ function KanbanColumn({
             onAdvance={() => onAdvance(card.opp.id)}
             onDragStart={() => onDragStart(card.opp.id)}
             onDragEnd={onDragEnd}
+            onPriority={(note) => onPriority(card.opp.id, note)}
+            onLose={(reason) => onLose(card.opp.id, reason)}
           />
         ))}
 
         <button
+          onClick={onAdd}
           className="w-full py-2.5 rounded-xl border-2 border-dashed text-xs transition-all hover:opacity-80 flex items-center justify-center gap-1"
           style={{ borderColor: `${stage.accent}44`, color: stage.accent, fontWeight: 600 }}
         >
@@ -388,6 +507,8 @@ function OpportunityCard({
   onAdvance,
   onDragStart,
   onDragEnd,
+  onPriority,
+  onLose,
 }: {
   card: Card_;
   stageAccent: string;
@@ -397,10 +518,27 @@ function OpportunityCard({
   onAdvance: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onPriority: (note: string | null) => void;
+  onLose: (reason: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  /** Qué está pidiendo la tarjeta: una nota de urgencia o un motivo de baja. */
+  const [asking, setAsking] = useState<"priority" | "lose" | null>(null);
+  const [draft, setDraft] = useState("");
   const { opp, contactName, propertyTitle, propertyType, matchScore } = card;
+
+  function cancelAsk() {
+    setAsking(null);
+    setDraft("");
+  }
+
+  function confirmAsk() {
+    const note = draft.trim() || null;
+    if (asking === "priority") onPriority(note ?? "Sin nota");
+    if (asking === "lose") onLose(note);
+    cancelAsk();
+  }
 
   return (
     <div
@@ -494,6 +632,77 @@ function OpportunityCard({
               <ClockIcon size={11} color="#A78BFA" />
               <span style={{ color: "#7C6A99" }}>{daysInStage(opp.stage_since)}</span>
             </div>
+
+            {asking ? (
+              <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") confirmAsk();
+                    if (e.key === "Escape") cancelAsk();
+                  }}
+                  placeholder={
+                    asking === "priority" ? "¿Por qué es urgente?" : "¿Por qué se cayó?"
+                  }
+                  autoFocus
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs border outline-none bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA]"
+                />
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <button
+                    onClick={confirmAsk}
+                    className="px-2.5 py-1 rounded-lg text-xs text-white transition-all hover:opacity-90"
+                    style={{
+                      background: asking === "lose" ? "#E11D48" : "var(--gradient-brand)",
+                      fontWeight: 600,
+                      fontSize: "10px",
+                    }}
+                  >
+                    {asking === "lose" ? "Dar de baja" : "Marcar urgente"}
+                  </button>
+                  <button
+                    onClick={cancelAsk}
+                    className="px-2.5 py-1 rounded-lg text-xs transition-all hover:bg-violet-50"
+                    style={{ color: "#7C6A99", fontWeight: 600, fontSize: "10px" }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => {
+                    if (opp.is_priority) {
+                      onPriority(null);
+                    } else {
+                      setDraft("");
+                      setAsking("priority");
+                    }
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg transition-all hover:opacity-80"
+                  style={{
+                    background: opp.is_priority ? "#FEF3C7" : "#F5F3FF",
+                    color: opp.is_priority ? "#B45309" : "#7C3AED",
+                    fontWeight: 600,
+                    fontSize: "10px",
+                  }}
+                >
+                  <AlertTriangleIcon color={opp.is_priority ? "#B45309" : "#7C3AED"} />
+                  {opp.is_priority ? "Quitar urgencia" : "Marcar urgente"}
+                </button>
+                <button
+                  onClick={() => {
+                    setDraft("");
+                    setAsking("lose");
+                  }}
+                  className="px-2 py-1 rounded-lg transition-all hover:opacity-80"
+                  style={{ background: "#FFF1F2", color: "#E11D48", fontWeight: 600, fontSize: "10px" }}
+                >
+                  Perdida
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -532,7 +741,13 @@ function OpportunityCard({
   );
 }
 
-function PrioritySection({ cards }: { cards: Card_[] }) {
+function PrioritySection({
+  cards,
+  onOpen,
+}: {
+  cards: Card_[];
+  onOpen: (contactId: string) => void;
+}) {
   return (
     <Card className="h-full">
       <div
@@ -566,6 +781,7 @@ function PrioritySection({ cards }: { cards: Card_[] }) {
           cards.map(({ opp, contactName, matchScore }) => (
             <div
               key={opp.id}
+              onClick={() => onOpen(opp.contact_id)}
               className="rounded-xl p-3.5 cursor-pointer transition-all hover:shadow-md"
               style={{
                 background: "linear-gradient(135deg, #FFFBEB 0%, #FFF7ED 100%)",
@@ -616,6 +832,10 @@ function PrioritySection({ cards }: { cards: Card_[] }) {
                   {money(opp.value, opp.currency)}
                 </span>
                 <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen(opp.contact_id);
+                  }}
                   className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg text-white transition-all hover:opacity-90"
                   style={{ background: "linear-gradient(135deg, #F97316, #EC4899)", fontWeight: 600 }}
                 >

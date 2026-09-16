@@ -1,0 +1,376 @@
+import { useEffect, useMemo, useState } from "react";
+import { useStore, type NewEventInput } from "@/data/store";
+import { AgendaIcon, EventTypeIcon } from "@/components/ui/icons";
+import type { EventType } from "@/types/db";
+
+/**
+ * Alta de un evento de agenda.
+ *
+ * El título se sugiere solo a partir del tipo y del contacto elegido, porque
+ * en la práctica un agente agenda "Visita — Martín Rodríguez" nueve de cada
+ * diez veces y escribirlo a mano es fricción pura. Si lo edita, deja de
+ * pisarse.
+ */
+
+const TYPES: { value: EventType; label: string; color: string }[] = [
+  { value: "visita", label: "Visita", color: "#7C3AED" },
+  { value: "llamada", label: "Llamada", color: "#3B82F6" },
+  { value: "reunion", label: "Reunión", color: "#EC4899" },
+  { value: "seguimiento", label: "Seguimiento", color: "#F59E0B" },
+];
+
+const DURATIONS = [30, 45, 60, 90, 120];
+
+/** `Date` -> `YYYY-MM-DD` en hora local (el ISO nativo pasa por UTC y corre el día). */
+const toDateInput = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Próxima media hora en punto, como arranque por defecto. */
+function defaultStart(day?: Date): { date: string; time: string } {
+  const d = day ? new Date(day) : new Date();
+  if (!day) {
+    d.setMinutes(d.getMinutes() + 30 - (d.getMinutes() % 30), 0, 0);
+    if (d.getHours() < 9) d.setHours(9, 0, 0, 0);
+    if (d.getHours() >= 19) {
+      d.setDate(d.getDate() + 1);
+      d.setHours(9, 0, 0, 0);
+    }
+  } else {
+    d.setHours(10, 0, 0, 0);
+  }
+  return {
+    date: toDateInput(d),
+    time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+  };
+}
+
+export function EventFormModal({
+  day,
+  onClose,
+  onSaved,
+}: {
+  /** Día preseleccionado: al agendar desde una celda del calendario. */
+  day?: Date;
+  onClose: () => void;
+  onSaved?: () => void;
+}) {
+  const { addEvent, contacts, properties, profiles, profile } = useStore();
+
+  const initial = useMemo(() => defaultStart(day), [day]);
+
+  const [type, setType] = useState<EventType>("visita");
+  const [title, setTitle] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [contactId, setContactId] = useState("");
+  const [propertyId, setPropertyId] = useState("");
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time);
+  const [duration, setDuration] = useState(60);
+  const [ownerId, setOwnerId] = useState(profile.id);
+  const [notes, setNotes] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const typeLabel = TYPES.find((t) => t.value === type)!.label;
+  const contactName = contacts.find((c) => c.id === contactId)?.full_name;
+  const suggested = contactName ? `${typeLabel} — ${contactName}` : typeLabel;
+  const effectiveTitle = titleTouched && title.trim() ? title.trim() : suggested;
+
+  /** Propiedades ofrecidas primero: las que están disponibles. */
+  const propertyOptions = useMemo(
+    () =>
+      [...properties].sort((a, b) => {
+        const rank = (s: string) => (s === "disponible" ? 0 : 1);
+        return rank(a.status) - rank(b.status) || a.title.localeCompare(b.title);
+      }),
+    [properties],
+  );
+
+  const contactOptions = useMemo(
+    () => [...contacts].sort((a, b) => a.full_name.localeCompare(b.full_name)),
+    [contacts],
+  );
+
+  function handleSave() {
+    const e: Record<string, string> = {};
+    if (!date) e.date = "Elegí una fecha";
+    if (!time) e.time = "Elegí un horario";
+    if (type === "visita" && !propertyId) e.property = "Una visita necesita una propiedad";
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+
+    const [hh, mm] = time.split(":").map(Number);
+    const [yy, mo, dd] = date.split("-").map(Number);
+    const starts = new Date(yy, mo - 1, dd, hh, mm, 0, 0);
+    const ends = new Date(starts.getTime() + duration * 60_000);
+
+    const input: NewEventInput = {
+      type,
+      title: effectiveTitle,
+      contact_id: contactId || null,
+      property_id: propertyId || null,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      notes: notes.trim() || null,
+      owner_id: ownerId,
+    };
+
+    addEvent(input);
+    onSaved?.();
+    onClose();
+  }
+
+  return (
+    <div
+      className="pm-backdrop fixed inset-0 z-50 flex items-center justify-center p-6"
+      style={{ background: "rgba(31,10,60,0.35)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Nuevo evento"
+    >
+      <div
+        className="pm-modal rounded-2xl w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden"
+        style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Cabecera */}
+        <div
+          className="px-6 py-5 border-b flex items-center gap-3 flex-shrink-0"
+          style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
+        >
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "var(--gradient-brand)" }}
+          >
+            <AgendaIcon size={18} color="white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-lg tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+              Nuevo evento
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+              Queda en el calendario y en el historial del contacto.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50 flex-shrink-0"
+            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Cuerpo */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          <div>
+            <SectionLabel>Tipo de evento</SectionLabel>
+            <div className="flex flex-wrap gap-2">
+              {TYPES.map((t) => {
+                const active = t.value === type;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setType(t.value)}
+                    className="flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl transition-all border"
+                    style={
+                      active
+                        ? { background: t.color, color: "white", borderColor: "transparent", fontWeight: 600 }
+                        : { background: "white", color: "#7C6A99", borderColor: "#EDE9FE", fontWeight: 500 }
+                    }
+                  >
+                    <EventTypeIcon type={t.value} color={active ? "white" : t.color} size={12} />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Cuándo</SectionLabel>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Fecha" error={errors.date}>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={inputClass(!!errors.date)}
+                />
+              </Field>
+              <Field label="Hora" error={errors.time}>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  step={900}
+                  className={inputClass(!!errors.time)}
+                />
+              </Field>
+              <Field label="Duración">
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(Number(e.target.value))}
+                  className={selectClass}
+                >
+                  {DURATIONS.map((d) => (
+                    <option key={d} value={d}>
+                      {d < 60 ? `${d} min` : d === 60 ? "1 hora" : `${d / 60} horas`}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Con quién</SectionLabel>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Contacto">
+                <select
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">Sin contacto</option>
+                  {contactOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Propiedad" error={errors.property}>
+                <select
+                  value={propertyId}
+                  onChange={(e) => setPropertyId(e.target.value)}
+                  className={errors.property ? selectClassError : selectClass}
+                >
+                  <option value="">Sin propiedad</option>
+                  {propertyOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                      {p.status !== "disponible" ? ` (${p.status})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Agente">
+                <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={selectClass}>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Título">
+                <input
+                  value={titleTouched ? title : suggested}
+                  onChange={(e) => {
+                    setTitleTouched(true);
+                    setTitle(e.target.value);
+                  }}
+                  placeholder={suggested}
+                  className={inputClass(false)}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Notas</SectionLabel>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+              placeholder="Qué hay que preparar, quién más va, cómo llegar…"
+              className={inputClass(false) + " resize-none"}
+            />
+          </div>
+        </div>
+
+        {/* Pie */}
+        <div
+          className="px-6 py-4 border-t flex items-center justify-end gap-3 flex-shrink-0"
+          style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
+        >
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+            style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
+          >
+            Agendar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Piezas ──────────────────────────────────────────────────────────────── */
+
+const inputClass = (hasError: boolean) =>
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
+  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+
+const selectClass =
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
+  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+
+const selectClassError =
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
+  "text-[#1F0A3C] border-[#FECDD3] focus:border-[#FB7185] focus:ring-4 focus:ring-[#EDE9FE]";
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="text-xs uppercase mb-3"
+      style={{ color: "#7C3AED", fontWeight: 700, letterSpacing: "0.1em" }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+        {label}
+      </span>
+      {children}
+      {error && (
+        <span className="block text-xs mt-1.5" style={{ color: "#E11D48", fontWeight: 500 }}>
+          {error}
+        </span>
+      )}
+    </label>
+  );
+}

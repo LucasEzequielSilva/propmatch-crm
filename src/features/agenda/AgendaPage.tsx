@@ -11,6 +11,7 @@ import {
   PlusIcon,
 } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
+import { EventFormModal } from "./EventFormModal";
 import { avatarGradient, initials } from "@/lib/format";
 import type { CalendarEvent, EventType } from "@/types/db";
 
@@ -54,11 +55,26 @@ const decimalHour = (d: Date) => d.getHours() + d.getMinutes() / 60;
 
 export default function AgendaPage() {
   const navigate = useNavigate();
-  const { events, tasks, toggleTask, contactById, propertyById, coverPhoto, matches } = useStore();
+  const {
+    events,
+    tasks,
+    toggleTask,
+    addTask,
+    removeTask,
+    profile,
+    contactById,
+    propertyById,
+    coverPhoto,
+    matches,
+  } = useStore();
 
   const [query, setQuery] = useState("");
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  /** `null` mientras el campo de nueva tarea está cerrado. */
+  const [taskDraft, setTaskDraft] = useState<string | null>(null);
+  const [taskPriority, setTaskPriority] = useState(false);
 
   const today = new Date();
   const weekStart = useMemo(() => {
@@ -106,6 +122,25 @@ export default function AgendaPage() {
     [events],
   );
 
+  function submitTask() {
+    const text = (taskDraft ?? "").trim();
+    if (!text) {
+      setTaskDraft(null);
+      setTaskPriority(false);
+      return;
+    }
+    addTask({
+      text,
+      is_priority: taskPriority,
+      due_date: null,
+      contact_id: null,
+      owner_id: profile.id,
+    });
+    // El campo queda abierto: las tareas se cargan de a varias.
+    setTaskDraft("");
+    setTaskPriority(false);
+  }
+
   const nextEvent = upcoming[0];
   const pendingTasks = tasks.filter((t) => !t.is_done);
 
@@ -127,7 +162,7 @@ export default function AgendaPage() {
         title="Agenda"
         subtitle="Organizá tu día y no te pierdas ninguna oportunidad."
         search={{ placeholder: "Buscar evento...", value: query, onChange: setQuery }}
-        action={{ label: "Nuevo evento", onClick: () => {} }}
+        action={{ label: "Nuevo evento", onClick: () => setFormOpen(true) }}
       />
 
       <div className="flex-1 flex overflow-hidden flex-col xl:flex-row">
@@ -283,41 +318,113 @@ export default function AgendaPage() {
             </div>
             <div className="space-y-2">
               {tasks.map((task) => (
-                <button
+                <div
                   key={task.id}
-                  onClick={() => toggleTask(task.id)}
-                  className="w-full flex items-start gap-2.5 text-left p-2.5 rounded-xl transition-all hover:bg-violet-50"
+                  className="group flex items-start gap-1 rounded-xl transition-all hover:bg-violet-50"
                 >
-                  <div
-                    className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 transition-all"
-                    style={
-                      task.is_done
-                        ? { background: "var(--gradient-brand)" }
-                        : { border: "2px solid #DDD6FE", background: "white" }
-                    }
+                  <button
+                    onClick={() => toggleTask(task.id)}
+                    className="flex-1 min-w-0 flex items-start gap-2.5 text-left p-2.5"
                   >
-                    {task.is_done && <CheckIcon size={10} color="white" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="text-xs leading-relaxed"
-                      style={{
-                        color: task.is_done ? "#C4B5FD" : "#374151",
-                        fontWeight: task.is_done ? 400 : 500,
-                        textDecoration: task.is_done ? "line-through" : "none",
-                      }}
+                    <div
+                      className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 transition-all"
+                      style={
+                        task.is_done
+                          ? { background: "var(--gradient-brand)" }
+                          : { border: "2px solid #DDD6FE", background: "white" }
+                      }
                     >
-                      {task.text}
-                    </p>
-                    {task.is_priority && !task.is_done && (
-                      <span className="text-xs" style={{ color: "#EC4899", fontWeight: 600, fontSize: "10px" }}>
-                        ● Prioritaria
-                      </span>
-                    )}
-                  </div>
-                </button>
+                      {task.is_done && <CheckIcon size={10} color="white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-xs leading-relaxed"
+                        style={{
+                          color: task.is_done ? "#C4B5FD" : "#374151",
+                          fontWeight: task.is_done ? 400 : 500,
+                          textDecoration: task.is_done ? "line-through" : "none",
+                        }}
+                      >
+                        {task.text}
+                      </p>
+                      {task.is_priority && !task.is_done && (
+                        <span className="text-xs" style={{ color: "#EC4899", fontWeight: 600, fontSize: "10px" }}>
+                          ● Prioritaria
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => removeTask(task.id)}
+                    aria-label={"Eliminar tarea: " + task.text}
+                    className="w-6 h-6 mt-2.5 mr-1 rounded-lg flex-shrink-0 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:bg-white"
+                    style={{ color: "#C4B5FD", fontSize: 15, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
+
+            {taskDraft === null ? (
+              <button
+                onClick={() => setTaskDraft("")}
+                className="w-full mt-2 py-2 rounded-xl text-xs transition-all hover:bg-violet-50 flex items-center justify-center gap-1.5"
+                style={{ color: "#7C3AED", fontWeight: 600 }}
+              >
+                <PlusIcon size={11} color="currentColor" />
+                Agregar tarea
+              </button>
+            ) : (
+              <div className="mt-2 px-1">
+                <input
+                  value={taskDraft}
+                  onChange={(e) => setTaskDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitTask();
+                    if (e.key === "Escape") {
+                      setTaskDraft(null);
+                      setTaskPriority(false);
+                    }
+                  }}
+                  placeholder="Llamar a Martín por la contraoferta..."
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-xl text-xs border outline-none transition-all bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                />
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <button
+                    onClick={() => setTaskPriority((v) => !v)}
+                    className="px-2.5 py-1 rounded-lg transition-all border"
+                    style={
+                      taskPriority
+                        ? { background: "#FDF2F8", color: "#EC4899", borderColor: "#FBCFE8", fontWeight: 600, fontSize: "10px" }
+                        : { background: "white", color: "#A78BFA", borderColor: "#EDE9FE", fontWeight: 600, fontSize: "10px" }
+                    }
+                  >
+                    ● Prioritaria
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setTaskDraft(null);
+                        setTaskPriority(false);
+                      }}
+                      className="px-2.5 py-1 rounded-lg transition-all hover:bg-violet-50"
+                      style={{ color: "#7C6A99", fontWeight: 600, fontSize: "10px" }}
+                    >
+                      Listo
+                    </button>
+                    <button
+                      onClick={submitTask}
+                      className="px-3 py-1 rounded-lg text-white transition-all hover:opacity-90"
+                      style={{ background: "var(--gradient-brand)", fontWeight: 600, fontSize: "10px" }}
+                    >
+                      Agregar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Próximos eventos */}
@@ -369,6 +476,7 @@ export default function AgendaPage() {
             </div>
 
             <button
+              onClick={() => setFormOpen(true)}
               className="w-full mt-3 py-2.5 rounded-xl text-xs border-2 border-dashed transition-all hover:border-violet-300 flex items-center justify-center gap-1.5"
               style={{ borderColor: "#DDD6FE", color: "#7C3AED", fontWeight: 600 }}
             >
@@ -378,6 +486,8 @@ export default function AgendaPage() {
           </div>
         </div>
       </div>
+
+      {formOpen && <EventFormModal onClose={() => setFormOpen(false)} />}
     </>
   );
 }
