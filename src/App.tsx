@@ -17,6 +17,9 @@ import ReportesPage from "@/features/reportes/ReportesPage";
 import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
 import FichaPage from "@/features/ficha/FichaPage";
 import ImportarPage from "@/features/importar/ImportarPage";
+import OperacionesPage from "@/features/operaciones/OperacionesPage";
+import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
+import DocumentoPage from "@/features/operaciones/DocumentoPage";
 
 /**
  * Navegación.
@@ -40,6 +43,7 @@ export default function App() {
           </Route>
 
           <Route element={<RequireSession />}>
+            <Route path="operaciones/:dealId/documento/:kind" element={<DocumentoPage />} />
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
 
@@ -52,6 +56,8 @@ export default function App() {
               <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
 
               <Route path="oportunidades" element={<OportunidadesPage />} />
+              <Route path="operaciones" element={<OperacionesPage />} />
+              <Route path="operaciones/:dealId" element={<OperacionDetallePage />} />
 
               <Route path="matches" element={<MatchesPage />} />
               <Route path="matches/:matchId" element={<VerMatchPage />} />

@@ -73,7 +73,7 @@ as $$
   select agency_id from profiles where id = auth.uid();
 $$;
 
-create or replace function current_role()
+create or replace function current_user_role()
 returns user_role
 language sql
 stable

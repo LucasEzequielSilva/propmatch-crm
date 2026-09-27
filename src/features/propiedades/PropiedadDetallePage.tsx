@@ -125,6 +125,13 @@ export default function PropiedadDetallePage() {
           Compartir ficha
         </button>
         <button
+          onClick={() => navigate(`/operaciones?propiedad=${property.id}`)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50"
+          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+        >
+          Iniciar operación
+        </button>
+        <button
           onClick={() => navigate(`/propiedades/${property.id}/editar`)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
           style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}

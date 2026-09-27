@@ -266,3 +266,61 @@ export interface OpportunityWithRelations extends Opportunity {
   property: Pick<Property, "id" | "title" | "type"> | null;
   match_score: number | null;
 }
+
+/* ── Operaciones (expediente de una venta o un alquiler) ──────────────────── */
+
+export type DealKind = "venta" | "alquiler";
+export type DealStatus = "en_curso" | "cerrada" | "caida";
+
+/** Datos de una persona tal como van en el contrato. */
+export interface DealParty {
+  name: string;
+  dni: string;
+  cuit: string;
+  civil_status: string;
+  nationality: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+export interface Deal {
+  id: string;
+  agency_id: string;
+  kind: DealKind;
+  status: DealStatus;
+  opportunity_id: string | null;
+  property_id: string | null;
+  /** Comprador o inquilino. */
+  client_contact_id: string | null;
+  /** Vendedor o propietario. */
+  owner_contact_id: string | null;
+  client: DealParty;
+  owner: DealParty;
+  guarantor: DealParty;
+  /** Precio de venta, o alquiler mensual. */
+  price: number | null;
+  currency: CurrencyCode;
+  commission_pct: number | null;
+  /** Reserva */
+  reserva_amount: number | null;
+  /** `YYYY-MM-DD` */
+  reserva_valid_until: string | null;
+  /** Venta: % del precio que se paga al firmar el boleto. */
+  boleto_advance_pct: number | null;
+  /** `YYYY-MM-DD` */
+  escritura_date: string | null;
+  escribano: string;
+  /** Alquiler */
+  contract_months: number | null;
+  start_date: string | null;
+  deposit_months: number | null;
+  update_rule: string;
+  destination: string;
+  /** Ids de pasos y de documentos tildados. */
+  steps: Record<string, boolean>;
+  docs: Record<string, boolean>;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}

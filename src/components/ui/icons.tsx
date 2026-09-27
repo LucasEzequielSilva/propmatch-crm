@@ -422,3 +422,14 @@ export function WhatsAppIcon({ size = 16, color = "currentColor", className }: I
     </svg>
   );
 }
+
+/** Expediente: hoja con renglones y tilde. */
+export function OperacionesIcon({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M7 3h7l5 5v12a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M14 3v5h5" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 14l2 2 4-4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

@@ -8,6 +8,7 @@ import {
   LogoutIcon,
   MatchesIcon,
   OpportunitiesIcon,
+  OperacionesIcon,
   PropertiesIcon,
   ReportesIcon,
   SettingsIcon,
@@ -38,6 +39,7 @@ const TABS: Item[] = [
 
 const MORE: Item[] = [
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
+  { to: "/operaciones", label: "Operaciones", icon: OperacionesIcon },
   { to: "/matches", label: "Matches", icon: MatchesIcon },
   { to: "/reportes", label: "Reportes", icon: ReportesIcon },
   { to: "/configuracion", label: "Configuración", icon: SettingsIcon },

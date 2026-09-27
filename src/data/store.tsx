@@ -10,6 +10,7 @@ import type {
   ContactRequirement,
   ContactStatus,
   CurrencyCode,
+  Deal,
   EventType,
   Match,
   OperationType,
@@ -62,6 +63,7 @@ interface StoreData {
   activities: Activity[];
   events: CalendarEvent[];
   tasks: Task[];
+  deals: Deal[];
   /** Ids de matches ya revisados. Las ids son deterministas (requerimiento + propiedad). */
   reviewedMatches: string[];
   /** Seguimientos pospuestos: contacto -> hasta cuándo (ISO). */
@@ -80,6 +82,7 @@ function seedData(): StoreData {
     activities: seedActivities,
     events: seedEvents,
     tasks: seedTasks,
+    deals: [],
     reviewedMatches: [],
     followUpSnoozes: {},
   };
@@ -92,6 +95,7 @@ function loadData(): StoreData {
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
     const merged = { ...seedData(), ...parsed };
+    merged.deals = merged.deals ?? [];
     // Campos que se sumaron después: los registros guardados no los tienen.
     merged.properties = merged.properties.map((p) => ({
       ...p,
@@ -207,6 +211,8 @@ export interface NewOpportunityInput {
   owner_id: string | null;
 }
 
+export type NewDealInput = Omit<Deal, "id" | "agency_id" | "created_at" | "updated_at">;
+
 interface StoreValue extends StoreData {
   agency: Agency;
   /** El agente con la sesión abierta. */
@@ -267,6 +273,9 @@ interface StoreValue extends StoreData {
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
   markMatchReviewed: (id: string) => void;
+  addDeal: (input: NewDealInput) => Deal;
+  updateDeal: (id: string, patch: Partial<Deal>) => void;
+  removeDeal: (id: string) => void;
   reset: () => void;
   /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
   persistFailed: boolean;
@@ -1088,6 +1097,42 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [matches, reviewed],
   );
 
+  const addDeal = useCallback<StoreValue["addDeal"]>((input) => {
+    const nowIso = new Date().toISOString();
+    const deal: Deal = { ...input, id: uid("d"), agency_id: seedAgency.id, created_at: nowIso, updated_at: nowIso };
+    setData((d) => ({
+      ...d,
+      deals: [deal, ...d.deals],
+      activities: [
+        {
+          id: uid("a"),
+          agency_id: seedAgency.id,
+          actor_id: actorRef.current,
+          type: "nota" as ActivityType,
+          title: `Operación de ${input.kind} iniciada`,
+          detail: d.properties.find((p) => p.id === input.property_id)?.title ?? null,
+          contact_id: input.client_contact_id,
+          property_id: input.property_id,
+          opportunity_id: input.opportunity_id,
+          created_at: nowIso,
+        },
+        ...d.activities,
+      ],
+    }));
+    return deal;
+  }, []);
+
+  const updateDeal = useCallback<StoreValue["updateDeal"]>((id, patch) => {
+    setData((d) => ({
+      ...d,
+      deals: d.deals.map((x) => (x.id === id ? { ...x, ...patch, updated_at: new Date().toISOString() } : x)),
+    }));
+  }, []);
+
+  const removeDeal = useCallback<StoreValue["removeDeal"]>((id) => {
+    setData((d) => ({ ...d, deals: d.deals.filter((x) => x.id !== id) }));
+  }, []);
+
   const reset = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -1142,6 +1187,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toggleTask,
       removeTask,
       markMatchReviewed,
+      addDeal,
+      updateDeal,
+      removeDeal,
       reset,
       persistFailed,
     };
@@ -1178,6 +1226,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toggleTask,
     removeTask,
     markMatchReviewed,
+    addDeal,
+    updateDeal,
+    removeDeal,
     reset,
     persistFailed,
   ]);
