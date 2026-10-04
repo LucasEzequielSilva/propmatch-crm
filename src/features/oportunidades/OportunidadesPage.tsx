@@ -227,6 +227,7 @@ export default function OportunidadesPage() {
                       onAdd={() => setNewIn(stage.id)}
                       onPriority={setOpportunityPriority}
                       onLose={markOpportunityLost}
+                      onOpenContact={(contactId) => navigate(`/contactos/${contactId}`)}
                     />
                   );
                 })}
@@ -403,6 +404,7 @@ function KanbanColumn({
   onAdd,
   onPriority,
   onLose,
+  onOpenContact,
 }: {
   stage: (typeof STAGES)[number];
   cards: Card_[];
@@ -416,6 +418,7 @@ function KanbanColumn({
   onAdd: () => void;
   onPriority: (id: string, note: string | null) => void;
   onLose: (id: string, reason: string | null) => void;
+  onOpenContact: (contactId: string) => void;
 }) {
   const [isOver, setIsOver] = useState(false);
 
@@ -482,6 +485,7 @@ function KanbanColumn({
             onDragEnd={onDragEnd}
             onPriority={(note) => onPriority(card.opp.id, note)}
             onLose={(reason) => onLose(card.opp.id, reason)}
+            onOpenContact={() => onOpenContact(card.opp.contact_id)}
           />
         ))}
 
@@ -509,6 +513,7 @@ function OpportunityCard({
   onDragEnd,
   onPriority,
   onLose,
+  onOpenContact,
 }: {
   card: Card_;
   stageAccent: string;
@@ -520,6 +525,7 @@ function OpportunityCard({
   onDragEnd: () => void;
   onPriority: (note: string | null) => void;
   onLose: (reason: string | null) => void;
+  onOpenContact: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -585,7 +591,14 @@ function OpportunityCard({
             {initials(contactName)}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            <p
+              className="text-sm truncate hover:underline"
+              style={{ color: "#1F0A3C", fontWeight: 700 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenContact();
+              }}
+            >
               {contactName}
             </p>
             <p className="text-xs truncate mt-0.5" style={{ color: "#A78BFA" }}>

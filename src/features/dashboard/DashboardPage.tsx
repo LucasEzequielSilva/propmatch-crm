@@ -46,7 +46,10 @@ export default function DashboardPage() {
     contactById,
     propertyById,
     coverPhoto,
+    appOffers,
   } = useStore();
+
+  const pendingOffers = appOffers.filter((o) => o.status === "pending");
 
   const [query, setQuery] = useState("");
   const firstName = profile.full_name.split(" ")[0];
@@ -95,6 +98,28 @@ export default function DashboardPage() {
       />
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
+        {pendingOffers.length > 0 && (
+          <div
+            onClick={() => navigate("/ofertas")}
+            className="mt-6 md:mt-8 rounded-2xl p-4 flex items-center gap-3 cursor-pointer transition-all hover:opacity-95"
+            style={{ background: "linear-gradient(135deg, #FFF7ED, #FDE8F5)", border: "1px solid #FDE68A" }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              <OpportunitiesIcon size={16} color="white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                {pendingOffers.length} {pendingOffers.length === 1 ? "oferta pendiente" : "ofertas pendientes"}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+                Gente real hizo una oferta por tus propiedades — click para revisarlas.
+              </p>
+            </div>
+          </div>
+        )}
         {searchResults ? (
           <SearchResults
             results={searchResults}

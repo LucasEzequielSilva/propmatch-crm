@@ -1,29 +1,27 @@
 import { useState } from "react";
 import { useStore } from "@/data/store";
 import { MatchesSolidIcon } from "@/components/ui/icons";
-import { avatarGradient, initials } from "@/lib/format";
 
 /**
  * Inicio de sesión.
  *
- * IMPORTANTE: esto es la pantalla, no la seguridad. Sin backend no hay
- * contraseñas guardadas ni tokens: alcanza con el mail de un agente para
- * entrar. Existe para que el flujo esté completo y para saber qué agente está
- * usando el CRM (de eso dependen "a cargo de", el avatar del header y el
- * ranking del equipo). Cuando haya backend se reemplaza por auth real.
+ * Auth real contra el mismo Supabase que usa la app: la cuenta tiene que
+ * existir ahí y estar vinculada a una inmobiliaria en `agency_members`, o no
+ * entra. De eso dependen "a cargo de", el avatar del header y el ranking del
+ * equipo, que siguen usando el perfil local del agente logueado.
  */
 export default function LoginPage() {
-  const { signIn, profiles, agency } = useStore();
+  const { signIn, agency } = useStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const message = signIn(email, password);
+    const message = await signIn(email, password);
     setError(message);
     setBusy(false);
   }
@@ -170,54 +168,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Atajo mientras no hay backend: entrar como cualquier agente del equipo. */}
-          <div className="mt-8">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-              <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
-                Entrar como
-              </span>
-              <div className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-            </div>
-
-            <div className="space-y-2">
-              {profiles.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setEmail(p.email ?? "");
-                    setPassword("demo1234");
-                    setError(null);
-                  }}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all hover:border-violet-300 hover:bg-violet-50 text-left"
-                  style={{ borderColor: "#EDE9FE", background: "white" }}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarGradient(p.full_name)} flex items-center justify-center text-white flex-shrink-0`}
-                    style={{ fontSize: 10, fontWeight: 700 }}
-                  >
-                    {initials(p.full_name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                      {p.full_name}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: "#A78BFA" }}>
-                      {p.email}
-                    </p>
-                  </div>
-                  <span className="text-xs" style={{ color: "#C4B5FD" }}>
-                    {p.role === "owner" ? "Dueño" : "Agente"}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <p className="text-xs mt-4 leading-relaxed" style={{ color: "#C4B5FD" }}>
-              Todavía no hay backend: la contraseña no se valida contra nada. Es la pantalla y el
-              flujo, no la seguridad.
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -39,6 +39,7 @@ const TABS: Item[] = [
 
 const MORE: Item[] = [
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
+  { to: "/publicador", label: "Publicaciones", icon: PropertiesIcon },
   { to: "/operaciones", label: "Operaciones", icon: OperacionesIcon },
   { to: "/matches", label: "Matches", icon: MatchesIcon },
   { to: "/reportes", label: "Reportes", icon: ReportesIcon },

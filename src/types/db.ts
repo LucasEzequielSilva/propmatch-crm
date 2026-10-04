@@ -85,6 +85,8 @@ export interface Contact {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** uuid del usuario real en la app, si este contacto vino de un lead real (`source: "consumer_app"`). */
+  app_user_id?: string | null;
 }
 
 export interface ContactRequirement {
@@ -148,6 +150,10 @@ export interface Property {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  /** uuid de la fila real en la app (Supabase `properties`), si esta propiedad quedó publicada. `null`/sin definir = solo vive en el CRM. */
+  app_property_id?: string | null;
+  /** Estado de la sincronización con la app. Sin definir = todavía no se intentó. */
+  sync_status?: "not_publishable" | "synced" | "syncing" | "error";
 }
 
 export interface PropertyPhoto {
@@ -218,6 +224,13 @@ export interface Activity {
   property_id: string | null;
   opportunity_id: string | null;
   created_at: string;
+  /** uuid de la oferta real en la app, solo si esta actividad es "Oferta recibida desde la app". */
+  app_offer_id?: string | null;
+  /** Estado de esa oferta tal como la dejó el CRM al responderla. `null`/sin definir = no es una oferta o no se respondió. */
+  offer_status?: "pending" | "accepted" | "rejected" | null;
+  /** uuid del swipe real en la app, solo si esta actividad es "Le interesó tu propiedad en la app". */
+  app_swipe_id?: string | null;
+  swipe_status?: "pending" | "accepted" | "rejected" | null;
 }
 
 export interface CalendarEvent {
@@ -265,6 +278,23 @@ export interface OpportunityWithRelations extends Opportunity {
   contact: Pick<Contact, "id" | "full_name">;
   property: Pick<Property, "id" | "title" | "type"> | null;
   match_score: number | null;
+}
+
+/**
+ * Oferta real hecha desde la app sobre una propiedad de la agencia. Es la
+ * fuente de verdad para el Dashboard, la pantalla de Ofertas y la ficha de
+ * la propiedad — la actividad en el historial del contacto solo enlaza acá
+ * por `app_offer_id`, no duplica el estado.
+ */
+export interface AppOffer {
+  id: string;
+  /** uuid de la oferta real en Supabase (`offers.id`). */
+  app_offer_id: string;
+  contact_id: string;
+  property_id: string;
+  amount_usd: number;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
 }
 
 /* ── Operaciones (expediente de una venta o un alquiler) ──────────────────── */

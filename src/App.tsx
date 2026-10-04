@@ -9,7 +9,9 @@ import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
 import PropiedadesPage from "@/features/propiedades/PropiedadesPage";
 import SubirPropiedadPage from "@/features/propiedades/SubirPropiedadPage";
 import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
+import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
+import OfertasPage from "@/features/ofertas/OfertasPage";
 import MatchesPage from "@/features/matches/MatchesPage";
 import VerMatchPage from "@/features/matches/VerMatchPage";
 import AgendaPage from "@/features/agenda/AgendaPage";
@@ -55,7 +57,10 @@ export default function App() {
               <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
               <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
 
+              <Route path="publicador" element={<MultipublicadorPage />} />
+
               <Route path="oportunidades" element={<OportunidadesPage />} />
+              <Route path="ofertas" element={<OfertasPage />} />
               <Route path="operaciones" element={<OperacionesPage />} />
               <Route path="operaciones/:dealId" element={<OperacionDetallePage />} />
 
@@ -76,16 +81,18 @@ export default function App() {
   );
 }
 
-/** Área privada: sin sesión abierta, al login. */
+/** Área privada: sin sesión abierta, al login. Espera a que se resuelva la sesión de Supabase antes de redirigir, para no mandar al login a alguien que ya estaba logueado. */
 function RequireSession() {
-  const { currentUserId } = useStore();
+  const { currentUserId, sessionLoading } = useStore();
+  if (sessionLoading) return null;
   if (!currentUserId) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
 /** Con la sesión ya abierta, el login no tiene sentido. */
 function PublicOnly() {
-  const { currentUserId } = useStore();
+  const { currentUserId, sessionLoading } = useStore();
+  if (sessionLoading) return null;
   if (currentUserId) return <Navigate to="/" replace />;
   return <Outlet />;
 }

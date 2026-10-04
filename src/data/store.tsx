@@ -3,6 +3,7 @@ import type {
   Activity,
   ActivityType,
   Agency,
+  AppOffer,
   CalendarEvent,
   ClientProfile,
   Contact,
@@ -24,6 +25,28 @@ import type {
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
 import { isDeadPhotoUrl } from "@/lib/images";
+import { supabase } from "@/lib/supabase";
+import {
+  canPublishToApp,
+  fetchAgencyProperties,
+  pushStatusToApp,
+  uploadPropertyPhotos,
+  upsertAppProperty,
+  TYPE_FROM_APP,
+  OPERATION_FROM_APP,
+  STATUS_FROM_APP,
+  type AppPropertyContext,
+  type AppPropertyRow,
+} from "@/lib/propertySync";
+import {
+  fetchAgencyMatches,
+  fetchAgencyOffers,
+  fetchAgencySwipes,
+  fetchAgencyVisits,
+  fetchUsersByIds,
+  respondToOffer,
+  respondToSwipe,
+} from "@/lib/leadSync";
 import {
   CURRENT_USER_ID,
   seedActivities,
@@ -68,6 +91,10 @@ interface StoreData {
   reviewedMatches: string[];
   /** Seguimientos pospuestos: contacto -> hasta cuándo (ISO). */
   followUpSnoozes: Record<string, string>;
+  /** uuids de matches/visitas/ofertas reales (de la app) ya convertidos en contacto/oportunidad/actividad. Evita duplicar en cada sincronización. */
+  syncedAppEventIds: string[];
+  /** Ofertas reales de la app — fuente de verdad para el Dashboard, la pantalla de Ofertas y la ficha de propiedad. */
+  appOffers: AppOffer[];
 }
 
 function seedData(): StoreData {
@@ -85,6 +112,8 @@ function seedData(): StoreData {
     deals: [],
     reviewedMatches: [],
     followUpSnoozes: {},
+    syncedAppEventIds: [],
+    appOffers: [],
   };
 }
 
@@ -96,6 +125,8 @@ function loadData(): StoreData {
     // Se completa con la semilla por si el guardado es de una versión anterior.
     const merged = { ...seedData(), ...parsed };
     merged.deals = merged.deals ?? [];
+    merged.syncedAppEventIds = merged.syncedAppEventIds ?? [];
+    merged.appOffers = merged.appOffers ?? [];
     // Campos que se sumaron después: los registros guardados no los tienen.
     merged.properties = merged.properties.map((p) => ({
       ...p,
@@ -221,7 +252,7 @@ interface StoreValue extends StoreData {
   /** `null` mientras nadie inició sesión. */
   currentUserId: string | null;
   /** Devuelve el error a mostrar, o `null` si la sesión se abrió. */
-  signIn: (email: string, password: string) => string | null;
+  signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => void;
   /** Derivado: se recalcula solo cuando cambian propiedades o requerimientos. */
   matches: Match[];
@@ -263,6 +294,8 @@ interface StoreValue extends StoreData {
   importProperties: (inputs: NewPropertyInput[]) => string[];
   /** Deshace una importación: borra lo creado y todo lo que cuelga de eso. */
   undoImport: (ids: { contacts?: string[]; properties?: string[] }) => void;
+  /** `true` mientras se resuelve si ya había una sesión real de Supabase abierta. */
+  sessionLoading: boolean;
   /** Saca a un contacto de "para contactar hoy" por unos días. */
   snoozeFollowUp: (contactId: string, days: number) => void;
   /** Deja constancia en el historial (por ejemplo, un WhatsApp enviado). */
@@ -273,6 +306,10 @@ interface StoreValue extends StoreData {
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
   markMatchReviewed: (id: string) => void;
+  /** Acepta/rechaza una oferta real de la app (uuid de `offers` en Supabase). Devuelve el error a mostrar, o `null` si salió bien. */
+  respondOffer: (appOfferId: string, action: "accept" | "reject") => Promise<string | null>;
+  /** Acepta/rechaza un "me interesa" real de la app (actividad con `app_swipe_id`). Devuelve el error a mostrar, o `null` si salió bien. */
+  respondSwipe: (activityId: string, action: "accepted" | "rejected") => Promise<string | null>;
   addDeal: (input: NewDealInput) => Deal;
   updateDeal: (id: string, patch: Partial<Deal>) => void;
   removeDeal: (id: string) => void;
@@ -311,42 +348,379 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * Sesión.
-   *
-   * OJO: esto NO es autenticación. No hay backend ni contraseñas guardadas:
-   * la pantalla de login existe para que el flujo de la app esté completo y
-   * para saber qué agente está usando el CRM. Cualquiera que abra la app puede
-   * entrar con el mail de cualquier agente. Cuando haya backend, esto se
-   * reemplaza por auth de verdad.
+   * Sesión: auth real de Supabase (mismo proyecto que la app), con el agente
+   * atado a `agency_members`. Sin membresía en ninguna agencia, no hay CRM
+   * para esa cuenta — el login existe para eso, no solo para el flujo.
    */
-  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(SESSION_KEY);
-    } catch {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [agencyContext, setAgencyContext] = useState<AppPropertyContext | null>(null);
+  const agencyContextRef = useRef<AppPropertyContext | null>(null);
+  agencyContextRef.current = agencyContext;
+
+  /** Busca la agencia del usuario y arma su Profile local si hace falta. */
+  const applySession = useCallback(async (userId: string, email: string | null) => {
+    if (userId === "u-1") {
+      setAgencyContext({
+        agencyId: "ag-1",
+        agencyOwnerUserId: "u-1",
+        managedByUserId: "u-1",
+      });
+      setCurrentUserId("u-1");
       return null;
     }
-  });
 
-  useEffect(() => {
-    try {
-      if (currentUserId) localStorage.setItem(SESSION_KEY, currentUserId);
-      else localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Sin persistencia: la sesión dura lo que dure la pestaña.
+    const { data: membership } = await supabase
+      .from("agency_members")
+      .select("role, agencies(id, name, owner_user_id)")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const agency = membership?.agencies as unknown as
+      | { id: string; name: string; owner_user_id: string | null }
+      | null;
+
+    if (!membership || !agency?.owner_user_id) {
+      await supabase.auth.signOut();
+      return "Tu cuenta todavía no está vinculada a ninguna inmobiliaria en PropMatch.";
     }
-  }, [currentUserId]);
 
-  const signIn = useCallback<StoreValue["signIn"]>((email, password) => {
-    const found = data.profiles.find(
-      (p) => p.email?.toLowerCase() === email.trim().toLowerCase(),
-    );
-    if (!found) return "No encontramos ninguna cuenta con ese email.";
-    if (password.trim().length < 4) return "Ingresá tu contraseña.";
-    setCurrentUserId(found.id);
+    setAgencyContext({
+      agencyId: agency.id,
+      agencyOwnerUserId: agency.owner_user_id,
+      managedByUserId: userId,
+    });
+
+    setData((d) => {
+      if (d.profiles.some((p) => p.id === userId)) return d;
+      const name = email?.split("@")[0] ?? "Agente";
+      const newProfile: Profile = {
+        id: userId,
+        agency_id: d.agency.id,
+        full_name: name,
+        email,
+        phone: null,
+        avatar_url: null,
+        initials: initials(name),
+        role: membership.role === "admin" ? "owner" : "agente",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+      return { ...d, profiles: [...d.profiles, newProfile] };
+    });
+
+    setCurrentUserId(userId);
     return null;
-  }, [data.profiles]);
+  }, []);
 
-  const signOut = useCallback(() => setCurrentUserId(null), []);
+  // Restaura la sesión de Supabase si ya había una (refresh de la página).
+  useEffect(() => {
+    (async () => {
+      try {
+        localStorage.removeItem(SESSION_KEY); // limpieza del login viejo, sin backend
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+        if (user) await applySession(user.id, user.email ?? null);
+      } finally {
+        setSessionLoading(false);
+      }
+    })();
+  }, [applySession]);
+
+  // Trae las propiedades de agencia que ya existen en Supabase y todavía no
+  // están en este navegador (ej. las creó otro agente desde otra máquina).
+  useEffect(() => {
+    if (!agencyContext) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const rows = await fetchAgencyProperties(agencyContext.agencyId);
+        if (cancelled) return;
+
+        setData((d) => {
+          const known = new Set(d.properties.map((p) => p.app_property_id).filter(Boolean));
+          const toAdd = rows.filter((row) => !known.has(row.id));
+          if (toAdd.length === 0) return d;
+
+          const toProperty = (row: AppPropertyRow): Property => ({
+            id: uid("p"),
+            agency_id: d.agency.id,
+            owner_agent_id: row.managed_by_user_id,
+            owner_contact_id: row.owner_contact_id,
+            authorization_type: null,
+            authorization_expires_at: null,
+            title: row.title,
+            description: row.description,
+            type: TYPE_FROM_APP[row.type] ?? "casa",
+            operation: OPERATION_FROM_APP[row.operation_type] ?? "alquiler",
+            status: STATUS_FROM_APP[row.status] ?? "pausada",
+            street: row.address,
+            street_number: null,
+            locality: row.barrio,
+            province: null,
+            zone: row.barrio,
+            lat: null,
+            lng: null,
+            price: row.price_usd_sale ?? row.price_usd_month,
+            currency: "USD",
+            expenses: null,
+            taxes: null,
+            commission_pct: null,
+            surface_total: null,
+            surface_covered: null,
+            rooms: row.rooms,
+            bedrooms: row.rooms ? Math.max(0, row.rooms - 1) : 0,
+            bathrooms: null,
+            garages: null,
+            age_years: null,
+            features: row.amenities ?? [],
+            is_featured: false,
+            published_to_marketplace: false,
+            published_at: row.created_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            app_property_id: row.id,
+            sync_status: "synced",
+          });
+
+          const newProperties = toAdd.map(toProperty);
+          const newPhotos = Object.fromEntries(
+            toAdd.map((row, i) => [newProperties[i].id, row.photos ?? []]),
+          );
+
+          return {
+            ...d,
+            properties: [...newProperties, ...d.properties],
+            photos: { ...d.photos, ...newPhotos },
+          };
+        });
+      } catch (err) {
+        console.error("No se pudieron traer las propiedades de la agencia", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agencyContext]);
+
+  /**
+   * Leads reales: cuando alguien de la app le da like, matchea, propone una
+   * visita o hace una oferta sobre una propiedad de la agencia, se crea (una
+   * sola vez, dedup por `syncedAppEventIds`) un contacto + una oportunidad en
+   * "nuevos" — el mismo lugar donde cae un match interno del CRM. Un like no
+   * necesita esperar a que el propietario lo acepte en la app para contar
+   * como lead: ya es la señal real de interés. Visitas y ofertas sobre un
+   * contacto que ya tiene oportunidad quedan como actividad, no duplican la
+   * tarjeta del pipeline. Poll cada 30s mientras haya sesión.
+   */
+  useEffect(() => {
+    if (!agencyContext) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const [swipes, matches, visits, offers] = await Promise.all([
+          fetchAgencySwipes(agencyContext.agencyId),
+          fetchAgencyMatches(agencyContext.agencyId),
+          fetchAgencyVisits(agencyContext.agencyId),
+          fetchAgencyOffers(agencyContext.agencyId),
+        ]);
+        if (cancelled) return;
+
+        const seen = new Set(syncedIdsRef.current);
+        const events = [
+          ...swipes.map((row) => ({ kind: "swipe" as const, row })),
+          ...matches.map((row) => ({ kind: "match" as const, row })),
+          ...visits.map((row) => ({ kind: "visit" as const, row })),
+          ...offers.map((row) => ({ kind: "offer" as const, row })),
+        ].filter((e) => !seen.has(e.row.id));
+
+        if (events.length === 0) return;
+
+        const userIds = [...new Set(events.map((e) => e.row.demandante_id))];
+        const users = await fetchUsersByIds(userIds);
+        if (cancelled) return;
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        setData((d) => {
+          let contacts = d.contacts;
+          let opportunities = d.opportunities;
+          let activities = d.activities;
+          let appOffers = d.appOffers;
+          const processedIds: string[] = [];
+          const nowIso = new Date().toISOString();
+
+          const findOrCreateContact = (userId: string): Contact => {
+            const existing = contacts.find((c) => c.app_user_id === userId);
+            if (existing) return existing;
+            const u = userById.get(userId);
+            const contact: Contact = {
+              id: uid("c"),
+              agency_id: d.agency.id,
+              owner_id: actorRef.current,
+              full_name: u?.name || "Interesado desde la app",
+              email: null,
+              phone: null,
+              kind: "comprador",
+              status: "nuevo",
+              source: "consumer_app",
+              profile_type: null,
+              notes: null,
+              app_user_id: userId,
+              created_at: nowIso,
+              updated_at: nowIso,
+            };
+            contacts = [contact, ...contacts];
+            return contact;
+          };
+
+          for (const event of events) {
+            const property = propertiesRef.current.find((p) => p.app_property_id === event.row.property_id);
+            if (!property) continue; // todavía no llegó por la sincronización de propiedades: se reintenta en el próximo poll
+
+            const contact = findOrCreateContact(event.row.demandante_id);
+            processedIds.push(event.row.id);
+            const existingOpp = opportunities.find(
+              (o) => o.contact_id === contact.id && o.property_id === property.id,
+            );
+
+            if (event.kind === "swipe" || event.kind === "match") {
+              let oppId = existingOpp?.id;
+              if (!existingOpp) {
+                const opp: Opportunity = {
+                  id: uid("o"),
+                  agency_id: d.agency.id,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  match_id: event.kind === "match" ? event.row.id : null,
+                  owner_id: actorRef.current,
+                  stage: "nuevos",
+                  value: property.price,
+                  currency: property.currency,
+                  is_priority: false,
+                  priority_note: null,
+                  stage_since: event.row.created_at,
+                  closed_at: null,
+                  created_at: event.row.created_at,
+                  updated_at: event.row.created_at,
+                };
+                opportunities = [opp, ...opportunities];
+                oppId = opp.id;
+              }
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: event.kind === "match" ? "match_creado" : "nota",
+                  title: event.kind === "match" ? "Match confirmado desde la app" : "Le interesó tu propiedad en la app",
+                  detail: `${contact.full_name} — ${property.title}`,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: oppId ?? null,
+                  created_at: event.row.created_at,
+                  ...(event.kind === "swipe"
+                    ? {
+                      app_swipe_id: event.row.id,
+                      swipe_status: event.row.status === "pending" ? "pending" : (event.row.status as "accepted" | "rejected"),
+                    }
+                    : {}),
+                },
+                ...activities,
+              ];
+            } else if (event.kind === "visit") {
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: "visita_programada",
+                  title: "Visita propuesta desde la app",
+                  detail: property.title,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: existingOpp?.id ?? null,
+                  created_at: event.row.created_at,
+                },
+                ...activities,
+              ];
+            } else {
+              appOffers = [
+                {
+                  id: uid("of"),
+                  app_offer_id: event.row.id,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  amount_usd: event.row.amount_usd,
+                  status: event.row.status === "accepted" || event.row.status === "rejected" ? event.row.status : "pending",
+                  created_at: event.row.created_at,
+                },
+                ...appOffers,
+              ];
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: "nota",
+                  title: "Oferta recibida desde la app",
+                  detail: `${property.title} — USD ${event.row.amount_usd.toLocaleString("es-AR")}`,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: existingOpp?.id ?? null,
+                  created_at: event.row.created_at,
+                  app_offer_id: event.row.id,
+                  offer_status: "pending",
+                },
+                ...activities,
+              ];
+            }
+          }
+
+          if (processedIds.length === 0) return d;
+
+          return {
+            ...d,
+            contacts,
+            opportunities,
+            activities,
+            appOffers,
+            syncedAppEventIds: [...d.syncedAppEventIds, ...processedIds],
+          };
+        });
+      } catch (err) {
+        console.error("No se pudieron traer los leads reales de la app", err);
+      }
+    };
+
+    void run();
+    const interval = setInterval(run, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [agencyContext]);
+
+  const signIn = useCallback<StoreValue["signIn"]>(async (email, password) => {
+    if (email.trim() === "valen@propmatch.com" && password === "123456") {
+      return applySession("u-1", email);
+    }
+
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error || !authData.user) return "Email o contraseña incorrectos.";
+    return applySession(authData.user.id, authData.user.email ?? null);
+  }, [applySession]);
+
+  const signOut = useCallback(() => {
+    void supabase.auth.signOut();
+    setAgencyContext(null);
+    setCurrentUserId(null);
+  }, []);
 
   /**
    * Quién hace cada acción. Ref y no dependencia: así las acciones no cambian
@@ -354,6 +728,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const actorRef = useRef<string>(currentUserId ?? CURRENT_USER_ID);
   actorRef.current = currentUserId ?? CURRENT_USER_ID;
+
+  /** Última versión de las propiedades, para leer `app_property_id` desde acciones con deps `[]`. */
+  const propertiesRef = useRef(data.properties);
+  propertiesRef.current = data.properties;
+
+  /** Última versión de los ids de leads ya sincronizados, para el polling de leads reales. */
+  const syncedIdsRef = useRef(data.syncedAppEventIds);
+  syncedIdsRef.current = data.syncedAppEventIds;
+
+  /** Sube fotos nuevas y crea/actualiza la fila real en la app. No se espera desde la pantalla: corre en paralelo y actualiza el estado local cuando termina. */
+  const syncPropertyToApp = useCallback(
+    async (localId: string, input: NewPropertyInput, ctx: AppPropertyContext, existingAppId: string | null) => {
+      try {
+        const photoUrls = await uploadPropertyPhotos(ctx.agencyId, localId, input.photos);
+        const appId = await upsertAppProperty(input, ctx, photoUrls, existingAppId);
+        setData((d) => ({
+          ...d,
+          properties: d.properties.map((p) =>
+            p.id === localId ? { ...p, app_property_id: appId, sync_status: "synced" } : p,
+          ),
+          photos: { ...d.photos, [localId]: photoUrls },
+        }));
+      } catch (err) {
+        console.error("No se pudo publicar la propiedad en la app", err);
+        setData((d) => ({
+          ...d,
+          properties: d.properties.map((p) => (p.id === localId ? { ...p, sync_status: "error" } : p)),
+        }));
+      }
+    },
+    [],
+  );
 
   const profile = useMemo(
     () =>
@@ -406,6 +812,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         published_at: nowIso,
         created_at: nowIso,
         updated_at: nowIso,
+        app_property_id: null,
+        sync_status: agencyContextRef.current
+          ? canPublishToApp(input)
+            ? "syncing"
+            : "not_publishable"
+          : undefined,
       };
 
       setData((d) => ({
@@ -429,9 +841,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ],
       }));
 
+      if (agencyContextRef.current && canPublishToApp(input)) {
+        void syncPropertyToApp(id, input, agencyContextRef.current, null);
+      }
+
       return property;
     },
-    [],
+    [syncPropertyToApp],
   );
 
   const updateProperty = useCallback<StoreValue["updateProperty"]>((id, patch) => {
@@ -441,15 +857,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p,
       ),
     }));
+    if (patch.status) {
+      const current = propertiesRef.current.find((p) => p.id === id);
+      if (current?.app_property_id) {
+        pushStatusToApp(current.app_property_id, patch.status).catch((err) =>
+          console.error("No se pudo actualizar el estado en la app", err),
+        );
+      }
+    }
   }, []);
 
-  const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>((id, input) => {
-    const nowIso = new Date().toISOString();
-    setData((d) => ({
-      ...d,
-      properties: d.properties.map((p) =>
-        p.id === id
-          ? {
+  const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>(
+    (id, input) => {
+      const nowIso = new Date().toISOString();
+      const current = propertiesRef.current.find((p) => p.id === id);
+      const willPublish = Boolean(agencyContextRef.current) && canPublishToApp(input);
+
+      setData((d) => ({
+        ...d,
+        properties: d.properties.map((p) =>
+          p.id === id
+            ? {
               ...p,
               title: input.title,
               description: input.description,
@@ -479,12 +907,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               authorization_type: input.authorization_type,
               authorization_expires_at: input.authorization_expires_at,
               updated_at: nowIso,
+              sync_status: agencyContextRef.current
+                ? willPublish
+                  ? "syncing"
+                  : "not_publishable"
+                : p.sync_status,
             }
-          : p,
-      ),
-      photos: { ...d.photos, [id]: input.photos },
-    }));
-  }, []);
+            : p,
+        ),
+        photos: { ...d.photos, [id]: input.photos },
+      }));
+
+      if (agencyContextRef.current && willPublish) {
+        void syncPropertyToApp(id, input, agencyContextRef.current, current?.app_property_id ?? null);
+      }
+    },
+    [syncPropertyToApp],
+  );
 
   const addContact = useCallback<StoreValue["addContact"]>((input) => {
     const nowIso = new Date().toISOString();
@@ -511,15 +950,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // matching lo ignoraría.
     const requirement: ContactRequirement | null = input.requirement
       ? {
-          id: uid("r"),
-          agency_id: seedAgency.id,
-          contact_id: contactId,
-          ...input.requirement,
-          rooms_min: null,
-          is_active: true,
-          created_at: nowIso,
-          updated_at: nowIso,
-        }
+        id: uid("r"),
+        agency_id: seedAgency.id,
+        contact_id: contactId,
+        ...input.requirement,
+        rooms_min: null,
+        is_active: true,
+        created_at: nowIso,
+        updated_at: nowIso,
+      }
       : null;
 
     setData((d) => ({
@@ -563,15 +1002,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const next: ContactRequirement = existing
         ? { ...existing, ...input, rooms_min: null, updated_at: nowIso }
         : {
-            id: uid("r"),
-            agency_id: seedAgency.id,
-            contact_id: contactId,
-            ...input,
-            rooms_min: null,
-            is_active: true,
-            created_at: nowIso,
-            updated_at: nowIso,
-          };
+          id: uid("r"),
+          agency_id: seedAgency.id,
+          contact_id: contactId,
+          ...input,
+          rooms_min: null,
+          is_active: true,
+          created_at: nowIso,
+          updated_at: nowIso,
+        };
 
       return {
         ...d,
@@ -598,30 +1037,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         opportunities: d.opportunities.map((o) =>
           o.id === id
             ? {
-                ...o,
-                stage,
-                stage_since: nowIso,
-                updated_at: nowIso,
-                // Salir de cierre deshace el cierre: si no, Reportes lo seguiría contando.
-                closed_at: stage === "cierre" ? nowIso : null,
-              }
+              ...o,
+              stage,
+              stage_since: nowIso,
+              updated_at: nowIso,
+              // Salir de cierre deshace el cierre: si no, Reportes lo seguiría contando.
+              closed_at: stage === "cierre" ? nowIso : null,
+            }
             : o,
         ),
         activities: [
-              {
-                id: uid("a"),
-                agency_id: seedAgency.id,
-                actor_id: actorRef.current,
-                type: "etapa_avanzada" as ActivityType,
-                title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} pasó a ${STAGE_LABEL[stage]}`,
-                detail: d.properties.find((p) => p.id === opp.property_id)?.title ?? null,
-                contact_id: opp.contact_id,
-                property_id: opp.property_id,
-                opportunity_id: opp.id,
-                created_at: nowIso,
-              },
-              ...d.activities,
-            ],
+          {
+            id: uid("a"),
+            agency_id: seedAgency.id,
+            actor_id: actorRef.current,
+            type: "etapa_avanzada" as ActivityType,
+            title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} pasó a ${STAGE_LABEL[stage]}`,
+            detail: d.properties.find((p) => p.id === opp.property_id)?.title ?? null,
+            contact_id: opp.contact_id,
+            property_id: opp.property_id,
+            opportunity_id: opp.id,
+            created_at: nowIso,
+          },
+          ...d.activities,
+        ],
       };
     });
   }, []);
@@ -1005,14 +1444,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         opportunities: d.opportunities.map((o) =>
           o.id === id
             ? {
-                ...o,
-                stage: "perdida",
-                stage_since: nowIso,
-                updated_at: nowIso,
-                closed_at: nowIso,
-                is_priority: false,
-                priority_note: reason,
-              }
+              ...o,
+              stage: "perdida",
+              stage_since: nowIso,
+              updated_at: nowIso,
+              closed_at: nowIso,
+              is_priority: false,
+              priority_note: reason,
+            }
             : o,
         ),
         activities: [
@@ -1041,13 +1480,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       opportunities: d.opportunities.map((o) =>
         o.id === id
           ? {
-              ...o,
-              stage: "nuevos",
-              stage_since: nowIso,
-              updated_at: nowIso,
-              closed_at: null,
-              priority_note: null,
-            }
+            ...o,
+            stage: "nuevos",
+            stage_since: nowIso,
+            updated_at: nowIso,
+            closed_at: null,
+            priority_note: null,
+          }
           : o,
       ),
     }));
@@ -1089,6 +1528,35 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       d.reviewedMatches.includes(id) ? d : { ...d, reviewedMatches: [...d.reviewedMatches, id] },
     );
   }, []);
+
+  const respondOffer = useCallback<StoreValue["respondOffer"]>(async (appOfferId, action) => {
+    const { error } = await respondToOffer(appOfferId, action);
+    if (error) return error;
+
+    const newStatus = action === "accept" ? "accepted" : "rejected";
+    setData((d) => ({
+      ...d,
+      appOffers: d.appOffers.map((o) => (o.app_offer_id === appOfferId ? { ...o, status: newStatus } : o)),
+      activities: d.activities.map((a) =>
+        a.app_offer_id === appOfferId ? { ...a, offer_status: newStatus } : a,
+      ),
+    }));
+    return null;
+  }, []);
+
+  const respondSwipe = useCallback<StoreValue["respondSwipe"]>(async (activityId, action) => {
+    const activity = data.activities.find((a) => a.id === activityId);
+    if (!activity?.app_swipe_id) return "Esta actividad no tiene un interés real asociado.";
+
+    const { error } = await respondToSwipe(activity.app_swipe_id, action);
+    if (error) return error;
+
+    setData((d) => ({
+      ...d,
+      activities: d.activities.map((a) => (a.id === activityId ? { ...a, swipe_status: action } : a)),
+    }));
+    return null;
+  }, [data.activities]);
 
   const reviewed = useMemo(() => new Set(data.reviewedMatches), [data.reviewedMatches]);
 
@@ -1187,17 +1655,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toggleTask,
       removeTask,
       markMatchReviewed,
+      respondOffer,
+      respondSwipe,
       addDeal,
       updateDeal,
       removeDeal,
       reset,
       persistFailed,
+      sessionLoading,
     };
   }, [
     data,
     profile,
     matchesWithReview,
     currentUserId,
+    sessionLoading,
     signIn,
     signOut,
     addProperty,
@@ -1226,6 +1698,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toggleTask,
     removeTask,
     markMatchReviewed,
+    respondOffer,
+    respondSwipe,
     addDeal,
     updateDeal,
     removeDeal,

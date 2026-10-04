@@ -18,7 +18,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: (p: IconProps) => React.ReactElement;
-  badge?: "matches";
+  badge?: "matches" | "offers";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -26,6 +26,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/contactos", label: "Contactos", icon: ContactsIcon },
   { to: "/propiedades", label: "Propiedades", icon: PropertiesIcon },
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
+  { to: "/publicador", label: "Publicaciones", icon: PropertiesIcon },
+  { to: "/ofertas", label: "Ofertas", icon: OperacionesIcon, badge: "offers" },
   { to: "/operaciones", label: "Operaciones", icon: OperacionesIcon },
   { to: "/matches", label: "Matches", icon: MatchesIcon, badge: "matches" },
   { to: "/agenda", label: "Agenda", icon: AgendaIcon },
@@ -33,8 +35,9 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function Sidebar() {
-  const { profile, agency, matches, signOut } = useStore();
+  const { profile, agency, matches, appOffers, signOut } = useStore();
   const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
+  const pendingOffers = appOffers.filter((o) => o.status === "pending").length;
 
   return (
     <aside
@@ -83,7 +86,8 @@ export function Sidebar() {
       <nav className="flex-1 px-3 space-y-0.5">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const badgeCount = item.badge === "matches" ? pendingMatches : 0;
+          const badgeCount =
+            item.badge === "matches" ? pendingMatches : item.badge === "offers" ? pendingOffers : 0;
 
           return (
             <NavLink
@@ -94,10 +98,10 @@ export function Sidebar() {
               style={({ isActive }) =>
                 isActive
                   ? {
-                      background: "var(--gradient-nav-active)",
-                      color: "#7C3AED",
-                      fontWeight: 600,
-                    }
+                    background: "var(--gradient-nav-active)",
+                    color: "#7C3AED",
+                    fontWeight: 600,
+                  }
                   : { color: "#6B7280", fontWeight: 500 }
               }
             >

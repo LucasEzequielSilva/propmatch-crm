@@ -25,6 +25,7 @@ import {
 import type { PropertyStatus } from "@/types/db";
 import { ShareListingModal } from "@/components/share/ShareListingModal";
 import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal";
+import { MultipublicationModal, PlatformConfig } from "./MultipublicationModal";
 import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
 import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
@@ -55,6 +56,8 @@ export default function PropiedadDetallePage() {
     activities,
     updateProperty,
     createOpportunityFromMatch,
+    appOffers,
+    respondOffer,
   } = useStore();
 
   const property = propertyById(propertyId);
@@ -63,6 +66,12 @@ export default function PropiedadDetallePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sharing, setSharing] = useState(searchParams.get("compartir") === "1");
   const [reportOpen, setReportOpen] = useState(false);
+  const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
+
+  const [multipubOpen, setMultipubOpen] = useState(false);
+  const [publications, setPublications] = useState<PlatformConfig[]>([
+    { id: "web", name: "Web PropMatch", status: "active", connected: true }
+  ]);
 
   const gallery = property ? (photos[property.id] ?? []) : [];
 
@@ -75,6 +84,17 @@ export default function PropiedadDetallePage() {
     () => (property ? opportunities.filter((o) => o.property_id === property.id) : []),
     [opportunities, property],
   );
+
+  const propertyOffers = useMemo(
+    () => (property ? appOffers.filter((o) => o.property_id === property.id) : []),
+    [appOffers, property],
+  );
+
+  async function handleRespondOffer(appOfferId: string, action: "accept" | "reject") {
+    setRespondingOfferId(appOfferId);
+    await respondOffer(appOfferId, action);
+    setRespondingOfferId(null);
+  }
 
   if (!property) {
     return (
@@ -164,6 +184,19 @@ export default function PropiedadDetallePage() {
         />
       )}
       {reportOpen && owner && <WhatsAppModal contact={owner} property={property} onClose={() => setReportOpen(false)} />}
+
+      {multipubOpen && (
+        <MultipublicationModal
+          property={property}
+          coverPhoto={cover}
+          activePublications={publications}
+          onClose={() => setMultipubOpen(false)}
+          onPublishComplete={(newPubs) => {
+            setPublications(newPubs);
+            setMultipubOpen(false);
+          }}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
@@ -393,6 +426,55 @@ export default function PropiedadDetallePage() {
                 </div>
               </Card>
             )}
+
+            {/* Publicaciones */}
+            <Card>
+              <SectionHeader
+                inCard
+                title="Publicaciones"
+                subtitle={`${publications.filter(p => p.status === 'published' || p.status === 'active').length} canales activos`}
+                action={{ label: "Publicar / Sincronizar", onClick: () => setMultipubOpen(true) }}
+              />
+              {publications.filter(p => p.status !== 'unpublished' && p.status !== 'disconnected').length === 0 ? (
+                <div className="p-6 text-center text-sm text-[#A78BFA]">
+                  Propiedad no publicada en canales externos.
+                </div>
+              ) : (
+                <div className="w-full text-left text-sm" style={{ borderTop: "1px solid #F3F0FF" }}>
+                  <div className="grid grid-cols-5 px-4 py-3 text-xs font-bold text-[#A78BFA] border-b" style={{ borderColor: "#F3F0FF" }}>
+                    <div>Canal</div>
+                    <div>Estado</div>
+                    <div>Última sinc.</div>
+                    <div>ID externo</div>
+                    <div className="text-right">Link</div>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: "#F3F0FF" }}>
+                    {publications.filter(p => p.status !== 'unpublished' && p.status !== 'disconnected').map(p => (
+                      <div key={p.id} className="grid grid-cols-5 px-4 py-3 items-center hover:bg-[#FAFAFF]">
+                        <div className="font-bold text-[#1F0A3C]">{p.name}</div>
+                        <div>
+                          {p.status === 'active' && <Badge bg="#F8FAFC" text="#475569" border="#E2E8F0">Propio</Badge>}
+                          {p.status === 'published' && <Badge bg="#F0FDF4" text="#15803D" border="#BBF7D0">Publicada</Badge>}
+                          {p.status === 'error' && <Badge bg="#FFF1F2" text="#BE123C" border="#FECDD3">Falló</Badge>}
+                          {p.status === 'pending' && <Badge bg="#FEFCE8" text="#A16207" border="#FEF08A">Pendiente</Badge>}
+                        </div>
+                        <div className="text-xs text-[#7C6A99]">{p.lastSync || '—'}</div>
+                        <div className="text-xs text-[#7C6A99] font-mono">{p.externalId || '—'}</div>
+                        <div className="text-right">
+                          {(p.status === 'published' || p.url) ? (
+                            <a href={p.url || "#"} target="_blank" rel="noopener noreferrer" className="text-xs text-[#7C3AED] hover:underline font-bold">
+                              Ver aviso ↗
+                            </a>
+                          ) : (
+                            <span className="text-xs text-[#D1D5DB]">—</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
           </div>
 
           {/* Columna derecha */}
@@ -462,6 +544,62 @@ export default function PropiedadDetallePage() {
                 </div>
               </div>
             </Card>
+
+            {/* Ofertas reales de la app */}
+            {propertyOffers.length > 0 && (
+              <Card>
+                <SectionHeader
+                  inCard
+                  title="Ofertas"
+                  subtitle={`${propertyOffers.filter((o) => o.status === "pending").length} pendientes de ${propertyOffers.length}`}
+                />
+                <div className="divide-y" style={{ borderColor: "#F3F0FF" }}>
+                  {propertyOffers.map((offer) => {
+                    const offerContact = contactById(offer.contact_id);
+                    return (
+                      <div key={offer.id} className="p-4 flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => navigate(`/contactos/${offer.contact_id}`)}
+                            className="text-sm truncate block text-left hover:underline"
+                            style={{ color: "#1F0A3C", fontWeight: 700 }}
+                          >
+                            {offerContact?.full_name ?? "Sin contacto"}
+                          </button>
+                          <p className="text-xs" style={{ color: "#A78BFA" }}>
+                            {money(offer.amount_usd, "USD")}
+                          </p>
+                        </div>
+                        {offer.status === "accepted" ? (
+                          <Badge bg="#F0FDF4" text="#15803D" border="#BBF7D0">Aceptada</Badge>
+                        ) : offer.status === "rejected" ? (
+                          <Badge bg="#FFF1F2" text="#BE123C" border="#FECDD3">Rechazada</Badge>
+                        ) : (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              disabled={respondingOfferId === offer.app_offer_id}
+                              onClick={() => handleRespondOffer(offer.app_offer_id, "accept")}
+                              className="text-xs px-2.5 py-1.5 rounded-lg text-white disabled:opacity-50"
+                              style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                            >
+                              Aceptar
+                            </button>
+                            <button
+                              disabled={respondingOfferId === offer.app_offer_id}
+                              onClick={() => handleRespondOffer(offer.app_offer_id, "reject")}
+                              className="text-xs px-2.5 py-1.5 rounded-lg border disabled:opacity-50"
+                              style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600 }}
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
 
             {/* Personas compatibles */}
             <Card>
