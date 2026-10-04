@@ -117,6 +117,41 @@ function seedData(): StoreData {
   };
 }
 
+/**
+ * Saca los datos de ejemplo (`seed.ts`) de lo que guarda el navegador. Se usa
+ * al abrir una sesión REAL: la semilla es solo para la demo (`u-1`); con una
+ * cuenta de agencia verdadera mezclaría contactos, oportunidades y propiedades
+ * inventados con los reales. Lo creado por el usuario (ids generados con
+ * `uid`) y lo traído de la app (`app_property_id`) se conserva.
+ */
+function purgeSeed(d: StoreData): StoreData {
+  const ids = <T extends { id: string }>(rows: T[]) => new Set(rows.map((r) => r.id));
+  const contacts = ids(seedContacts);
+  const requirements = ids(seedRequirements);
+  const properties = ids(seedProperties);
+  const opportunities = ids(seedOpportunities);
+  const activities = ids(seedActivities);
+  const events = ids(seedEvents);
+  const tasks = ids(seedTasks);
+  const profiles = ids(seedProfiles);
+  const isSeedProperty = (p: Property) => properties.has(p.id) && !p.app_property_id;
+
+  return {
+    ...d,
+    contacts: d.contacts.filter((c) => !contacts.has(c.id)),
+    requirements: d.requirements.filter((r) => !requirements.has(r.id) && !contacts.has(r.contact_id)),
+    properties: d.properties.filter((p) => !isSeedProperty(p)),
+    photos: Object.fromEntries(Object.entries(d.photos).filter(([id]) => !properties.has(id))),
+    opportunities: d.opportunities.filter((o) => !opportunities.has(o.id) && !contacts.has(o.contact_id)),
+    activities: d.activities.filter((a) => !activities.has(a.id)),
+    events: d.events.filter((e) => !events.has(e.id)),
+    tasks: d.tasks.filter((t) => !tasks.has(t.id)),
+    profiles: d.profiles.filter((p) => !profiles.has(p.id)),
+    reviewedMatches: [],
+    followUpSnoozes: {},
+  };
+}
+
 function loadData(): StoreData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -403,6 +438,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       agencyId: agency.id,
       agencyOwnerUserId: agency.owner_user_id,
       managedByUserId: userId,
+    });
+
+    // Con una cuenta real, `agency` pasa a ser la agencia verdadera (su uuid es
+    // el que esperan Supabase y todo lo que filtra por `agency.id`) y se quitan
+    // los datos de ejemplo.
+    setData((d) => {
+      const clean = purgeSeed(d);
+      return { ...clean, agency: { ...clean.agency, id: agency.id, name: agency.name } };
     });
 
     setData((d) => {
