@@ -1,9 +1,11 @@
 import { NavLink } from "react-router-dom";
 import { useStore } from "@/data/store";
+import { countUnanswered, useInboxFeed } from "@/features/inbox/inboxFeed";
 import {
   AgendaIcon,
   ContactsIcon,
   HomeIcon,
+  InboxIcon,
   MatchesIcon,
   OpportunitiesIcon,
   OperacionesIcon,
@@ -18,11 +20,12 @@ interface NavItem {
   to: string;
   label: string;
   icon: (p: IconProps) => React.ReactElement;
-  badge?: "matches" | "offers";
+  badge?: "matches" | "offers" | "inbox";
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Inicio", icon: HomeIcon },
+  { to: "/inbox", label: "Inbox", icon: InboxIcon, badge: "inbox" },
   { to: "/contactos", label: "Contactos", icon: ContactsIcon },
   { to: "/propiedades", label: "Propiedades", icon: PropertiesIcon },
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
@@ -38,6 +41,7 @@ export function Sidebar() {
   const { profile, agency, matches, appOffers, signOut } = useStore();
   const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
   const pendingOffers = appOffers.filter((o) => o.status === "pending").length;
+  const unanswered = countUnanswered(useInboxFeed(agency.id));
 
   return (
     <aside
@@ -87,7 +91,13 @@ export function Sidebar() {
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const badgeCount =
-            item.badge === "matches" ? pendingMatches : item.badge === "offers" ? pendingOffers : 0;
+            item.badge === "matches"
+              ? pendingMatches
+              : item.badge === "offers"
+                ? pendingOffers
+                : item.badge === "inbox"
+                  ? unanswered
+                  : 0;
 
           return (
             <NavLink

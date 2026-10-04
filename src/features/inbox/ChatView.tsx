@@ -1,0 +1,256 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronLeftIcon } from "@/components/ui/icons";
+import type { Match, Profile } from "@/types/db";
+import { CHANNEL_META, type Conversation } from "./conversations";
+import { Avatar } from "./ConversationList";
+import { addressOf, SNIPPETS } from "./snippets";
+import { useMatchChat } from "./useMatchChat";
+import type { MessageRow } from "@/lib/leadSync";
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Hoy";
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return "Ayer";
+  return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+export function ChatView({
+  conversation,
+  preview,
+  currentUserId,
+  responsible,
+  crmMatch,
+  onBack,
+  onProfile,
+  onSeen,
+}: {
+  conversation: Conversation;
+  preview: MessageRow[];
+  currentUserId: string | null;
+  responsible: Profile | undefined;
+  crmMatch: Match | undefined;
+  onBack: () => void;
+  onProfile: () => void;
+  onSeen: (iso: string) => void;
+}) {
+  const navigate = useNavigate();
+  const { messages, loading, sending, error, send } = useMatchChat(conversation.matchId, currentUserId, preview);
+  const [text, setText] = useState("");
+  const scroller = useRef<HTMLDivElement>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+
+  // Borrador por conversación: al cambiar de chat el input arranca vacío.
+  useEffect(() => setText(""), [conversation.matchId]);
+
+  const lastId = messages[messages.length - 1]?.id;
+  const lastAt = messages[messages.length - 1]?.created_at;
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lastId, conversation.matchId]);
+
+  useEffect(() => {
+    if (lastAt) onSeen(lastAt);
+  }, [lastAt, onSeen]);
+
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [text]);
+
+  async function submit() {
+    if (!text.trim() || sending) return;
+    const ok = await send(text);
+    if (ok) setText("");
+  }
+
+  function insertSnippet(build: (typeof SNIPPETS)[number]["build"]) {
+    const nombre = conversation.name.split(" ")[0];
+    const t = build({
+      nombre,
+      propiedad: conversation.property?.title ?? null,
+      direccion: addressOf(conversation.property),
+    });
+    if (!t) return;
+    setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${t}` : t));
+    area.current?.focus();
+  }
+
+  const items: Array<{ kind: "day"; key: string; label: string } | { kind: "msg"; m: MessageRow }> = [];
+  let prevDay = "";
+  for (const m of messages) {
+    const day = new Date(m.created_at).toDateString();
+    if (day !== prevDay) {
+      items.push({ kind: "day", key: `d-${m.id}`, label: dayLabel(m.created_at) });
+      prevDay = day;
+    }
+    items.push({ kind: "msg", m });
+  }
+
+  const property = conversation.property;
+  const btn =
+    "min-h-[44px] md:min-h-[36px] px-3.5 rounded-xl text-sm border transition-all hover:border-violet-300 flex items-center";
+
+  return (
+    <section className="flex flex-col min-h-0 h-full bg-white" aria-label={`Conversación con ${conversation.name}`}>
+      <header className="flex items-center gap-3 px-3 md:px-4 py-3 border-b flex-shrink-0" style={{ borderColor: "#EDE9FE" }}>
+        <button
+          onClick={onBack}
+          aria-label="Volver a la bandeja"
+          className="md:hidden w-11 h-11 -ml-1 flex items-center justify-center rounded-xl"
+          style={{ color: "#7C3AED" }}
+        >
+          <ChevronLeftIcon size={20} />
+        </button>
+        <Avatar name={conversation.name} size={40} />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            {conversation.name}
+          </h2>
+          <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
+            {CHANNEL_META[conversation.channel].label}
+            {responsible ? ` · Resp. por ${responsible.full_name}` : ""}
+          </p>
+        </div>
+        <button onClick={onProfile} className={`${btn} xl:hidden`} style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600 }}>
+          Perfil
+        </button>
+        {conversation.contact && (
+          <button
+            onClick={() => navigate(`/contactos/${conversation.contact!.id}`)}
+            className={`${btn} hidden sm:flex`}
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "#F9F7FF" }}
+          >
+            Ver ficha
+          </button>
+        )}
+      </header>
+
+      {property && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 text-xs border-b flex-shrink-0 flex-wrap"
+          style={{ background: "#F9F7FF", borderColor: "#F3F0FF", color: "#4C1D95" }}
+        >
+          <span>
+            Consulta sobre: <strong style={{ fontWeight: 700 }}>{property.title}</strong>
+          </span>
+          {crmMatch && (
+            <button
+              onClick={() => navigate(`/matches/${crmMatch.id}`)}
+              className="underline underline-offset-2 min-h-[28px]"
+              style={{ color: "#6D28D9", fontWeight: 700 }}
+            >
+              Ver match ({Math.round(crmMatch.score)}%)
+            </button>
+          )}
+        </div>
+      )}
+
+      <div
+        ref={scroller}
+        role="log"
+        aria-live="polite"
+        aria-label="Mensajes"
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-2"
+        style={{ background: "#FDFCFF" }}
+      >
+        {loading ? (
+          <p className="text-xs text-center" style={{ color: "#7458C4" }}>
+            Cargando mensajes…
+          </p>
+        ) : items.length === 0 ? (
+          <p className="text-xs text-center py-8" style={{ color: "#7C6A99" }}>
+            Todavía no hay mensajes. Escribí el primero o usá una respuesta rápida.
+          </p>
+        ) : (
+          items.map((it) => {
+            if (it.kind === "day") {
+              return (
+                <div key={it.key} className="flex justify-center py-2">
+                  <span className="text-[11px] px-3 py-1 rounded-full" style={{ background: "#F5F3FF", color: "#7458C4", fontWeight: 600 }}>
+                    {it.label}
+                  </span>
+                </div>
+              );
+            }
+            const fromClient = it.m.sender_id === conversation.demandanteId;
+            return (
+              <div key={it.m.id} className={`flex ${fromClient ? "justify-start" : "justify-end"}`}>
+                <div
+                  className="max-w-[85%] md:max-w-[75%] rounded-2xl px-3.5 py-2"
+                  style={{
+                    background: fromClient ? "#F3F0FF" : "#7C3AED",
+                    color: fromClient ? "#1F0A3C" : "white",
+                    borderBottomLeftRadius: fromClient ? 6 : undefined,
+                    borderBottomRightRadius: fromClient ? undefined : 6,
+                  }}
+                >
+                  <p className="text-sm whitespace-pre-wrap break-words">{it.m.content}</p>
+                  <p className="text-[11px] mt-0.5 text-right" style={{ color: fromClient ? "#7458C4" : "rgba(255,255,255,0.8)" }}>
+                    {new Date(it.m.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="border-t px-3 md:px-4 pt-2 pb-3 flex-shrink-0" style={{ borderColor: "#EDE9FE" }}>
+        <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Respuestas rápidas">
+          {SNIPPETS.map((s) => {
+            const unavailable = s.build({ nombre: "", propiedad: null, direccion: addressOf(property) }) === null;
+            return (
+              <button
+                key={s.id}
+                disabled={unavailable}
+                title={unavailable ? "La propiedad no tiene dirección cargada" : undefined}
+                onClick={() => insertSnippet(s.build)}
+                className="min-h-[44px] md:min-h-[32px] px-3 rounded-full text-xs whitespace-nowrap border disabled:opacity-50 hover:border-violet-300"
+                style={{ borderColor: "#DDD6FE", color: "#6D28D9", background: "#F9F7FF", fontWeight: 600 }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        {error && (
+          <p role="alert" className="text-xs mb-2" style={{ color: "#BE123C", fontWeight: 600 }}>
+            {error}
+          </p>
+        )}
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={area}
+            value={text}
+            rows={1}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            aria-label="Escribir un mensaje"
+            placeholder="Escribí un mensaje… (Shift+Enter para salto de línea)"
+            className="flex-1 px-3.5 py-2.5 rounded-xl text-sm border outline-none resize-none bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] min-h-[44px]"
+          />
+          <button
+            onClick={submit}
+            disabled={sending || !text.trim()}
+            className="min-h-[44px] px-5 rounded-xl text-sm text-white disabled:opacity-50"
+            style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+          >
+            {sending ? "Enviando…" : "Enviar"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}

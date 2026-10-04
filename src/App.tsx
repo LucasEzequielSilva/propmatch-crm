@@ -13,6 +13,7 @@ import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
 import MultipublicadorVivoPage from "@/features/propiedades/MultipublicadorVivoPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
 import OfertasPage from "@/features/ofertas/OfertasPage";
+import InboxPage from "@/features/inbox/InboxPage";
 import MatchesPage from "@/features/matches/MatchesPage";
 import VerMatchPage from "@/features/matches/VerMatchPage";
 import AgendaPage from "@/features/agenda/AgendaPage";
@@ -50,6 +51,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
 
+              <Route path="inbox" element={<InboxPage />} />
               <Route path="contactos" element={<ContactosPage />} />
               <Route path="contactos/:contactId" element={<ContactoDetallePage />} />
 

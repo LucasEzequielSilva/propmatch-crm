@@ -522,6 +522,16 @@ export default function ContactoDetallePage() {
               </Card>
             )}
 
+            {currentUserId &&
+              contactChats.map((o) => (
+                <ChatPanel
+                  key={o.id}
+                  matchId={o.match_id}
+                  propertyTitle={propertyById(o.property_id)?.title ?? "Propiedad"}
+                  currentUserId={currentUserId}
+                />
+              ))}
+
             {upcoming.length > 0 && (
               <Card>
                 <SectionHeader inCard title="Próximas actividades" />

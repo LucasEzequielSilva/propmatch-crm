@@ -110,6 +110,43 @@ export async function fetchMatchMessages(matchId: string): Promise<MessageRow[]>
   return data as MessageRow[];
 }
 
+/**
+ * Mensajes recientes de muchos matches de una vez (para el Inbox: un fetch en
+ * vez de uno por conversación). Se parte en tandas para no pasar el largo de
+ * URL del `in`, y se trae lo más nuevo primero para que el tope de filas
+ * recorte lo viejo. Devuelve cada match con sus últimos `perMatch` mensajes
+ * en orden cronológico.
+ */
+export async function fetchMessagesForMatches(
+  matchIds: string[],
+  perMatch = 30,
+): Promise<Record<string, MessageRow[]>> {
+  const out: Record<string, MessageRow[]> = {};
+  if (matchIds.length === 0) return out;
+  const chunks: string[][] = [];
+  for (let i = 0; i < matchIds.length; i += 80) chunks.push(matchIds.slice(i, i + 80));
+  const results = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, match_id, sender_id, content, created_at")
+        .in("match_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return data as MessageRow[];
+    }),
+  );
+  for (const rows of results) {
+    for (const m of rows) {
+      const list = (out[m.match_id] ??= []);
+      if (list.length < perMatch) list.push(m);
+    }
+  }
+  for (const id of Object.keys(out)) out[id].reverse();
+  return out;
+}
+
 /** Manda un mensaje real al chat — permitido por `messages_agency_send`. */
 export async function sendMatchMessage(
   matchId: string,
