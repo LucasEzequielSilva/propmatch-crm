@@ -11,6 +11,7 @@ import SubirPropiedadPage from "@/features/propiedades/SubirPropiedadPage";
 import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
 import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
 import MultipublicadorVivoPage from "@/features/propiedades/MultipublicadorVivoPage";
+import InstagramPublisherPage from "@/features/instagram/InstagramPublisherPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
 import OfertasPage from "@/features/ofertas/OfertasPage";
 import InboxPage from "@/features/inbox/InboxPage";
@@ -62,6 +63,7 @@ export default function App() {
 
               <Route path="publicador" element={<MultipublicadorPage />} />
               <Route path="publicador/:propertyId" element={<MultipublicadorVivoPage />} />
+              <Route path="publicador/:propertyId/instagram" element={<InstagramPublisherPage />} />
 
               <Route path="oportunidades" element={<OportunidadesPage />} />
               <Route path="ofertas" element={<OfertasPage />} />

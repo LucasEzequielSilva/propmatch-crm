@@ -46,11 +46,13 @@ function ChannelRow({
   selected,
   onToggle,
   onRetry,
+  onDesign,
 }: {
   ch: ChannelState;
   selected: boolean;
   onToggle: () => void;
   onRetry: () => void;
+  onDesign: () => void;
 }) {
   const { info, status } = ch;
   const isWeb = info.channel === "web";
@@ -89,6 +91,15 @@ function ChannelRow({
         )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
+        {info.channel === "instagram" && (
+          <button
+            onClick={onDesign}
+            className="px-3 py-2 min-h-11 md:min-h-0 md:py-1.5 rounded-lg text-xs border hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7458C4", fontWeight: 700 }}
+          >
+            Diseñar publicación
+          </button>
+        )}
         {status === "published" && ch.externalId && (
           <span
             className="text-[11px] px-2 py-1 rounded-md border"
@@ -322,6 +333,7 @@ export default function MultipublicadorVivoPage() {
                       selected={selected.includes(ch.info.channel)}
                       onToggle={() => toggle(ch.info.channel)}
                       onRetry={() => void queue(property, [ch.info.channel])}
+                      onDesign={() => navigate(`/publicador/${property.id}/instagram`)}
                     />
                   ))}
                 </div>
