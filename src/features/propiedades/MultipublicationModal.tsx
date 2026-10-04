@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Property } from "@/types/db";
+import { Property, PublicationChannel } from "@/types/db";
 import { money } from "@/lib/format";
 import { CheckCircleIcon, AlertTriangleIcon, HomeIcon } from "@/components/ui/icons";
 
@@ -17,6 +17,20 @@ export interface PlatformConfig {
   connected: boolean;
 }
 
+/** id de la UI -> canal de la tabla `property_publications`. */
+export const CHANNEL_BY_PLATFORM: Record<string, PublicationChannel> = {
+  ml: "mercadolibre",
+  zp: "zonaprop",
+  ap: "argenprop",
+  cp: "cabaprop",
+  fb: "facebook",
+  ig: "instagram",
+  web: "web",
+};
+export const PLATFORM_BY_CHANNEL = Object.fromEntries(
+  Object.entries(CHANNEL_BY_PLATFORM).map(([k, v]) => [v, k]),
+) as Record<PublicationChannel, string>;
+
 const INITIAL_PLATFORMS: PlatformConfig[] = [
   { id: "ml", name: "Mercado Libre", status: "unpublished", connected: true },
   { id: "zp", name: "Zonaprop", status: "unpublished", connected: true },
@@ -31,12 +45,19 @@ export function MultipublicationModal({
   property,
   coverPhoto,
   activePublications,
+  persistent = false,
   onClose,
   onPublishComplete
 }: {
   property: Property;
   coverPhoto: string | null;
   activePublications: PlatformConfig[];
+  /**
+   * `true` si las publicaciones se guardan en la base. Todavia no hay conectores
+   * reales a los portales: en ese modo los canales quedan "en cola" (`pending`)
+   * en vez de simular un exito con un ID inventado.
+   */
+  persistent?: boolean;
   onClose: () => void;
   onPublishComplete: (newPubs: PlatformConfig[]) => void;
 }) {
@@ -70,6 +91,11 @@ export function MultipublicationModal({
   };
 
   const handlePublish = () => {
+    if (persistent) {
+      setPlatforms(prev => prev.map(p => selected.has(p.id) ? { ...p, status: "pending", errorMessage: undefined, lastSync: "en cola" } : p));
+      setPublishState("done");
+      return;
+    }
     setPublishState("publishing");
 
     // Simular el proceso de publicación
@@ -109,6 +135,7 @@ export function MultipublicationModal({
   };
 
   const successCount = platforms.filter(p => selected.has(p.id) && p.status === 'published').length;
+  const queuedCount = platforms.filter(p => selected.has(p.id) && p.status === 'pending').length;
   const errorCount = platforms.filter(p => selected.has(p.id) && p.status === 'error').length;
 
   return (
@@ -260,9 +287,11 @@ export function MultipublicationModal({
 
           {publishState === "done" && (
             <div className="flex flex-col items-center justify-center py-4">
-              <h3 className="text-2xl font-black text-[#1F0A3C] tracking-tight mb-2">Publicación completada</h3>
+              <h3 className="text-2xl font-black text-[#1F0A3C] tracking-tight mb-2">{persistent ? "Publicaciones guardadas" : "Publicación completada"}</h3>
               <p className="text-sm text-[#7C6A99] font-medium mb-6">
-                {successCount} publicaciones exitosas<br />
+                {persistent
+                  ? <>{queuedCount} {queuedCount === 1 ? "canal quedó" : "canales quedaron"} en cola. El envío automático a cada portal se habilita al conectar su cuenta.</>
+                  : <>{successCount} publicaciones exitosas</>}<br />
                 {errorCount > 0 && <span className="text-red-500">{errorCount} {errorCount === 1 ? 'publicación requiere' : 'publicaciones requieren'} atención.</span>}
               </p>
 
@@ -275,6 +304,7 @@ export function MultipublicationModal({
                     </div>
                     <span className="text-sm font-bold">
                       {p.status === "published" && <span className="text-[#16A34A] flex items-center gap-1"><CheckCircleIcon size={14} color="#16A34A" /> Éxito</span>}
+                      {p.status === "pending" && persistent && <span className="text-yellow-600">En cola</span>}
                       {p.status === "error" && <span className="text-red-500 flex items-center gap-1"><AlertTriangleIcon size={14} color="red" /> Falló</span>}
                     </span>
                   </div>

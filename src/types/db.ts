@@ -354,3 +354,29 @@ export interface Deal {
   created_at: string;
   updated_at: string;
 }
+
+export type PublicationChannel =
+  | "mercadolibre"
+  | "zonaprop"
+  | "argenprop"
+  | "cabaprop"
+  | "facebook"
+  | "instagram"
+  | "web";
+export type PublicationStatus = "draft" | "pending" | "published" | "error" | "paused" | "removed";
+
+/** Una publicación externa de una propiedad (`property_publications`). La propiedad sigue siendo la fuente de verdad. */
+export interface PropertyPublication {
+  id: string;
+  agency_id: string;
+  property_id: string;
+  channel: PublicationChannel;
+  status: PublicationStatus;
+  external_id: string | null;
+  external_url: string | null;
+  error_message: string | null;
+  published_at: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

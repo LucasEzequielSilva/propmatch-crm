@@ -1,25 +1,88 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
 import { useStore } from "@/data/store";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, Badge } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/states";
 import { HomeIcon, PropertiesIcon, AlertTriangleIcon, MatchesSolidIcon, MapPinIcon } from "@/components/ui/icons";
-import { MultipublicationModal, PlatformConfig } from "./MultipublicationModal";
-import type { Property } from "@/types/db";
+import {
+    MultipublicationModal,
+    PlatformConfig,
+    PlatformStatus,
+    CHANNEL_BY_PLATFORM,
+    PLATFORM_BY_CHANNEL,
+} from "./MultipublicationModal";
+import type { Property, PropertyPublication, PublicationStatus } from "@/types/db";
+import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSync";
 import { PROPERTY_TYPE_LABEL, money } from "@/lib/format";
 
+const PLATFORM_NAMES: Record<string, string> = {
+    ml: "Mercado Libre", zp: "Zonaprop", ap: "Argenprop", cp: "CABAPROP",
+    fb: "Facebook", ig: "Instagram", web: "Web PropMatch",
+};
+const ROW_TO_UI: Record<PublicationStatus, PlatformStatus> = {
+    draft: "unpublished", pending: "pending", published: "published",
+    error: "error", paused: "unpublished", removed: "unpublished",
+};
+
 export default function MultipublicadorPage() {
-    const navigate = useNavigate();
-    const { properties, photos } = useStore();
+    const { properties, photos, agency } = useStore();
     const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
     const [publicationsMap, setPublicationsMap] = useState<Record<string, PlatformConfig[]>>({});
+    /** Publicaciones guardadas en la base. `null` = tabla no disponible -> modo local. */
+    const [remote, setRemote] = useState<PropertyPublication[] | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
-    const getPublications = (propId: string) => {
-        return publicationsMap[propId] || [
-            { id: "web", name: "Web PropMatch", status: "active", connected: true }
-        ];
+    useEffect(() => {
+        let cancelled = false;
+        fetchAgencyPublications(agency.id).then(rows => { if (!cancelled) setRemote(rows); });
+        return () => { cancelled = true; };
+    }, [agency.id]);
+
+    /** Solo se persiste si hay tabla y la propiedad ya existe en la base. */
+    const isPersistent = (p: Property) => remote !== null && !!p.app_property_id;
+
+    const getPublications = (p: Property): PlatformConfig[] => {
+        const web: PlatformConfig = { id: "web", name: "Web PropMatch", status: "active", connected: true };
+        if (isPersistent(p)) {
+            const rows = remote!.filter(r => r.property_id === p.app_property_id && r.channel !== "web");
+            return [web, ...rows.map(r => ({
+                id: PLATFORM_BY_CHANNEL[r.channel],
+                name: PLATFORM_NAMES[PLATFORM_BY_CHANNEL[r.channel]] ?? r.channel,
+                status: ROW_TO_UI[r.status],
+                connected: true,
+                externalId: r.external_id ?? undefined,
+                url: r.external_url ?? undefined,
+                errorMessage: r.error_message ?? undefined,
+            }))];
+        }
+        return publicationsMap[p.id] || [web];
+    };
+
+    const savePublications = async (p: Property, platforms: PlatformConfig[]) => {
+        if (!isPersistent(p)) {
+            setPublicationsMap(prev => ({ ...prev, [p.id]: platforms }));
+            return;
+        }
+        const items = platforms
+            .filter(c => c.id !== "web" && c.status !== "unpublished" && c.status !== "disconnected")
+            .map(c => ({
+                agencyId: agency.id,
+                propertyId: p.app_property_id!,
+                channel: CHANNEL_BY_PLATFORM[c.id],
+                status: (c.status === "active" ? "published" : c.status) as PublicationStatus,
+                externalId: c.externalId,
+                externalUrl: c.url,
+                errorMessage: c.errorMessage,
+            }));
+        const { rows, error } = await upsertPublications(items);
+        setSaveError(error);
+        if (!error) {
+            setRemote(prev => [
+                ...(prev ?? []).filter(r => !rows.some(n => n.property_id === r.property_id && n.channel === r.channel)),
+                ...rows,
+            ]);
+        }
     };
 
     const { totalSynced, totalErrors, totalChannels } = useMemo(() => {
@@ -27,7 +90,7 @@ export default function MultipublicadorPage() {
         let errs = 0;
         let chans = 0;
         properties.forEach(p => {
-            const pubs = getPublications(p.id);
+            const pubs = getPublications(p);
             const activeOrPub = pubs.filter(c => c.status === 'published' || c.status === 'active').length;
             const errored = pubs.filter(c => c.status === 'error').length;
             if (activeOrPub > 0) synced++;
@@ -35,7 +98,7 @@ export default function MultipublicadorPage() {
             chans += activeOrPub;
         });
         return { totalSynced: synced, totalErrors: errs, totalChannels: chans };
-    }, [properties, publicationsMap]);
+    }, [properties, publicationsMap, remote]);
 
     return (
         <>
@@ -46,6 +109,11 @@ export default function MultipublicadorPage() {
             />
 
             <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
+                {saveError && (
+                    <p className="mt-6 text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
+                        No se pudieron guardar las publicaciones: {saveError}
+                    </p>
+                )}
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <StatCard
                         value={String(totalSynced)}
@@ -112,7 +180,7 @@ export default function MultipublicadorPage() {
                                 </thead>
                                 <tbody>
                                     {properties.map((p, idx) => {
-                                        const pubs = getPublications(p.id);
+                                        const pubs = getPublications(p);
                                         const activeCount = pubs.filter(c => c.status === 'published' || c.status === 'active').length;
                                         const errorCount = pubs.filter(c => c.status === 'error').length;
                                         const photo = (photos[p.id] || [])[0];
@@ -196,10 +264,11 @@ export default function MultipublicadorPage() {
                 <MultipublicationModal
                     property={selectedProperty}
                     coverPhoto={(photos[selectedProperty.id] || [])[0] || null}
-                    activePublications={getPublications(selectedProperty.id)}
+                    activePublications={getPublications(selectedProperty)}
+                    persistent={isPersistent(selectedProperty)}
                     onClose={() => setSelectedProperty(null)}
                     onPublishComplete={(newPubs) => {
-                        setPublicationsMap(prev => ({ ...prev, [selectedProperty.id]: newPubs }));
+                        void savePublications(selectedProperty, newPubs);
                         setSelectedProperty(null);
                     }}
                 />
