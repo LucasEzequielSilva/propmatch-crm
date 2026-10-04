@@ -4,7 +4,10 @@ import { ChevronLeftIcon } from "@/components/ui/icons";
 import type { Match, Profile } from "@/types/db";
 import { CHANNEL_META, type Conversation } from "./conversations";
 import { Avatar } from "./ConversationList";
-import { addressOf, SNIPPETS } from "./snippets";
+import { useStore } from "@/data/store";
+import { isAutomaticMessage, summarizeHours } from "./automationEngine";
+import { useAutomationState } from "./automationState";
+import { buildTemplateContext, missingPropertyVars, renderTemplate } from "./templates";
 import { useMatchChat } from "./useMatchChat";
 import type { MessageRow } from "@/lib/leadSync";
 
@@ -38,6 +41,14 @@ export function ChatView({
   onSeen: (iso: string) => void;
 }) {
   const navigate = useNavigate();
+  const { agency, profileById } = useStore();
+  const { config, log } = useAutomationState(agency.id);
+  const tplEnv = {
+    agencyName: agency.name,
+    agentName: profileById(currentUserId)?.full_name ?? "",
+    horario: config.hoursText.trim() || summarizeHours(config.hours),
+  };
+  const tplCtx = buildTemplateContext(conversation, tplEnv);
   const { messages, loading, sending, error, send } = useMatchChat(conversation.matchId, currentUserId, preview);
   const [text, setText] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
@@ -70,15 +81,11 @@ export function ChatView({
     if (ok) setText("");
   }
 
-  function insertSnippet(build: (typeof SNIPPETS)[number]["build"]) {
-    const nombre = conversation.name.split(" ")[0];
-    const t = build({
-      nombre,
-      propiedad: conversation.property?.title ?? null,
-      direccion: addressOf(conversation.property),
-    });
+  function insertSnippet(template: string) {
+    const t = renderTemplate(template, tplCtx);
     if (!t) return;
-    setText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${t}` : t));
+    setText((prev) => (prev.trim() ? `${prev.trimEnd()}
+${t}` : t));
     area.current?.focus();
   }
 
@@ -180,6 +187,7 @@ export function ChatView({
               );
             }
             const fromClient = it.m.sender_id === conversation.demandanteId;
+            const auto = isAutomaticMessage(it.m, conversation.demandanteId, log);
             return (
               <div key={it.m.id} className={`flex ${fromClient ? "justify-start" : "justify-end"}`}>
                 <div
@@ -191,6 +199,11 @@ export function ChatView({
                     borderBottomRightRadius: fromClient ? undefined : 6,
                   }}
                 >
+                  {auto && (
+                    <p className="text-[11px] mb-0.5" style={{ color: "rgba(255,255,255,0.9)", fontWeight: 700 }}>
+                      Automático
+                    </p>
+                  )}
                   <p className="text-sm whitespace-pre-wrap break-words">{it.m.content}</p>
                   <p className="text-[11px] mt-0.5 text-right" style={{ color: fromClient ? "#7458C4" : "rgba(255,255,255,0.8)" }}>
                     {new Date(it.m.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
@@ -204,18 +217,19 @@ export function ChatView({
 
       <div className="border-t px-3 md:px-4 pt-2 pb-3 flex-shrink-0" style={{ borderColor: "#EDE9FE" }}>
         <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Respuestas rápidas">
-          {SNIPPETS.map((s) => {
-            const unavailable = s.build({ nombre: "", propiedad: null, direccion: addressOf(property) }) === null;
+          {config.snippets.map((s) => {
+            const missing = missingPropertyVars(s.text, tplCtx);
+            const unavailable = missing.length > 0;
             return (
               <button
                 key={s.id}
                 disabled={unavailable}
-                title={unavailable ? "La propiedad no tiene dirección cargada" : undefined}
-                onClick={() => insertSnippet(s.build)}
+                title={unavailable ? "Falta un dato de la propiedad (dirección, título o precio)" : undefined}
+                onClick={() => insertSnippet(s.text)}
                 className="min-h-[44px] md:min-h-[32px] px-3 rounded-full text-xs whitespace-nowrap border disabled:opacity-50 hover:border-violet-300"
                 style={{ borderColor: "#DDD6FE", color: "#6D28D9", background: "#F9F7FF", fontWeight: 600 }}
               >
-                {s.label}
+                {s.title}
               </button>
             );
           })}

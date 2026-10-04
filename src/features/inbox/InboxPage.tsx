@@ -3,6 +3,10 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Card } from "@/components/ui/Card";
 import { SearchIcon } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
+import { AutomationsDrawer } from "./AutomationsDrawer";
+import { summarizeHours, useAutomationRunner } from "./automationEngine";
+import { useAutomationState } from "./automationState";
+import { buildTemplateContext } from "./templates";
 import { ChatView } from "./ChatView";
 import { buildConversations, CHANNEL_META, norm, SOON_CHANNELS, useSeen } from "./conversations";
 import { ConversationList } from "./ConversationList";
@@ -35,6 +39,9 @@ export default function InboxPage() {
   const [agentId, setAgentId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
+  const [autoOpen, setAutoOpen] = useState(false);
+  const autoState = useAutomationState(agency.id);
+  const { config: autoConfig } = autoState;
 
   const all = useMemo(
     () =>
@@ -47,6 +54,20 @@ export default function InboxPage() {
       }),
     [feed.matches, feed.messagesByMatch, contacts, properties, seen],
   );
+
+  const agentName = profileById(currentUserId)?.full_name ?? "";
+  const horario = autoConfig.hoursText.trim() || summarizeHours(autoConfig.hours);
+  useAutomationRunner({
+    agencyId: agency.id,
+    userId: currentUserId,
+    ready: !feed.loading && !feed.error && feed.agencyId === agency.id,
+    paused: autoConfig.paused,
+    rules: autoConfig.rules,
+    hours: autoConfig.hours,
+    conversations: all,
+    messagesByMatch: feed.messagesByMatch,
+    renderContext: (c) => buildTemplateContext(c, { agencyName: agency.name, agentName, horario }),
+  });
 
   const base = useMemo(() => (agentId ? all.filter((c) => c.agentId === agentId) : all), [all, agentId]);
   const counts = {
@@ -143,6 +164,24 @@ export default function InboxPage() {
         </ul>
 
         <div className="flex items-center gap-2 ml-auto w-full md:w-auto">
+          <button
+            onClick={() => setAutoOpen(true)}
+            className="min-h-[44px] md:min-h-[40px] px-4 rounded-xl text-sm border whitespace-nowrap flex items-center gap-2 hover:border-violet-300"
+            style={{ borderColor: "#DDD6FE", color: "#6D28D9", background: "#F9F7FF", fontWeight: 600 }}
+          >
+            Automatizaciones
+            {autoConfig.paused ? (
+              <span className="text-[11px] px-1.5 rounded-full" style={{ background: "#FEF3C7", color: "#92400E", fontWeight: 700 }}>
+                En pausa
+              </span>
+            ) : (
+              autoConfig.rules.some((r) => r.enabled) && (
+                <span className="text-[11px] px-1.5 rounded-full" style={{ background: "#DCFCE7", color: "#166534", fontWeight: 700 }}>
+                  {autoConfig.rules.filter((r) => r.enabled).length} activas
+                </span>
+              )
+            )}
+          </button>
           {profiles.length > 1 && (
             <select
               value={agentId}
@@ -230,6 +269,16 @@ export default function InboxPage() {
           )}
         </div>
       </div>
+
+      <AutomationsDrawer
+        open={autoOpen}
+        onClose={() => setAutoOpen(false)}
+        agencyId={agency.id}
+        agencyName={agency.name}
+        agentName={agentName}
+        conversations={all}
+        properties={properties}
+      />
     </>
   );
 }
