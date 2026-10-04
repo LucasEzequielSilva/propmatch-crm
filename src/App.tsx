@@ -10,6 +10,7 @@ import PropiedadesPage from "@/features/propiedades/PropiedadesPage";
 import SubirPropiedadPage from "@/features/propiedades/SubirPropiedadPage";
 import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
 import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
+import MultipublicadorVivoPage from "@/features/propiedades/MultipublicadorVivoPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
 import OfertasPage from "@/features/ofertas/OfertasPage";
 import MatchesPage from "@/features/matches/MatchesPage";
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
 
               <Route path="publicador" element={<MultipublicadorPage />} />
+              <Route path="publicador/:propertyId" element={<MultipublicadorVivoPage />} />
 
               <Route path="oportunidades" element={<OportunidadesPage />} />
               <Route path="ofertas" element={<OfertasPage />} />

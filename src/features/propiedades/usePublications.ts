@@ -1,0 +1,130 @@
+/**
+ * Estado de las publicaciones externas de las propiedades de la agencia.
+ *
+ * Con la tabla `property_publications` disponible y la propiedad ya en la
+ * base (`app_property_id`), todo se guarda ahí. Si no, queda en memoria
+ * (modo local) con el mismo shape, para que la pantalla no distinga.
+ *
+ * Todavía no hay conectores reales a los portales: `queue` deja los canales
+ * en `pending` ("en cola"). Nunca marca `published` ni inventa IDs externos.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { useStore } from "@/data/store";
+import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSync";
+import type { Property, PropertyPublication, PublicationChannel, PublicationStatus } from "@/types/db";
+
+export interface ChannelInfo {
+  channel: PublicationChannel;
+  name: string;
+  /** Iniciales para el logo del canal. */
+  short: string;
+  /** Color de marca del canal (fondo del logo). */
+  color: string;
+}
+
+/** Canales externos en el orden en que se muestran. `web` es el propio y no se encola. */
+export const EXTERNAL_CHANNELS: ChannelInfo[] = [
+  { channel: "mercadolibre", name: "Mercado Libre Inmuebles", short: "ML", color: "#FFE600" },
+  { channel: "zonaprop", name: "Zonaprop", short: "ZP", color: "#F26122" },
+  { channel: "argenprop", name: "Argenprop", short: "AP", color: "#0F766E" },
+  { channel: "cabaprop", name: "CABAPROP", short: "CP", color: "#1D4ED8" },
+  { channel: "facebook", name: "Facebook Marketplace & Page", short: "f", color: "#1877F2" },
+  { channel: "instagram", name: "Instagram", short: "IG", color: "#E1306C" },
+];
+export const WEB_CHANNEL: ChannelInfo = { channel: "web", name: "Sitio web PropMatch", short: "W", color: "#7C3AED" };
+
+export interface ChannelState {
+  info: ChannelInfo;
+  /** `null` = nunca se intentó publicar en este canal. */
+  status: PublicationStatus | null;
+  externalId: string | null;
+  externalUrl: string | null;
+  errorMessage: string | null;
+  lastSyncedAt: string | null;
+}
+
+export function usePublications() {
+  const { agency } = useStore();
+  /** `null` = tabla no disponible (modo local). */
+  const [remote, setRemote] = useState<PropertyPublication[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [local, setLocal] = useState<Record<string, Partial<Record<PublicationChannel, PublicationStatus>>>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAgencyPublications(agency.id).then((rows) => {
+      if (cancelled) return;
+      setRemote(rows);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [agency.id]);
+
+  /** Se guarda en la base solo si hay tabla y la propiedad ya existe allá. */
+  const isPersistent = useCallback((p: Property) => remote !== null && !!p.app_property_id, [remote]);
+
+  const channelsOf = useCallback(
+    (p: Property): ChannelState[] =>
+      [...EXTERNAL_CHANNELS, WEB_CHANNEL].map((info) => {
+        if (info.channel === "web") {
+          return { info, status: "published", externalId: null, externalUrl: null, errorMessage: null, lastSyncedAt: null };
+        }
+        if (isPersistent(p)) {
+          const row = remote!.find((r) => r.property_id === p.app_property_id && r.channel === info.channel);
+          return {
+            info,
+            status: row?.status ?? null,
+            externalId: row?.external_id ?? null,
+            externalUrl: row?.external_url ?? null,
+            errorMessage: row?.error_message ?? null,
+            lastSyncedAt: row?.last_synced_at ?? null,
+          };
+        }
+        return {
+          info,
+          status: local[p.id]?.[info.channel] ?? null,
+          externalId: null,
+          externalUrl: null,
+          errorMessage: null,
+          lastSyncedAt: null,
+        };
+      }),
+    [isPersistent, remote, local],
+  );
+
+  /** Deja los canales indicados en cola (o los re-encola si estaban en error). */
+  const queue = useCallback(
+    async (p: Property, channels: PublicationChannel[]) => {
+      if (channels.length === 0) return;
+      if (!isPersistent(p)) {
+        setLocal((prev) => ({
+          ...prev,
+          [p.id]: { ...prev[p.id], ...Object.fromEntries(channels.map((c) => [c, "pending"])) },
+        }));
+        return;
+      }
+      const { rows, error: err } = await upsertPublications(
+        channels.map((channel) => ({
+          agencyId: agency.id,
+          propertyId: p.app_property_id!,
+          channel,
+          status: "pending" as const,
+        })),
+      );
+      setError(err);
+      if (!err) {
+        setRemote((prev) => [
+          ...(prev ?? []).filter((r) => !rows.some((n) => n.property_id === r.property_id && n.channel === r.channel)),
+          ...rows,
+        ]);
+      }
+    },
+    [agency.id, isPersistent],
+  );
+
+  return { channelsOf, queue, isPersistent, loading, error, persistentMode: remote !== null };
+}

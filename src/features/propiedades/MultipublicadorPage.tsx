@@ -1,104 +1,35 @@
-import { useState, useMemo, useEffect } from "react";
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, Badge } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { EmptyState } from "@/components/ui/states";
 import { HomeIcon, PropertiesIcon, AlertTriangleIcon, MatchesSolidIcon, MapPinIcon } from "@/components/ui/icons";
-import {
-    MultipublicationModal,
-    PlatformConfig,
-    PlatformStatus,
-    CHANNEL_BY_PLATFORM,
-    PLATFORM_BY_CHANNEL,
-} from "./MultipublicationModal";
-import type { Property, PropertyPublication, PublicationStatus } from "@/types/db";
-import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSync";
 import { PROPERTY_TYPE_LABEL, money } from "@/lib/format";
-
-const PLATFORM_NAMES: Record<string, string> = {
-    ml: "Mercado Libre", zp: "Zonaprop", ap: "Argenprop", cp: "CABAPROP",
-    fb: "Facebook", ig: "Instagram", web: "Web PropMatch",
-};
-const ROW_TO_UI: Record<PublicationStatus, PlatformStatus> = {
-    draft: "unpublished", pending: "pending", published: "published",
-    error: "error", paused: "unpublished", removed: "unpublished",
-};
+import { usePublications } from "./usePublications";
 
 export default function MultipublicadorPage() {
-    const { properties, photos, agency } = useStore();
-    const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-    const [publicationsMap, setPublicationsMap] = useState<Record<string, PlatformConfig[]>>({});
-    /** Publicaciones guardadas en la base. `null` = tabla no disponible -> modo local. */
-    const [remote, setRemote] = useState<PropertyPublication[] | null>(null);
-    const [saveError, setSaveError] = useState<string | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        fetchAgencyPublications(agency.id).then(rows => { if (!cancelled) setRemote(rows); });
-        return () => { cancelled = true; };
-    }, [agency.id]);
-
-    /** Solo se persiste si hay tabla y la propiedad ya existe en la base. */
-    const isPersistent = (p: Property) => remote !== null && !!p.app_property_id;
-
-    const getPublications = (p: Property): PlatformConfig[] => {
-        const web: PlatformConfig = { id: "web", name: "Web PropMatch", status: "active", connected: true };
-        if (isPersistent(p)) {
-            const rows = remote!.filter(r => r.property_id === p.app_property_id && r.channel !== "web");
-            return [web, ...rows.map(r => ({
-                id: PLATFORM_BY_CHANNEL[r.channel],
-                name: PLATFORM_NAMES[PLATFORM_BY_CHANNEL[r.channel]] ?? r.channel,
-                status: ROW_TO_UI[r.status],
-                connected: true,
-                externalId: r.external_id ?? undefined,
-                url: r.external_url ?? undefined,
-                errorMessage: r.error_message ?? undefined,
-            }))];
-        }
-        return publicationsMap[p.id] || [web];
-    };
-
-    const savePublications = async (p: Property, platforms: PlatformConfig[]) => {
-        if (!isPersistent(p)) {
-            setPublicationsMap(prev => ({ ...prev, [p.id]: platforms }));
-            return;
-        }
-        const items = platforms
-            .filter(c => c.id !== "web" && c.status !== "unpublished" && c.status !== "disconnected")
-            .map(c => ({
-                agencyId: agency.id,
-                propertyId: p.app_property_id!,
-                channel: CHANNEL_BY_PLATFORM[c.id],
-                status: (c.status === "active" ? "published" : c.status) as PublicationStatus,
-                externalId: c.externalId,
-                externalUrl: c.url,
-                errorMessage: c.errorMessage,
-            }));
-        const { rows, error } = await upsertPublications(items);
-        setSaveError(error);
-        if (!error) {
-            setRemote(prev => [
-                ...(prev ?? []).filter(r => !rows.some(n => n.property_id === r.property_id && n.channel === r.channel)),
-                ...rows,
-            ]);
-        }
-    };
+    const { properties, photos } = useStore();
+    const navigate = useNavigate();
+    const { channelsOf, error: saveError } = usePublications();
 
     const { totalSynced, totalErrors, totalChannels } = useMemo(() => {
         let synced = 0;
         let errs = 0;
         let chans = 0;
         properties.forEach(p => {
-            const pubs = getPublications(p);
-            const activeOrPub = pubs.filter(c => c.status === 'published' || c.status === 'active').length;
-            const errored = pubs.filter(c => c.status === 'error').length;
-            if (activeOrPub > 0) synced++;
+            // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
+            const pubs = channelsOf(p).filter(c => c.info.channel !== "web");
+            const published = pubs.filter(c => c.status === "published").length;
+            const queued = pubs.filter(c => c.status === "pending").length;
+            const errored = pubs.filter(c => c.status === "error").length;
+            if (published + queued > 0) synced++;
             if (errored > 0) errs++;
-            chans += activeOrPub;
+            chans += published;
         });
         return { totalSynced: synced, totalErrors: errs, totalChannels: chans };
-    }, [properties, publicationsMap, remote]);
+    }, [properties, channelsOf]);
 
     return (
         <>
@@ -180,15 +111,16 @@ export default function MultipublicadorPage() {
                                 </thead>
                                 <tbody>
                                     {properties.map((p, idx) => {
-                                        const pubs = getPublications(p);
-                                        const activeCount = pubs.filter(c => c.status === 'published' || c.status === 'active').length;
-                                        const errorCount = pubs.filter(c => c.status === 'error').length;
+                                        const pubs = channelsOf(p);
+                                        const published = pubs.filter(c => c.status === "published");
+                                        const queuedCount = pubs.filter(c => c.status === "pending").length;
+                                        const errorCount = pubs.filter(c => c.status === "error").length;
                                         const photo = (photos[p.id] || [])[0];
 
                                         return (
                                             <tr
                                                 key={p.id}
-                                                onClick={() => setSelectedProperty(p)}
+                                                onClick={() => navigate(`/publicador/${p.id}`)}
                                                 className="transition-all hover:bg-[#FAFAFF] cursor-pointer group"
                                                 style={{ borderBottom: idx < properties.length - 1 ? "1px solid #F9F7FF" : undefined }}
                                             >
@@ -226,24 +158,27 @@ export default function MultipublicadorPage() {
                                                 </td>
                                                 <td className="px-5 py-4">
                                                     <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                                                        {pubs.filter(c => c.status === 'published' || c.status === 'active').map(c => (
-                                                            <span key={c.id} className="text-[10px] px-2 py-0.5 rounded-md border" style={{ background: "#F8FAFC", borderColor: "#E2E8F0", color: "#475569", fontWeight: 700 }}>
-                                                                {c.name}
+                                                        {published.map(c => (
+                                                            <span key={c.info.channel} className="text-[10px] px-2 py-0.5 rounded-md border" style={{ background: "#F8FAFC", borderColor: "#E2E8F0", color: "#475569", fontWeight: 700 }}>
+                                                                {c.info.name}
                                                             </span>
                                                         ))}
+                                                        {queuedCount > 0 && (
+                                                            <span className="text-[10px] px-2 py-0.5 rounded-md border" style={{ background: "#FFFBEB", borderColor: "#FDE68A", color: "#B45309", fontWeight: 700 }}>
+                                                                {queuedCount} en cola
+                                                            </span>
+                                                        )}
                                                         {errorCount > 0 && (
                                                             <span className="text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1" style={{ background: "#FFF1F2", borderColor: "#FECDD3", color: "#BE123C", fontWeight: 700 }}>
                                                                 <AlertTriangleIcon size={10} color="#BE123C" /> {errorCount} Error
                                                             </span>
                                                         )}
-                                                        {activeCount === 0 && (
-                                                            <span className="text-xs italic text-[#C4B5FD]">Ninguno</span>
-                                                        )}
+                                                        
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4 text-right">
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); setSelectedProperty(p); }}
+                                                        onClick={(e) => { e.stopPropagation(); navigate(`/publicador/${p.id}`); }}
                                                         className="px-4 py-2 rounded-xl text-xs transition-all flex items-center justify-center border font-bold hover:shadow-md hover:bg-violet-50 active:scale-95 ml-auto"
                                                         style={{ borderColor: "#EDE9FE", color: "#7C3AED", background: "white" }}
                                                     >
@@ -260,19 +195,6 @@ export default function MultipublicadorPage() {
                 </Card>
             </div>
 
-            {selectedProperty && (
-                <MultipublicationModal
-                    property={selectedProperty}
-                    coverPhoto={(photos[selectedProperty.id] || [])[0] || null}
-                    activePublications={getPublications(selectedProperty)}
-                    persistent={isPersistent(selectedProperty)}
-                    onClose={() => setSelectedProperty(null)}
-                    onPublishComplete={(newPubs) => {
-                        void savePublications(selectedProperty, newPubs);
-                        setSelectedProperty(null);
-                    }}
-                />
-            )}
         </>
     );
 }
