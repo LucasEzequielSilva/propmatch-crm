@@ -253,6 +253,17 @@ interface StoreValue extends StoreData {
   currentUserId: string | null;
   /** Devuelve el error a mostrar, o `null` si la sesión se abrió. */
   signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (input: {
+    name: string;
+    agencyName: string;
+    email: string;
+    password: string;
+  }) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+  /** Redirige a Google; devuelve un error amable si no se pudo iniciar. */
+  signInWithGoogle: () => Promise<string | null>;
+  /** Email de una cuenta creada que aún no tiene inmobiliaria (o `null`). */
+  pendingLinkEmail: string | null;
+  dismissPendingLink: () => void;
   signOut: () => void;
   /** Derivado: se recalcula solo cuando cambian propiedades o requerimientos. */
   matches: Match[];
@@ -354,6 +365,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  /** Cuenta válida pero sin inmobiliaria: el login muestra una pantalla de espera, no un error. */
+  const [pendingLinkEmail, setPendingLinkEmail] = useState<string | null>(null);
   const [agencyContext, setAgencyContext] = useState<AppPropertyContext | null>(null);
   const agencyContextRef = useRef<AppPropertyContext | null>(null);
   agencyContextRef.current = agencyContext;
@@ -382,6 +395,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     if (!membership || !agency?.owner_user_id) {
       await supabase.auth.signOut();
+      setPendingLinkEmail(email);
       return "Tu cuenta todavía no está vinculada a ninguna inmobiliaria en PropMatch.";
     }
 
@@ -715,6 +729,56 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (error || !authData.user) return "Email o contraseña incorrectos.";
     return applySession(authData.user.id, authData.user.email ?? null);
   }, [applySession]);
+
+  /**
+   * Alta con email. `handle_new_user` (trigger de la app) crea la fila en
+   * `public.users` leyendo solo `name` de la metadata (`role` es nullable);
+   * `agency_name` queda guardado en la metadata del usuario para cuando alguien
+   * vincule la cuenta a una inmobiliaria. El cliente no puede crear agencias
+   * (RLS), así que la cuenta nueva termina en `pendingLinkEmail`.
+   */
+  const signUp = useCallback<StoreValue["signUp"]>(async (input) => {
+    const { data: res, error } = await supabase.auth.signUp({
+      email: input.email.trim(),
+      password: input.password,
+      options: { data: { name: input.name.trim(), agency_name: input.agencyName.trim() } },
+    });
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("already")) return { error: "Ese email ya tiene una cuenta. Probá ingresar.", needsEmailConfirmation: false };
+      if (msg.includes("password")) return { error: "La contraseña no cumple los requisitos de seguridad.", needsEmailConfirmation: false };
+      return { error: "No pudimos crear la cuenta. Probá de nuevo en un rato.", needsEmailConfirmation: false };
+    }
+    // Supabase no avisa que el email existe (anti-enumeración): devuelve un usuario sin identidades.
+    if (res.user && res.user.identities?.length === 0) {
+      return { error: "Ese email ya tiene una cuenta. Probá ingresar.", needsEmailConfirmation: false };
+    }
+    if (res.session && res.user) {
+      await applySession(res.user.id, res.user.email ?? null);
+      return { error: null, needsEmailConfirmation: false };
+    }
+    setPendingLinkEmail(input.email.trim());
+    return { error: null, needsEmailConfirmation: true };
+  }, [applySession]);
+
+  /**
+   * Requiere el provider Google habilitado en Supabase (Auth > Providers) con un
+   * cliente OAuth de Google Cloud, y `window.location.origin` en las Redirect
+   * URLs. Al volver, supabase-js lee la sesión de la URL y `getSession` (arriba)
+   * la pasa por `applySession`.
+   */
+  const signInWithGoogle = useCallback<StoreValue["signInWithGoogle"]>(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (!error) return null;
+    return /provider is not enabled|unsupported provider/i.test(error.message)
+      ? "Google todavía no está habilitado para PropMatch."
+      : "No pudimos conectar con Google. Probá de nuevo.";
+  }, []);
+
+  const dismissPendingLink = useCallback(() => setPendingLinkEmail(null), []);
 
   const signOut = useCallback(() => {
     void supabase.auth.signOut();
@@ -1621,6 +1685,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       profile,
       currentUserId,
       signIn,
+      signUp,
+      signInWithGoogle,
+      pendingLinkEmail,
+      dismissPendingLink,
       signOut,
       matches: matchesWithReview,
       contactById: (id) => (id ? contactIndex.get(id) : undefined),
@@ -1671,6 +1739,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     currentUserId,
     sessionLoading,
     signIn,
+    signUp,
+    signInWithGoogle,
+    pendingLinkEmail,
+    dismissPendingLink,
     signOut,
     addProperty,
     updateProperty,
