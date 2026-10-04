@@ -58,7 +58,7 @@ export function AppHeader({
     >
       <div className="min-w-0 flex-1 md:flex-initial order-1">
         {breadcrumb && breadcrumb.length > 0 && (
-          <p className="hidden md:block text-xs mb-1" style={{ color: "#A78BFA", fontWeight: 500 }}>
+          <p className="hidden md:block text-xs mb-1" style={{ color: "#7458C4", fontWeight: 500 }}>
             {breadcrumb.map((crumb, i) => (
               <span key={crumb}>
                 {i > 0 && <span style={{ color: "#DDD6FE" }}> / </span>}
@@ -216,7 +216,7 @@ function HeaderSearch({
 
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm focus-within:ring-2 focus-within:ring-[#DDD6FE] transition-all flex-1 md:flex-none w-full md:w-[220px] !flex-shrink"
+      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm focus-within:ring-2 focus-within:ring-[#7C3AED] transition-all flex-1 md:flex-none w-full md:w-[220px] !flex-shrink"
       style={{ background: "#F5F3FF" }}
     >
       <SearchIcon />
@@ -224,7 +224,7 @@ function HeaderSearch({
         value={local}
         onChange={(e) => setLocal(e.target.value)}
         placeholder={placeholder}
-        className="bg-transparent outline-none w-full text-[#1F0A3C] placeholder:text-[#C4B5FD]"
+        className="bg-transparent outline-none w-full text-[#1F0A3C] placeholder:text-[#6F5E94]"
         style={{ fontSize: 14 }}
       />
       {local && (
@@ -235,7 +235,7 @@ function HeaderSearch({
           }}
           aria-label="Limpiar búsqueda"
           className="flex-shrink-0"
-          style={{ color: "#C4B5FD", lineHeight: 1 }}
+          style={{ color: "#7C6A99", lineHeight: 1 }}
         >
           ×
         </button>

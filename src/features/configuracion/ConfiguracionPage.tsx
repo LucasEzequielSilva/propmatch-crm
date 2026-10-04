@@ -66,7 +66,7 @@ export default function ConfiguracionPage() {
                     <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                       {p.full_name}
                       {p.id === profile.id && (
-                        <span className="ml-1.5 text-xs" style={{ color: "#A78BFA", fontWeight: 500 }}>
+                        <span className="ml-1.5 text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
                           (vos)
                         </span>
                       )}
@@ -84,7 +84,7 @@ export default function ConfiguracionPage() {
                 </div>
               ))}
             </div>
-            <p className="px-5 pb-4 text-xs" style={{ color: "#A78BFA" }}>
+            <p className="px-5 pb-4 text-xs" style={{ color: "#7458C4" }}>
               Invitar agentes y cambiar roles va a estar disponible cuando el CRM tenga backend.
             </p>
           </Card>
@@ -290,7 +290,7 @@ function ResetCard({ onReset }: { onReset: () => void }) {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE] " +
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE] " +
   "disabled:bg-[#FAFAFF] disabled:text-[#7C6A99] disabled:cursor-not-allowed";
 
 function Field({

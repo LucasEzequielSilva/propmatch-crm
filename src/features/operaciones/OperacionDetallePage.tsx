@@ -175,7 +175,7 @@ export default function OperacionDetallePage() {
                     </span>
                   </button>
                 ))}
-                <p className="text-xs mt-1" style={{ color: "#A78BFA" }}>
+                <p className="text-xs mt-1" style={{ color: "#7458C4" }}>
                   Son modelos orientativos: que los revise un escribano o abogado antes de firmar.
                 </p>
               </div>
@@ -321,13 +321,13 @@ function CheckRow({
       <span className="min-w-0">
         <span
           className="block text-sm"
-          style={{ color: checked ? "#A78BFA" : "#1F0A3C", fontWeight: 600, textDecoration: checked ? "line-through" : "none" }}
+          style={{ color: checked ? "#7458C4" : "#1F0A3C", fontWeight: 600, textDecoration: checked ? "line-through" : "none" }}
         >
           {index ? `${index}. ` : ""}
           {item.label}
         </span>
         {item.hint && !checked && (
-          <span className="block text-xs" style={{ color: "#A78BFA" }}>
+          <span className="block text-xs" style={{ color: "#7458C4" }}>
             {item.hint}
           </span>
         )}

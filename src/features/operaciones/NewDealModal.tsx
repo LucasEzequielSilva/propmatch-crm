@@ -102,7 +102,7 @@ export function NewDealModal({
           <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
             Nueva operación
           </p>
-          <button onClick={onClose} aria-label="Cerrar" style={{ color: "#A78BFA", fontSize: 22, lineHeight: 1 }}>
+          <button onClick={onClose} aria-label="Cerrar" style={{ color: "#7458C4", fontSize: 22, lineHeight: 1 }}>
             ×
           </button>
         </div>

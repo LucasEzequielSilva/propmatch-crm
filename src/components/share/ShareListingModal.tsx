@@ -96,7 +96,7 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -109,20 +109,20 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
                 readOnly
                 value={url ?? "Armando link…"}
                 onFocus={(e) => e.target.select()}
-                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-xs border outline-none text-[#7C6A99] border-[#EDE9FE] bg-[#FAFAFF]"
+                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl text-xs border outline-none text-[#7C6A99] border-[#EDE9FE] bg-[#FAFAFF] focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 aria-label="Link de la ficha"
               />
               <button
                 onClick={copy}
                 disabled={!url}
                 className="px-4 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
-                style={{ background: copied ? "#16A34A" : "var(--gradient-brand)", fontWeight: 600 }}
+                style={{ background: copied ? "#15803D" : "var(--gradient-brand)", fontWeight: 600 }}
               >
                 {copied ? "✓ Copiado" : "Copiar link"}
               </button>
             </div>
             <div className="flex items-center justify-between mt-2 gap-3">
-              <p className="text-xs" style={{ color: skipped ? "#B45309" : "#A78BFA" }}>
+              <p className="text-xs" style={{ color: skipped ? "#B45309" : "#7458C4" }}>
                 {skipped
                   ? `${skipped} ${skipped === 1 ? "foto subida desde la compu no entra" : "fotos subidas desde la compu no entran"} hasta tener servidor de fotos.`
                   : "Sin comisión, propietario ni altura de la calle."}
@@ -140,7 +140,7 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
               Mandar a quienes matchean
             </p>
             {interested.length === 0 ? (
-              <p className="text-sm" style={{ color: "#A78BFA" }}>
+              <p className="text-sm" style={{ color: "#7458C4" }}>
                 Todavía no hay contactos que busquen algo así.
               </p>
             ) : (
@@ -162,7 +162,7 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
                         {(() => {
                           const sent = lastSentAbout(activities, contact.id, property.id);
                           return sent ? (
-                            <span style={{ color: "#16A34A", fontWeight: 600 }}> · ✓ avisado {relativeTime(sent.created_at).toLowerCase()}</span>
+                            <span style={{ color: "#15803D", fontWeight: 600 }}> · ✓ avisado {relativeTime(sent.created_at).toLowerCase()}</span>
                           ) : null;
                         })()}
                       </p>

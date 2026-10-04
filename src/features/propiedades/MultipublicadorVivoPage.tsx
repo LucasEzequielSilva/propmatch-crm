@@ -31,7 +31,7 @@ const initialsOf = (name: string) =>
 function Spec({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] uppercase" style={{ color: "#A78BFA", fontWeight: 600, letterSpacing: "0.06em" }}>
+      <p className="text-[10px] uppercase" style={{ color: "#7458C4", fontWeight: 600, letterSpacing: "0.06em" }}>
         {label}
       </p>
       <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -57,8 +57,8 @@ function ChannelRow({
   const selectable = !isWeb && status === null;
 
   let line: { text: string; color: string; icon: React.ReactNode };
-  if (isWeb) line = { text: "Publicada · canal propio", color: "#16A34A", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
-  else if (status === "published") line = { text: "Publicada", color: "#16A34A", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
+  if (isWeb) line = { text: "Publicada · canal propio", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
+  else if (status === "published") line = { text: "Publicada", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
   else if (status === "pending") line = { text: "En cola · conector pendiente", color: "#B45309", icon: <ClockIcon size={13} color="#D97706" /> };
   else if (status === "error") line = { text: "Error", color: "#BE123C", icon: <AlertTriangleIcon size={13} color="#E11D48" /> };
   else line = { text: "Sin publicar", color: "#9CA3AF", icon: null };
@@ -310,7 +310,7 @@ export default function MultipublicadorVivoPage() {
               )}
 
               {loading ? (
-                <p className="px-5 py-10 text-sm text-center" style={{ color: "#A78BFA" }}>
+                <p className="px-5 py-10 text-sm text-center" style={{ color: "#7458C4" }}>
                   Cargando publicaciones…
                 </p>
               ) : (
@@ -367,7 +367,7 @@ export default function MultipublicadorVivoPage() {
                 </h3>
                 <Badge
                   bg={validPct === 100 ? "#DCFCE7" : "#FEF3C7"}
-                  text={validPct === 100 ? "#16A34A" : "#B45309"}
+                  text={validPct === 100 ? "#15803D" : "#B45309"}
                   size="xs"
                 >
                   {validPct}% VÁLIDO

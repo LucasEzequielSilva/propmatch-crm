@@ -183,7 +183,7 @@ export default function ContactosPage() {
             <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
               <FilterTabs options={TABS} value={tab} onChange={setTab} />
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm whitespace-nowrap" style={{ color: "#A78BFA" }}>
+                <span className="text-sm whitespace-nowrap" style={{ color: "#7458C4" }}>
                   <span style={{ color: "#1F0A3C", fontWeight: 600 }}>{filtered.length}</span> contactos
                 </span>
                 <FilterDropdown label="Tipo" options={TYPE_OPTIONS} value={type} onChange={setType} />
@@ -233,7 +233,7 @@ export default function ContactosPage() {
                           <th
                             key={h || `col-${i}`}
                             className="text-left px-5 py-3.5 text-xs uppercase tracking-wide whitespace-nowrap"
-                            style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}
+                            style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
                           >
                             {h}
                           </th>
@@ -321,7 +321,7 @@ function ContactRow({
             <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
               {contact.full_name}
             </p>
-            <p className="text-xs truncate" style={{ color: "#C4B5FD" }}>
+            <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
               {requirement?.zones[0] ?? contact.email ?? "—"}
             </p>
           </div>
@@ -354,7 +354,7 @@ function ContactRow({
             <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>
               {money(requirement.budget_min, requirement.currency)}
             </p>
-            <p className="text-xs" style={{ color: "#A78BFA" }}>
+            <p className="text-xs" style={{ color: "#7458C4" }}>
               hasta {money(requirement.budget_max, requirement.currency)}
             </p>
           </>
@@ -466,7 +466,7 @@ function TopMatchesPanel({
 
       <div className="bg-white p-4 space-y-3">
         {rows.length === 0 ? (
-          <p className="text-xs text-center py-4" style={{ color: "#A78BFA" }}>
+          <p className="text-xs text-center py-4" style={{ color: "#7458C4" }}>
             Todavía no hay matches para mostrar.
           </p>
         ) : (
@@ -491,7 +491,7 @@ function TopMatchesPanel({
                     {row.contact.full_name}
                   </p>
                 </div>
-                <p className="text-xs" style={{ color: "#A78BFA" }}>
+                <p className="text-xs" style={{ color: "#7458C4" }}>
                   <span style={{ color: "#7C3AED", fontWeight: 700 }}>{row.matchCount}</span>{" "}
                   {row.matchCount === 1 ? "propiedad compatible" : "propiedades compatibles"}
                 </p>
@@ -502,7 +502,7 @@ function TopMatchesPanel({
                 style={
                   idx === 0
                     ? { background: "var(--gradient-brand)", color: "white", fontWeight: 700 }
-                    : { background: "#F5F3FF", color: "#A78BFA", fontWeight: 600 }
+                    : { background: "#F5F3FF", color: "#7458C4", fontWeight: 600 }
                 }
               >
                 {idx + 1}

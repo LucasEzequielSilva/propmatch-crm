@@ -386,7 +386,7 @@ export default function ContactoDetallePage() {
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <MapPinIcon size={10} />
-                            <span className="text-xs" style={{ color: "#A78BFA" }}>
+                            <span className="text-xs" style={{ color: "#7458C4" }}>
                               {property.zone}
                             </span>
                           </div>
@@ -415,7 +415,7 @@ export default function ContactoDetallePage() {
                             className="text-xs px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90"
                             style={
                               hasOpp
-                                ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                                ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                                 : { background: "var(--gradient-brand)", fontWeight: 600 }
                             }
                           >
@@ -451,7 +451,7 @@ export default function ContactoDetallePage() {
                           <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                             {property?.title ?? "Sin propiedad"}
                           </p>
-                          <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                             Actualizada {relativeTime(opp.updated_at).toLowerCase()}
                           </p>
                         </div>
@@ -512,7 +512,7 @@ export default function ContactoDetallePage() {
               <Card padded>
                 <p
                   className="text-xs uppercase mb-2"
-                  style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                  style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
                 >
                   Notas
                 </p>
@@ -542,7 +542,7 @@ export default function ContactoDetallePage() {
                         <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                           {ev.title}
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: "#A78BFA", fontSize: 10 }}>
+                        <p className="text-xs mt-0.5" style={{ color: "#7458C4", fontSize: 10 }}>
                           {new Date(ev.starts_at).toLocaleDateString("es-AR", {
                             weekday: "short",
                             day: "numeric",
@@ -586,7 +586,7 @@ export default function ContactoDetallePage() {
                             {a.detail}
                           </p>
                         )}
-                        <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                        <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                           {relativeTime(a.created_at)}
                         </p>
                         {a.app_swipe_id && (
@@ -748,7 +748,7 @@ function iconFor(type: string): string {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs mb-1" style={{ color: "#A78BFA", fontWeight: 600 }}>
+      <p className="text-xs mb-1" style={{ color: "#7458C4", fontWeight: 600 }}>
         {label}
       </p>
       <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>

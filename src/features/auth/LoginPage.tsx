@@ -163,7 +163,7 @@ export default function LoginPage() {
             aria-controls={`${uid}-panel`}
             tabIndex={mode === m ? 0 : -1}
             onClick={() => changeMode(m)}
-            className="relative z-10 py-2 text-sm rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#A78BFA]"
+            className="relative z-10 py-2 text-sm rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
             style={{ color: mode === m ? "#1F0A3C" : "#7C6A99", fontWeight: 600 }}
           >
             {m === "login" ? "Ingresar" : "Crear cuenta"}
@@ -176,7 +176,7 @@ export default function LoginPage() {
           type="button"
           onClick={handleGoogle}
           disabled={anyBusy}
-          className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl text-sm bg-white border transition-all hover:bg-[#F8F9FA] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#A78BFA]"
+          className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl text-sm bg-white border transition-all hover:bg-[#F8F9FA] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
           style={{ borderColor: "#DADCE0", color: "#3C4043", fontWeight: 500 }}
         >
           {googleBusy ? <Spinner dark /> : <GoogleLogo />}
@@ -185,7 +185,7 @@ export default function LoginPage() {
 
         <div className="flex items-center gap-3 my-5" aria-hidden="true">
           <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-          <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 500 }}>
+          <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
             o continuá con email
           </span>
           <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
@@ -246,7 +246,7 @@ export default function LoginPage() {
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 aria-pressed={showPassword}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#A78BFA]"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 style={{ color: "#7C6A99" }}
               >
                 <EyeIcon off={showPassword} />
@@ -366,7 +366,7 @@ function PendingLink({
       <button
         type="button"
         onClick={onBack}
-        className="mt-8 w-full py-3 rounded-xl text-sm border bg-white transition-all hover:bg-[#F5F3FF] active:scale-[0.99] outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#A78BFA]"
+        className="mt-8 w-full py-3 rounded-xl text-sm border bg-white transition-all hover:bg-[#F5F3FF] active:scale-[0.99] outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
         style={{ borderColor: "#EDE9FE", color: "#3B0764", fontWeight: 600 }}
       >
         Volver al inicio
@@ -467,5 +467,5 @@ function GoogleLogo() {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
-  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] " +
-  "hover:border-[#DDD6FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] " +
+  "hover:border-[#DDD6FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";

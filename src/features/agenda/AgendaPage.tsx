@@ -281,7 +281,7 @@ export default function AgendaPage() {
             <div className="p-4 border-b" style={{ borderColor: "#F3F0FF" }}>
               <p
                 className="text-xs uppercase mb-3"
-                style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
               >
                 Próxima actividad
               </p>
@@ -306,7 +306,7 @@ export default function AgendaPage() {
             <div className="flex items-center justify-between mb-3">
               <p
                 className="text-xs uppercase"
-                style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
               >
                 Tareas pendientes
               </p>
@@ -346,7 +346,7 @@ export default function AgendaPage() {
                       <p
                         className="text-xs leading-relaxed"
                         style={{
-                          color: task.is_done ? "#C4B5FD" : "#374151",
+                          color: task.is_done ? "#7C6A99" : "#374151",
                           fontWeight: task.is_done ? 400 : 500,
                           textDecoration: task.is_done ? "line-through" : "none",
                         }}
@@ -364,7 +364,7 @@ export default function AgendaPage() {
                     onClick={() => removeTask(task.id)}
                     aria-label={"Eliminar tarea: " + task.text}
                     className="w-6 h-6 mt-2.5 mr-1 rounded-lg flex-shrink-0 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:bg-white"
-                    style={{ color: "#C4B5FD", fontSize: 15, lineHeight: 1 }}
+                    style={{ color: "#7C6A99", fontSize: 15, lineHeight: 1 }}
                   >
                     ×
                   </button>
@@ -395,7 +395,7 @@ export default function AgendaPage() {
                   }}
                   placeholder="Llamar a Martín por la contraoferta..."
                   autoFocus
-                  className="w-full px-3 py-2 rounded-xl text-xs border outline-none transition-all bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                  className="w-full px-3 py-2 rounded-xl text-xs border outline-none transition-all bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
                 />
                 <div className="flex items-center justify-between gap-2 mt-2">
                   <button
@@ -404,7 +404,7 @@ export default function AgendaPage() {
                     style={
                       taskPriority
                         ? { background: "#FDF2F8", color: "#EC4899", borderColor: "#FBCFE8", fontWeight: 600, fontSize: "10px" }
-                        : { background: "white", color: "#A78BFA", borderColor: "#EDE9FE", fontWeight: 600, fontSize: "10px" }
+                        : { background: "white", color: "#7458C4", borderColor: "#EDE9FE", fontWeight: 600, fontSize: "10px" }
                     }
                   >
                     ● Prioritaria
@@ -437,13 +437,13 @@ export default function AgendaPage() {
           <div className="p-4">
             <p
               className="text-xs uppercase mb-3"
-              style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+              style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
             >
               Próximos eventos
             </p>
             <div className="space-y-2">
               {upcoming.length === 0 ? (
-                <p className="text-xs text-center py-3" style={{ color: "#C4B5FD" }}>
+                <p className="text-xs text-center py-3" style={{ color: "#7C6A99" }}>
                   No hay eventos próximos.
                 </p>
               ) : (
@@ -468,7 +468,7 @@ export default function AgendaPage() {
                         <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                           {ev.title}
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: "#A78BFA", fontSize: "10px" }}>
+                        <p className="text-xs mt-0.5" style={{ color: "#7458C4", fontSize: "10px" }}>
                           {isToday
                             ? "Hoy"
                             : date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" })}{" "}
@@ -538,7 +538,7 @@ function WeeklyCalendar({
             <span
               className="text-xs uppercase"
               style={{
-                color: day.isToday ? "#7C3AED" : "#A78BFA",
+                color: day.isToday ? "#7C3AED" : "#7458C4",
                 fontWeight: 600,
                 letterSpacing: "0.08em",
               }}
@@ -567,7 +567,7 @@ function WeeklyCalendar({
               className="flex items-start justify-end pr-3 select-none"
               style={{ height: HOUR_HEIGHT, paddingTop: 2 }}
             >
-              <span className="text-xs" style={{ color: "#C4B5FD", fontWeight: 500 }}>
+              <span className="text-xs" style={{ color: "#7C6A99", fontWeight: 500 }}>
                 {String(h).padStart(2, "0")}:00
               </span>
             </div>
@@ -783,7 +783,7 @@ function NextEventCard({
                   {contactName}
                 </p>
                 {matchScore !== null && (
-                  <p className="text-xs" style={{ color: "#A78BFA", fontSize: "10px" }}>
+                  <p className="text-xs" style={{ color: "#7458C4", fontSize: "10px" }}>
                     {matchScore}% Match
                   </p>
                 )}
@@ -834,7 +834,7 @@ function MobileWeekList({
           <div key={day.date.toISOString()}>
             <p
               className="text-xs uppercase mb-2 flex items-center gap-2"
-              style={{ color: day.isToday ? "#7C3AED" : "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
+              style={{ color: day.isToday ? "#7C3AED" : "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}
             >
               {day.date.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" })}
               {day.isToday && (

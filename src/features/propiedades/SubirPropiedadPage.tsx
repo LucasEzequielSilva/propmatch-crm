@@ -558,7 +558,7 @@ export default function SubirPropiedadPage() {
                 <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                   o <span style={{ color: "#7C3AED", fontWeight: 600 }}>seleccionar archivos</span>
                 </p>
-                <p className="text-xs mt-2" style={{ color: "#C4B5FD" }}>
+                <p className="text-xs mt-2" style={{ color: "#7C6A99" }}>
                   JPG, PNG o WEBP · Máximo {MAX_PHOTO_MB} MB
                 </p>
               </div>
@@ -877,7 +877,7 @@ export default function SubirPropiedadPage() {
                   <div>
                     <p
                       className="text-xs uppercase"
-                      style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
+                      style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}
                     >
                       Potencial de match
                     </p>
@@ -909,7 +909,7 @@ export default function SubirPropiedadPage() {
             <Card padded>
               <p
                 className="text-xs uppercase mb-3"
-                style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
               >
                 Resumen
               </p>
@@ -931,7 +931,7 @@ export default function SubirPropiedadPage() {
         className="flex-shrink-0 flex items-center justify-between gap-4 px-4 md:px-8 py-4 border-t"
         style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
       >
-        <span className="text-xs" style={{ color: "#A78BFA" }}>
+        <span className="text-xs" style={{ color: "#7458C4" }}>
           {touched
             ? "Cambios sin guardar"
             : editing
@@ -992,7 +992,7 @@ export default function SubirPropiedadPage() {
           <button
             onClick={() => setToast(null)}
             aria-label="Cerrar"
-            style={{ color: "#C4B5FD", lineHeight: 1 }}
+            style={{ color: "#7C6A99", lineHeight: 1 }}
           >
             ×
           </button>
@@ -1044,12 +1044,12 @@ export default function SubirPropiedadPage() {
 
 const inputClass = (hasError: boolean) =>
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] focus:ring-4 focus:ring-[#EDE9FE] " +
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#7C3AED]");
 
 const selectClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";
 
 function Section({
   title,
@@ -1076,7 +1076,7 @@ function Section({
             {title}
           </p>
           {subtitle && (
-            <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+            <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
               {subtitle}
             </p>
           )}
@@ -1189,7 +1189,7 @@ function Chip({
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-xs" style={{ color: "#A78BFA" }}>
+      <span className="text-xs" style={{ color: "#7458C4" }}>
         {label}
       </span>
       <span className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>

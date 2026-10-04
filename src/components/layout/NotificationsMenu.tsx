@@ -48,9 +48,9 @@ const KIND_STYLE: Record<Kind, { icon: string; bg: string; color: string }> = {
   match: { icon: "✦", bg: "#F5F3FF", color: "#7C3AED" },
   evento: { icon: "◷", bg: "#EFF6FF", color: "#2563EB" },
   tarea: { icon: "!", bg: "#FFF1F2", color: "#E11D48" },
-  oportunidad: { icon: "⏸", bg: "#FFFBEB", color: "#D97706" },
+  oportunidad: { icon: "⏸", bg: "#FFFBEB", color: "#B45309" },
   autorizacion: { icon: "✎", bg: "#FFF1F2", color: "#BE123C" },
-  avisar: { icon: "➚", bg: "#F0FDF4", color: "#16A34A" },
+  avisar: { icon: "➚", bg: "#F0FDF4", color: "#15803D" },
   seguimiento: { icon: "☎", bg: "#FFF1F2", color: "#E11D48" },
 };
 
@@ -306,7 +306,7 @@ export function NotificationsMenu() {
 
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm" style={{ color: "#A78BFA" }}>
+              <p className="px-4 py-8 text-center text-sm" style={{ color: "#7458C4" }}>
                 Todo al día. No hay avisos pendientes.
               </p>
             ) : (
@@ -340,7 +340,7 @@ export function NotificationsMenu() {
                       <span className="block text-xs truncate" style={{ color: "#7C6A99" }}>
                         {n.detail}
                       </span>
-                      <span className="block text-[11px] mt-0.5" style={{ color: "#C4B5FD" }}>
+                      <span className="block text-[11px] mt-0.5" style={{ color: "#7C6A99" }}>
                         {n.when ?? relativeTime(n.at)}
                       </span>
                     </span>

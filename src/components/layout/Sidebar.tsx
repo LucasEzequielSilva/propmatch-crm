@@ -65,7 +65,7 @@ export function Sidebar() {
             </span>
           </div>
           {agency.name && (
-            <p className="text-xs truncate -mt-0.5" style={{ color: "#A78BFA" }}>
+            <p className="text-xs truncate -mt-0.5" style={{ color: "#7458C4" }}>
               {agency.name}
             </p>
           )}
@@ -76,7 +76,7 @@ export function Sidebar() {
       <div className="px-6 mb-2">
         <span
           className="uppercase"
-          style={{ color: "#A78BFA", fontSize: "10px", letterSpacing: "0.12em", fontWeight: 600 }}
+          style={{ color: "#7458C4", fontSize: "10px", letterSpacing: "0.12em", fontWeight: 600 }}
         >
           Menú principal
         </span>

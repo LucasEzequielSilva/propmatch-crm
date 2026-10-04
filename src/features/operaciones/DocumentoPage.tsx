@@ -51,7 +51,7 @@ export default function DocumentoPage() {
         <Link to={`/operaciones/${deal.id}`} className="text-sm" style={{ color: "#7C3AED", fontWeight: 600 }}>
           ← Volver a la operación
         </Link>
-        <p className="text-xs hidden sm:block" style={{ color: "#A78BFA" }}>
+        <p className="text-xs hidden sm:block" style={{ color: "#7458C4" }}>
           Podés editar el texto antes de imprimir.
         </p>
         <button

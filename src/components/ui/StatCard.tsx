@@ -16,7 +16,7 @@ export function StatCard({
   iconBg,
   badge,
   badgeBg = "#F0FDF4",
-  badgeText = "#16A34A",
+  badgeText = "#15803D",
   bar,
   barWidth,
   loading = false,
@@ -78,7 +78,7 @@ export function StatCard({
           {label}
         </p>
         {sub && (
-          <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+          <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
             {sub}
           </p>
         )}

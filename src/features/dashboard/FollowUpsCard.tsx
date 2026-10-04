@@ -61,7 +61,7 @@ export function FollowUpsCard() {
           <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
             Para contactar hoy
           </h2>
-          <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
             {followUps.length === 0
               ? "Estás al día con tus contactos"
               : `${followUps.length} ${followUps.length === 1 ? "contacto" : "contactos"}${urgent ? ` · ${urgent} ${urgent === 1 ? "urgente" : "urgentes"}` : ""}`}
@@ -116,7 +116,7 @@ export function FollowUpsCard() {
                   <WhatsAppButton compact label={`WhatsApp a ${f.contact.full_name}`} onClick={() => setWriting(f)} />
                   <button
                     onClick={() => markDone(f)}
-                    className="h-9 px-2.5 rounded-xl text-xs border transition-all hover:bg-white"
+                    className="h-11 sm:h-9 px-3 sm:px-2.5 rounded-xl text-xs border transition-all hover:bg-white"
                     style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "#FDFCFF" }}
                     title="Ya hablé con este contacto por otro medio"
                   >
@@ -124,8 +124,8 @@ export function FollowUpsCard() {
                   </button>
                   <button
                     onClick={() => snoozeFollowUp(f.contact.id, 3)}
-                    className="h-9 px-2.5 rounded-xl text-xs transition-all hover:bg-white"
-                    style={{ color: "#A78BFA", fontWeight: 600 }}
+                    className="h-11 sm:h-9 px-3 sm:px-2.5 rounded-xl text-xs transition-all hover:bg-white"
+                    style={{ color: "#7458C4", fontWeight: 600 }}
                     title="No mostrar por 3 días"
                   >
                     Posponer

@@ -54,7 +54,7 @@ export default function MultipublicadorPage() {
                         iconBg="#F0FDF4"
                         badge={properties.length > 0 ? `${Math.round((totalSynced / properties.length) * 100)}%` : "0%"}
                         badgeBg="#DCFCE7"
-                        badgeText="#16A34A"
+                        badgeText="#15803D"
                         bar="linear-gradient(90deg, #16A34A, #22C55E)"
                         barWidth={properties.length > 0 ? (totalSynced / properties.length) * 100 : 0}
                     />
@@ -103,10 +103,10 @@ export default function MultipublicadorPage() {
                             <table className="w-full bg-white text-left" style={{ minWidth: 800 }}>
                                 <thead>
                                     <tr style={{ background: "#FDFCFF", borderBottom: "1px solid #F3F0FF" }}>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}>Propiedad y Ubicación</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}>Características</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}>Canales Externos</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap text-right" style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}>Acciones</th>
+                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Propiedad y Ubicación</th>
+                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Características</th>
+                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Canales Externos</th>
+                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap text-right" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>

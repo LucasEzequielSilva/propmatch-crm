@@ -140,7 +140,7 @@ export function OpportunityFormModal({
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50 flex-shrink-0"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -260,7 +260,7 @@ export function OpportunityFormModal({
               </Field>
             </div>
             {property?.price != null && !valueTouched && (
-              <p className="text-xs mt-2" style={{ color: "#A78BFA" }}>
+              <p className="text-xs mt-2" style={{ color: "#7458C4" }}>
                 Tomado del precio publicado: {money(property.price, property.currency)}
               </p>
             )}
@@ -318,13 +318,13 @@ const toNumber = (v: string): number | null => {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  "border-[#EDE9FE] focus:border-[#A78BFA]";
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] focus:ring-4 focus:ring-[#EDE9FE] " +
+  "border-[#EDE9FE] focus:border-[#7C3AED]";
 
 const selectClass = (hasError: boolean) =>
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
   "text-[#1F0A3C] focus:ring-4 focus:ring-[#EDE9FE] " +
-  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#7C3AED]");
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (

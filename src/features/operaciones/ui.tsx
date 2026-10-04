@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 export const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  "border-[#EDE9FE] focus:border-[#A78BFA]";
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] focus:ring-4 focus:ring-[#EDE9FE] " +
+  "border-[#EDE9FE] focus:border-[#7C3AED]";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (

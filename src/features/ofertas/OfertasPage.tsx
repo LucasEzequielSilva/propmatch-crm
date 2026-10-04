@@ -86,12 +86,12 @@ export default function OfertasPage() {
                         </p>
                         <p
                           className="text-xs mt-0.5 hover:underline cursor-pointer"
-                          style={{ color: "#A78BFA" }}
+                          style={{ color: "#7458C4" }}
                           onClick={() => navigate(`/propiedades/${offer.property_id}`)}
                         >
                           {property?.title ?? "Sin propiedad"}
                         </p>
-                        <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                        <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                           {relativeTime(offer.created_at)}
                         </p>
                       </div>

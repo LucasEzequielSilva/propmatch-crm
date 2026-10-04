@@ -174,7 +174,7 @@ export default function DashboardPage() {
                 iconBg="#FAF5FF"
                 badge="Activo"
                 badgeBg="#F0FDF4"
-                badgeText="#16A34A"
+                badgeText="#15803D"
                 bar="linear-gradient(90deg, #A855F7, #EC4899)"
                 barWidth={90}
               />
@@ -211,7 +211,7 @@ export default function DashboardPage() {
                               <th
                                 key={h}
                                 className="text-left px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap"
-                                style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}
+                                style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
                               >
                                 {h}
                               </th>
@@ -253,7 +253,7 @@ export default function DashboardPage() {
                                   <p className="text-sm" style={{ color: "#374151", fontWeight: 500 }}>
                                     {property?.title ?? "—"}
                                   </p>
-                                  <p className="text-xs" style={{ color: "#C4B5FD" }}>
+                                  <p className="text-xs" style={{ color: "#7C6A99" }}>
                                     {property?.zone ?? ""}
                                   </p>
                                 </td>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-5 py-3.5 whitespace-nowrap">
-                                  <span className="text-xs" style={{ color: "#A78BFA" }}>
+                                  <span className="text-xs" style={{ color: "#7458C4" }}>
                                     {relativeTime(opp.updated_at)}
                                   </span>
                                 </td>
@@ -317,7 +317,7 @@ export default function DashboardPage() {
                               {a.detail}
                             </p>
                           )}
-                          <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                          <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                             {relativeTime(a.created_at)}
                           </p>
                         </div>
@@ -412,7 +412,7 @@ export default function DashboardPage() {
                               <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                                 {contact.full_name}
                               </p>
-                              <p className="text-xs" style={{ color: "#A78BFA" }}>
+                              <p className="text-xs" style={{ color: "#7458C4" }}>
                                 Busca su propiedad ideal
                               </p>
                             </div>
@@ -538,7 +538,7 @@ function SearchResults({
                         <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                           {p.title}
                         </p>
-                        <p className="text-xs" style={{ color: "#A78BFA" }}>
+                        <p className="text-xs" style={{ color: "#7458C4" }}>
                           {p.zone}
                         </p>
                       </div>
@@ -572,7 +572,7 @@ function SearchResults({
                       <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                         {c.full_name}
                       </p>
-                      <p className="text-xs truncate" style={{ color: "#A78BFA" }}>
+                      <p className="text-xs truncate" style={{ color: "#7458C4" }}>
                         {c.email}
                       </p>
                     </div>

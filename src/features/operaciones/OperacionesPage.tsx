@@ -128,7 +128,7 @@ function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase" style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}>
+          <p className="text-xs uppercase" style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}>
             {deal.kind === "venta" ? "Venta" : "Alquiler"}
           </p>
           <p className="text-sm mt-0.5 truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -149,7 +149,7 @@ function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
       <p className="text-base mt-3" style={{ color: "#1F0A3C", fontWeight: 800 }}>
         {money(deal.price, deal.currency)}
         {deal.kind === "alquiler" && (
-          <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 500 }}>
+          <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
             {" "}
             / mes
           </span>

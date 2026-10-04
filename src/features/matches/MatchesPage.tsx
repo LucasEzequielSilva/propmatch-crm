@@ -171,7 +171,7 @@ export default function MatchesPage() {
               value={minScore}
               onChange={setMinScore}
             />
-            <span className="text-sm whitespace-nowrap" style={{ color: "#A78BFA" }}>
+            <span className="text-sm whitespace-nowrap" style={{ color: "#7458C4" }}>
               <span style={{ color: "#1F0A3C", fontWeight: 700 }}>{filtered.length}</span> matches
             </span>
           </div>
@@ -201,7 +201,7 @@ export default function MatchesPage() {
                 <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                   Mejores matches para revisar
                 </h2>
-                <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                   Ordenados por compatibilidad · calculados sobre datos actuales
                 </p>
               </div>
@@ -283,7 +283,7 @@ function OverviewCard({
         <p className="text-sm mt-2" style={{ color: "#1F0A3C", fontWeight: 700 }}>
           {label}
         </p>
-        <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+        <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
           {sub}
         </p>
         <div className="h-1 rounded-full mt-3" style={{ background: "#F5F3FF" }}>
@@ -351,7 +351,7 @@ function MatchCard({
             <p className="text-sm leading-tight" style={{ color: "#1F0A3C", fontWeight: 700 }}>
               {contact.full_name}
             </p>
-            <p className="text-xs mt-1" style={{ color: "#A78BFA" }}>
+            <p className="text-xs mt-1" style={{ color: "#7458C4" }}>
               Busca: {requirement.property_types.map((t) => PROPERTY_TYPE_LABEL[t]).join(", ")}
             </p>
           </div>
@@ -363,7 +363,7 @@ function MatchCard({
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span style={{ color: "#C4B5FD", fontSize: 11 }}>$</span>
+              <span style={{ color: "#7C6A99", fontSize: 11 }}>$</span>
               <span className="text-xs" style={{ color: "#7C6A99" }}>
                 {money(requirement.budget_min, requirement.currency)} –{" "}
                 {money(requirement.budget_max, requirement.currency)}
@@ -379,13 +379,13 @@ function MatchCard({
         >
           <ScoreRing score={match.score} size={100} />
           <div className="flex items-center gap-1 mt-3">
-            <span className="text-xs" style={{ color: "#C4B5FD", fontSize: "10px" }}>
+            <span className="text-xs" style={{ color: "#7C6A99", fontSize: "10px" }}>
               {MATCH_FACTORS.length} factores evaluados
             </span>
           </div>
           <p
             className="text-xs mt-1.5 text-center leading-tight"
-            style={{ color: "#A78BFA", fontSize: "10px" }}
+            style={{ color: "#7458C4", fontSize: "10px" }}
           >
             Compatibilidad calculada
           </p>
@@ -430,7 +430,7 @@ function MatchCard({
               <span className="text-base" style={{ color: "#1F0A3C", fontWeight: 800 }}>
                 {money(property.price, property.currency)}
               </span>
-              <span className="text-xs whitespace-nowrap" style={{ color: "#C4B5FD" }}>
+              <span className="text-xs whitespace-nowrap" style={{ color: "#7C6A99" }}>
                 {relativeTime(match.created_at)}
               </span>
             </div>
@@ -482,7 +482,7 @@ function MatchCard({
                 className="flex-1 py-2 rounded-xl text-xs text-white transition-all hover:opacity-90 active:scale-95 disabled:active:scale-100"
                 style={
                   hasOpportunity
-                    ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                    ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                     : {
                         background: "var(--gradient-brand)",
                         fontWeight: 600,
@@ -559,7 +559,7 @@ function WhyMatchPanel({ item, onCreateOpp }: { item: HydratedMatch; onCreateOpp
               <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                 {contact.full_name}
               </p>
-              <p className="text-xs" style={{ color: "#A78BFA", fontSize: "10px" }}>
+              <p className="text-xs" style={{ color: "#7458C4", fontSize: "10px" }}>
                 Cliente
               </p>
             </div>
@@ -567,7 +567,7 @@ function WhyMatchPanel({ item, onCreateOpp }: { item: HydratedMatch; onCreateOpp
               <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                 {property.title}
               </p>
-              <p className="text-xs" style={{ color: "#A78BFA", fontSize: "10px" }}>
+              <p className="text-xs" style={{ color: "#7458C4", fontSize: "10px" }}>
                 Propiedad
               </p>
             </div>
@@ -615,7 +615,7 @@ function WhyMatchPanel({ item, onCreateOpp }: { item: HydratedMatch; onCreateOpp
       >
         <p
           className="text-xs uppercase mb-3"
-          style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+          style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
         >
           Acciones rápidas
         </p>
@@ -626,7 +626,7 @@ function WhyMatchPanel({ item, onCreateOpp }: { item: HydratedMatch; onCreateOpp
             className="w-full py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90"
             style={
               hasOpportunity
-                ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                 : {
                     background: "var(--gradient-brand)",
                     fontWeight: 600,

@@ -66,11 +66,11 @@ export function ChatPanel({
       <div className="p-4 flex flex-col gap-3" style={{ maxHeight: 340 }}>
         <div className="flex-1 overflow-y-auto space-y-2 pr-1" style={{ minHeight: 120, maxHeight: 220 }}>
           {loading ? (
-            <p className="text-xs" style={{ color: "#A78BFA" }}>
+            <p className="text-xs" style={{ color: "#7458C4" }}>
               Cargando...
             </p>
           ) : messages.length === 0 ? (
-            <p className="text-xs" style={{ color: "#A78BFA" }}>
+            <p className="text-xs" style={{ color: "#7458C4" }}>
               Todavía no hay mensajes en este match.
             </p>
           ) : (
@@ -88,7 +88,7 @@ export function ChatPanel({
                     <p className="text-sm">{m.content}</p>
                     <p
                       className="text-xs mt-0.5"
-                      style={{ color: mine ? "rgba(255,255,255,0.7)" : "#A78BFA" }}
+                      style={{ color: mine ? "rgba(255,255,255,0.7)" : "#7458C4" }}
                     >
                       {relativeTime(m.created_at)}
                     </p>
@@ -114,7 +114,7 @@ export function ChatPanel({
               if (e.key === "Enter") handleSend();
             }}
             placeholder="Escribir un mensaje..."
-            className="flex-1 px-3.5 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA]"
+            className="flex-1 px-3.5 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
           />
           <button
             disabled={sending || !text.trim()}

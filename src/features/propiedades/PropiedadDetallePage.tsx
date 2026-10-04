@@ -137,10 +137,10 @@ export default function PropiedadDetallePage() {
         </button>
         <button
           onClick={() => setSharing(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95"
           style={{ background: "#25D366", fontWeight: 600 }}
         >
-          <WhatsAppIcon size={14} color="white" />
+          <WhatsAppIcon size={14} color="#063B2A" />
           Compartir ficha
         </button>
         <button
@@ -161,7 +161,7 @@ export default function PropiedadDetallePage() {
         <select
           value={property.status}
           onChange={(e) => updateProperty(property.id, { status: e.target.value as PropertyStatus })}
-          className="px-4 py-2.5 rounded-xl text-sm border outline-none transition-all focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+          className="px-4 py-2.5 rounded-xl text-sm border outline-none transition-all focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
           style={{ borderColor: "#EDE9FE", background: "white", color: "#1F0A3C", fontWeight: 600 }}
           aria-label="Estado de la propiedad"
         >
@@ -195,7 +195,7 @@ export default function PropiedadDetallePage() {
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-3">
                     <HomeIcon size={44} color="#DDD6FE" />
-                    <p className="text-sm" style={{ color: "#C4B5FD" }}>
+                    <p className="text-sm" style={{ color: "#7C6A99" }}>
                       Sin fotos cargadas
                     </p>
                   </div>
@@ -264,7 +264,7 @@ export default function PropiedadDetallePage() {
                     </h2>
                     <div className="flex items-center gap-1.5 mt-1">
                       <MapPinIcon size={13} />
-                      <span className="text-sm" style={{ color: "#A78BFA" }}>
+                      <span className="text-sm" style={{ color: "#7458C4" }}>
                         {[property.street, property.street_number, property.zone, property.province]
                           .filter(Boolean)
                           .join(" ")}
@@ -275,7 +275,7 @@ export default function PropiedadDetallePage() {
                     <p className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
                       {money(property.price, property.currency)}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                    <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                       Publicada {relativeTime(property.published_at).toLowerCase()}
                     </p>
                   </div>
@@ -301,7 +301,7 @@ export default function PropiedadDetallePage() {
                     <p className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                       {spec.value ?? "—"}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                    <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                       {spec.label}
                     </p>
                   </div>
@@ -312,7 +312,7 @@ export default function PropiedadDetallePage() {
                 <div className="px-6 pb-6">
                   <p
                     className="text-xs uppercase mb-2"
-                    style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                    style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
                   >
                     Descripción
                   </p>
@@ -326,7 +326,7 @@ export default function PropiedadDetallePage() {
                 <div className="px-6 pb-6">
                   <p
                     className="text-xs uppercase mb-2"
-                    style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                    style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
                   >
                     Características
                   </p>
@@ -348,7 +348,7 @@ export default function PropiedadDetallePage() {
                 <div className="px-6 pb-6 flex gap-6 flex-wrap">
                   {property.expenses !== null && (
                     <div>
-                      <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                      <p className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
                         Expensas
                       </p>
                       <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -358,7 +358,7 @@ export default function PropiedadDetallePage() {
                   )}
                   {property.taxes !== null && (
                     <div>
-                      <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                      <p className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
                         Impuestos
                       </p>
                       <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -399,7 +399,7 @@ export default function PropiedadDetallePage() {
                           <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                             {contact?.full_name ?? "Sin contacto"}
                           </p>
-                          <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                             {relativeTime(opp.updated_at)}
                           </p>
                         </div>
@@ -422,7 +422,7 @@ export default function PropiedadDetallePage() {
                 action={{ label: "Gestionar publicaciones", onClick: () => navigate(`/publicador/${property.id}`) }}
               />
               <div className="w-full text-left text-sm" style={{ borderTop: "1px solid #F3F0FF" }}>
-                <div className="grid grid-cols-4 px-4 py-3 text-xs font-bold text-[#A78BFA] border-b" style={{ borderColor: "#F3F0FF" }}>
+                <div className="grid grid-cols-4 px-4 py-3 text-xs font-bold text-[#7458C4] border-b" style={{ borderColor: "#F3F0FF" }}>
                   <div>Canal</div>
                   <div>Estado</div>
                   <div>ID externo</div>
@@ -494,7 +494,7 @@ export default function PropiedadDetallePage() {
                     <WhatsAppButton compact label="Mandar informe por WhatsApp" onClick={() => setReportOpen(true)} />
                   </div>
                 ) : (
-                  <p className="text-sm" style={{ color: "#A78BFA" }}>
+                  <p className="text-sm" style={{ color: "#7458C4" }}>
                     Todavía no cargaste quién es el dueño.
                   </p>
                 )}
@@ -517,7 +517,7 @@ export default function PropiedadDetallePage() {
                       <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
                         {k.value}
                       </p>
-                      <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                      <p className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
                         {k.label}
                       </p>
                     </div>
@@ -547,7 +547,7 @@ export default function PropiedadDetallePage() {
                           >
                             {offerContact?.full_name ?? "Sin contacto"}
                           </button>
-                          <p className="text-xs" style={{ color: "#A78BFA" }}>
+                          <p className="text-xs" style={{ color: "#7458C4" }}>
                             {money(offer.amount_usd, "USD")}
                           </p>
                         </div>
@@ -641,7 +641,7 @@ export default function PropiedadDetallePage() {
                             <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                               {contact.full_name}
                             </p>
-                            <p className="text-xs" style={{ color: "#A78BFA" }}>
+                            <p className="text-xs" style={{ color: "#7458C4" }}>
                               {contact.phone ?? contact.email ?? "Sin contacto"}
                             </p>
                           </div>
@@ -679,7 +679,7 @@ export default function PropiedadDetallePage() {
                           className="w-full py-2 rounded-lg text-xs text-white transition-all hover:opacity-90"
                           style={
                             hasOpp
-                              ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                              ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                               : { background: "var(--gradient-brand)", fontWeight: 600 }
                           }
                         >
@@ -696,7 +696,7 @@ export default function PropiedadDetallePage() {
               <Card padded>
                 <p
                   className="text-xs uppercase mb-3"
-                  style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                  style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
                 >
                   Agente responsable
                 </p>
@@ -711,7 +711,7 @@ export default function PropiedadDetallePage() {
                     <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                       {agent.full_name}
                     </p>
-                    <p className="text-xs truncate" style={{ color: "#A78BFA" }}>
+                    <p className="text-xs truncate" style={{ color: "#7458C4" }}>
                       {agent.email}
                     </p>
                   </div>

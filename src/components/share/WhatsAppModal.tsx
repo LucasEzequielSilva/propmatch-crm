@@ -220,7 +220,7 @@ export function WhatsAppModal({
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -261,7 +261,7 @@ export function WhatsAppModal({
                   setPropertyId(e.target.value);
                   setEdited(false);
                 }}
-                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
               >
                 {owned.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -283,7 +283,7 @@ export function WhatsAppModal({
                   setPropertyId(e.target.value);
                   setEdited(false);
                 }}
-                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
               >
                 {options.map(({ property: p, score }) => (
                   <option key={p.id} value={p.id}>
@@ -329,10 +329,10 @@ export function WhatsAppModal({
           <button
             onClick={send}
             disabled={!text.trim() || waitingLink}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
             style={{ background: WA_GREEN, fontWeight: 700 }}
           >
-            <WhatsAppIcon size={15} color="white" />
+            <WhatsAppIcon size={15} color="#063B2A" />
             {waitingLink ? "Armando ficha…" : "Abrir WhatsApp"}
           </button>
         </div>
@@ -357,14 +357,14 @@ export function WhatsAppButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex items-center justify-center gap-2 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 ${
-        compact ? "w-9 h-9" : "px-4 py-2"
+      className={`flex items-center justify-center gap-2 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 ${
+        compact ? "w-11 h-11 sm:w-9 sm:h-9" : "px-4 py-2"
       }`}
       style={{ background: WA_GREEN, fontWeight: 600 }}
       aria-label={compact ? label : undefined}
       title={compact ? label : undefined}
     >
-      <WhatsAppIcon size={compact ? 16 : 14} color="white" />
+      <WhatsAppIcon size={compact ? 16 : 14} color="#063B2A" />
       {!compact && label}
     </button>
   );

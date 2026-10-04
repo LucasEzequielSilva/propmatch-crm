@@ -166,7 +166,7 @@ export default function OportunidadesPage() {
               iconBg="#FFFBEB"
               badge="Activos"
               badgeBg="#FFFBEB"
-              badgeText="#D97706"
+              badgeText="#B45309"
               bar="linear-gradient(90deg, #F59E0B, #FCD34D)"
               barWidth={(totals.negotiating.length / Math.max(1, totals.count)) * 100}
             />
@@ -281,7 +281,7 @@ export default function OportunidadesPage() {
                               {a.detail}
                             </p>
                           )}
-                          <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                          <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                             {relativeTime(a.created_at)}
                           </p>
                         </div>
@@ -362,7 +362,7 @@ function LostSection({
                 <p className="text-xs mt-1.5" style={{ color: "#9F1239" }}>
                   {opp.priority_note ?? "Sin motivo registrado"}
                 </p>
-                <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                   {relativeTime(opp.closed_at ?? opp.updated_at)}
                 </p>
               </div>
@@ -601,7 +601,7 @@ function OpportunityCard({
             >
               {contactName}
             </p>
-            <p className="text-xs truncate mt-0.5" style={{ color: "#A78BFA" }}>
+            <p className="text-xs truncate mt-0.5" style={{ color: "#7458C4" }}>
               {propertyTitle}
             </p>
           </div>
@@ -659,7 +659,7 @@ function OpportunityCard({
                     asking === "priority" ? "¿Por qué es urgente?" : "¿Por qué se cayó?"
                   }
                   autoFocus
-                  className="w-full px-2.5 py-1.5 rounded-lg text-xs border outline-none bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] border-[#EDE9FE] focus:border-[#A78BFA]"
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs border outline-none bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 />
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <button
@@ -722,7 +722,7 @@ function OpportunityCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1 min-w-0">
             <ClockIcon />
-            <span className="text-xs truncate" style={{ color: "#C4B5FD" }}>
+            <span className="text-xs truncate" style={{ color: "#7C6A99" }}>
               {relativeTime(opp.updated_at)}
             </span>
           </div>
@@ -786,7 +786,7 @@ function PrioritySection({
       <div className="p-4 grid gap-3 sm:grid-cols-2">
         {cards.length === 0 ? (
           <div className="sm:col-span-2 py-6 text-center">
-            <p className="text-sm" style={{ color: "#A78BFA" }}>
+            <p className="text-sm" style={{ color: "#7458C4" }}>
               Sin oportunidades urgentes 🎉
             </p>
           </div>
