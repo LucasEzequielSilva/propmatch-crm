@@ -25,7 +25,7 @@ import {
 import type { PropertyStatus } from "@/types/db";
 import { ShareListingModal } from "@/components/share/ShareListingModal";
 import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal";
-import { MultipublicationModal, PlatformConfig } from "./MultipublicationModal";
+import { usePublications } from "./usePublications";
 import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
 import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
@@ -68,10 +68,9 @@ export default function PropiedadDetallePage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
 
-  const [multipubOpen, setMultipubOpen] = useState(false);
-  const [publications, setPublications] = useState<PlatformConfig[]>([
-    { id: "web", name: "Web PropMatch", status: "active", connected: true }
-  ]);
+  const { channelsOf } = usePublications();
+  // Solo los canales donde ya se intentó publicar (y la web, que es propia y siempre está).
+  const publications = property ? channelsOf(property).filter((c) => c.status !== null) : [];
 
   const gallery = property ? (photos[property.id] ?? []) : [];
 
@@ -184,19 +183,6 @@ export default function PropiedadDetallePage() {
         />
       )}
       {reportOpen && owner && <WhatsAppModal contact={owner} property={property} onClose={() => setReportOpen(false)} />}
-
-      {multipubOpen && (
-        <MultipublicationModal
-          property={property}
-          coverPhoto={cover}
-          activePublications={publications}
-          onClose={() => setMultipubOpen(false)}
-          onPublishComplete={(newPubs) => {
-            setPublications(newPubs);
-            setMultipubOpen(false);
-          }}
-        />
-      )}
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
@@ -432,48 +418,43 @@ export default function PropiedadDetallePage() {
               <SectionHeader
                 inCard
                 title="Publicaciones"
-                subtitle={`${publications.filter(p => p.status === 'published' || p.status === 'active').length} canales activos`}
-                action={{ label: "Publicar / Sincronizar", onClick: () => setMultipubOpen(true) }}
+                subtitle={`${publications.filter((c) => c.status === "published").length} canales publicados`}
+                action={{ label: "Gestionar publicaciones", onClick: () => navigate(`/publicador/${property.id}`) }}
               />
-              {publications.filter(p => p.status !== 'unpublished' && p.status !== 'disconnected').length === 0 ? (
-                <div className="p-6 text-center text-sm text-[#A78BFA]">
-                  Propiedad no publicada en canales externos.
+              <div className="w-full text-left text-sm" style={{ borderTop: "1px solid #F3F0FF" }}>
+                <div className="grid grid-cols-4 px-4 py-3 text-xs font-bold text-[#A78BFA] border-b" style={{ borderColor: "#F3F0FF" }}>
+                  <div>Canal</div>
+                  <div>Estado</div>
+                  <div>ID externo</div>
+                  <div className="text-right">Link</div>
                 </div>
-              ) : (
-                <div className="w-full text-left text-sm" style={{ borderTop: "1px solid #F3F0FF" }}>
-                  <div className="grid grid-cols-5 px-4 py-3 text-xs font-bold text-[#A78BFA] border-b" style={{ borderColor: "#F3F0FF" }}>
-                    <div>Canal</div>
-                    <div>Estado</div>
-                    <div>Última sinc.</div>
-                    <div>ID externo</div>
-                    <div className="text-right">Link</div>
-                  </div>
-                  <div className="divide-y" style={{ borderColor: "#F3F0FF" }}>
-                    {publications.filter(p => p.status !== 'unpublished' && p.status !== 'disconnected').map(p => (
-                      <div key={p.id} className="grid grid-cols-5 px-4 py-3 items-center hover:bg-[#FAFAFF]">
-                        <div className="font-bold text-[#1F0A3C]">{p.name}</div>
-                        <div>
-                          {p.status === 'active' && <Badge bg="#F8FAFC" text="#475569" border="#E2E8F0">Propio</Badge>}
-                          {p.status === 'published' && <Badge bg="#F0FDF4" text="#15803D" border="#BBF7D0">Publicada</Badge>}
-                          {p.status === 'error' && <Badge bg="#FFF1F2" text="#BE123C" border="#FECDD3">Falló</Badge>}
-                          {p.status === 'pending' && <Badge bg="#FEFCE8" text="#A16207" border="#FEF08A">Pendiente</Badge>}
-                        </div>
-                        <div className="text-xs text-[#7C6A99]">{p.lastSync || '—'}</div>
-                        <div className="text-xs text-[#7C6A99] font-mono">{p.externalId || '—'}</div>
-                        <div className="text-right">
-                          {(p.status === 'published' || p.url) ? (
-                            <a href={p.url || "#"} target="_blank" rel="noopener noreferrer" className="text-xs text-[#7C3AED] hover:underline font-bold">
-                              Ver aviso ↗
-                            </a>
-                          ) : (
-                            <span className="text-xs text-[#D1D5DB]">—</span>
-                          )}
-                        </div>
+                <div className="divide-y" style={{ borderColor: "#F3F0FF" }}>
+                  {publications.map((c) => (
+                    <div key={c.info.channel} className="grid grid-cols-4 px-4 py-3 items-center hover:bg-[#FAFAFF]">
+                      <div className="font-bold text-[#1F0A3C]">{c.info.name}</div>
+                      <div>
+                        {c.info.channel === "web" && <Badge bg="#F8FAFC" text="#475569" border="#E2E8F0">Propio</Badge>}
+                        {c.info.channel !== "web" && c.status === "published" && <Badge bg="#F0FDF4" text="#15803D" border="#BBF7D0">Publicada</Badge>}
+                        {c.status === "error" && <Badge bg="#FFF1F2" text="#BE123C" border="#FECDD3">Falló</Badge>}
+                        {c.status === "pending" && <Badge bg="#FEFCE8" text="#A16207" border="#FEF08A">En cola</Badge>}
+                        {(c.status === "paused" || c.status === "draft" || c.status === "removed") && (
+                          <Badge bg="#F8FAFC" text="#475569" border="#E2E8F0">Inactiva</Badge>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <div className="text-xs text-[#7C6A99] font-mono">{c.externalId || "—"}</div>
+                      <div className="text-right">
+                        {c.externalUrl ? (
+                          <a href={c.externalUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#7C3AED] hover:underline font-bold">
+                            Ver aviso ↗
+                          </a>
+                        ) : (
+                          <span className="text-xs text-[#D1D5DB]">—</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </Card>
           </div>
 
