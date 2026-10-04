@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card } from "@/components/ui/Card";
 import {
@@ -54,6 +54,7 @@ const MAX_PHOTO_MB = 10;
 export default function SubirPropiedadPage() {
   const navigate = useNavigate();
   const { propertyId } = useParams();
+  const [searchParams] = useSearchParams();
   const {
     addProperty,
     savePropertyEdit,
@@ -67,6 +68,8 @@ export default function SubirPropiedadPage() {
   } = useStore();
 
   const editing = propertyById(propertyId);
+  // Viene del Multipublicador: al guardar se sigue a elegir canales, no al listado.
+  const publishAfter = !editing && searchParams.get("publicar") === "1";
   const num = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
 
   // Bloque 1 — información principal
@@ -266,7 +269,10 @@ export default function SubirPropiedadPage() {
     } else {
       const created = addProperty(input);
       const count = potential?.count ?? 0;
-      if (count > 0) {
+      if (publishAfter) {
+        setToast({ kind: "ok", text: "Propiedad guardada. Ahora elegí dónde publicarla." });
+        setTimeout(() => navigate(`/publicador/${created.id}`), 900);
+      } else if (count > 0) {
         setToast({
           kind: "ok",
           text: `Propiedad agregada. Coincide con ${count} ${count === 1 ? "cliente" : "clientes"}: avisales por WhatsApp.`,
@@ -326,6 +332,22 @@ export default function SubirPropiedadPage() {
       </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-28">
+        {publishAfter && (
+          <ol
+            aria-label="Pasos para publicar"
+            className="mt-6 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 rounded-2xl border px-4 py-3 text-sm"
+            style={{ background: "#F5F3FF", borderColor: "#EDE9FE" }}
+          >
+            <li aria-current="step" className="flex items-center gap-2" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white" style={{ background: "#7C3AED" }}>1</span>
+              Paso 1 de 2 · Cargá la propiedad
+            </li>
+            <li className="flex items-center gap-2" style={{ color: "#6B5A8E", fontWeight: 600 }}>
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs border" style={{ borderColor: "#C4B5FD", color: "#6B5A8E" }}>2</span>
+              Paso 2 · Elegí dónde publicar
+            </li>
+          </ol>
+        )}
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
           <div className="space-y-6 min-w-0">
             {/* Bloque 1 */}

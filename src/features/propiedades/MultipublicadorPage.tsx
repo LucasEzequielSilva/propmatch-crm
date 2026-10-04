@@ -1,200 +1,490 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, Badge } from "@/components/ui/Card";
-import { StatCard } from "@/components/ui/StatCard";
-import { EmptyState } from "@/components/ui/states";
-import { HomeIcon, PropertiesIcon, AlertTriangleIcon, MatchesSolidIcon, MapPinIcon } from "@/components/ui/icons";
-import { PROPERTY_TYPE_LABEL, money } from "@/lib/format";
-import { usePublications } from "./usePublications";
+import {
+    HomeIcon,
+    PlusIcon,
+    SearchIcon,
+    AlertTriangleIcon,
+    ChevronDownIcon,
+    ArrowRightIcon,
+    MapPinIcon,
+    PropertiesIcon,
+    CheckCircleIcon,
+} from "@/components/ui/icons";
+import { money } from "@/lib/format";
+import type { Property, PublicationChannel } from "@/types/db";
+import { EXTERNAL_CHANNELS, usePublications, type ChannelInfo, type ChannelState } from "./usePublications";
+import { INTEGRATION_GUIDES } from "./integrationGuides";
+
+/** Hoy no hay ninguna integración: cuando exista `agency_integrations` se lee de ahí. */
+type ConnectionStatus = "not_connected" | "connected" | "error";
+
+function connectionOf(_channel: PublicationChannel): ConnectionStatus {
+    return "not_connected";
+}
+
+const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; bg: string; fg: string }> = {
+    not_connected: { text: "Sin conectar", bg: "#F3F4F6", fg: "#4B5563" },
+    connected: { text: "Conectado", bg: "#DCFCE7", fg: "#15803D" },
+    error: { text: "Error de conexión", bg: "#FFE4E6", fg: "#BE123C" },
+};
+
+const DIFFICULTY_LABEL = {
+    facil: { text: "Fácil de conectar", bg: "#DCFCE7", fg: "#15803D" },
+    media: { text: "Dificultad media", bg: "#FEF3C7", fg: "#92400E" },
+    dificil: { text: "Más complejo", bg: "#FFE4E6", fg: "#BE123C" },
+} as const;
+
+type StatusFilter = "all" | "unpublished" | "queued" | "error" | "published";
+
+const FILTERS: { id: StatusFilter; label: string }[] = [
+    { id: "all", label: "Todas" },
+    { id: "unpublished", label: "Sin publicar" },
+    { id: "queued", label: "En cola" },
+    { id: "error", label: "Con error" },
+    { id: "published", label: "Publicadas" },
+];
+
+const LILA = "#7458C4";
+const INK = "#1F0A3C";
+
+function scrollToId(id: string, focus?: boolean) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    if (focus) (el as HTMLElement).focus({ preventScroll: true });
+}
+
+function externalOf(channels: ChannelState[]) {
+    return channels.filter(c => c.info.channel !== "web");
+}
 
 export default function MultipublicadorPage() {
     const { properties, photos } = useStore();
-    const navigate = useNavigate();
-    const { channelsOf, error: saveError } = usePublications();
+    const { channelsOf, loading, error: saveError } = usePublications();
+    const [query, setQuery] = useState("");
+    const [filter, setFilter] = useState<StatusFilter>("all");
+    const searchRef = useRef<HTMLInputElement>(null);
 
-    const { totalSynced, totalErrors, totalChannels } = useMemo(() => {
-        let synced = 0;
-        let errs = 0;
-        let chans = 0;
-        properties.forEach(p => {
-            // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
-            const pubs = channelsOf(p).filter(c => c.info.channel !== "web");
-            const published = pubs.filter(c => c.status === "published").length;
-            const queued = pubs.filter(c => c.status === "pending").length;
-            const errored = pubs.filter(c => c.status === "error").length;
-            if (published + queued > 0) synced++;
-            if (errored > 0) errs++;
-            chans += published;
+    // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
+    const rows = useMemo(
+        () =>
+            properties.map(p => {
+                const ext = externalOf(channelsOf(p));
+                return {
+                    p,
+                    published: ext.filter(c => c.status === "published"),
+                    queued: ext.filter(c => c.status === "pending"),
+                    errored: ext.filter(c => c.status === "error"),
+                };
+            }),
+        [properties, channelsOf],
+    );
+
+    const stats = useMemo(
+        () => ({
+            withChannel: rows.filter(r => r.published.length + r.queued.length > 0).length,
+            published: rows.reduce((n, r) => n + r.published.length, 0),
+            errors: rows.reduce((n, r) => n + r.errored.length, 0),
+        }),
+        [rows],
+    );
+
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return rows.filter(r => {
+            if (q) {
+                const hay = [r.p.title, r.p.zone, r.p.province, r.p.id].filter(Boolean).join(" ").toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            switch (filter) {
+                case "unpublished": return r.published.length + r.queued.length + r.errored.length === 0;
+                case "queued": return r.queued.length > 0;
+                case "error": return r.errored.length > 0;
+                case "published": return r.published.length > 0;
+                default: return true;
+            }
         });
-        return { totalSynced: synced, totalErrors: errs, totalChannels: chans };
-    }, [properties, channelsOf]);
+    }, [rows, query, filter]);
+
+    function goToList(next?: StatusFilter) {
+        if (next) setFilter(next);
+        scrollToId("listado-propiedades");
+        if (!next) searchRef.current?.focus({ preventScroll: true });
+    }
 
     return (
         <>
             <AppHeader
                 title="Multipublicador"
-                subtitle="Publicá tus propiedades en todos los portales desde un solo lugar."
+                subtitle="Publicá tus propiedades en los portales desde un solo lugar."
                 breadcrumb={["Publicaciones"]}
             />
 
             <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
                 {saveError && (
-                    <p className="mt-6 text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
+                    <p role="alert" className="mt-6 text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
                         No se pudieron guardar las publicaciones: {saveError}
                     </p>
                 )}
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <StatCard
-                        value={String(totalSynced)}
-                        label="Propiedades conectadas"
-                        sub="En al menos un canal"
-                        icon={<MatchesSolidIcon size={22} color="#16A34A" />}
-                        iconBg="#F0FDF4"
-                        badge={properties.length > 0 ? `${Math.round((totalSynced / properties.length) * 100)}%` : "0%"}
-                        badgeBg="#DCFCE7"
-                        badgeText="#15803D"
-                        bar="linear-gradient(90deg, #16A34A, #22C55E)"
-                        barWidth={properties.length > 0 ? (totalSynced / properties.length) * 100 : 0}
-                    />
-                    <StatCard
-                        value={String(totalChannels)}
-                        label="Canales activos Totales"
-                        sub="En todo el inventario"
-                        icon={<PropertiesIcon size={22} color="#7C3AED" />}
-                        iconBg="#F5F3FF"
-                        badge={`Avg ${properties.length ? (totalChannels / properties.length).toFixed(1) : 0}`}
-                        bar="linear-gradient(90deg, #7C3AED, #A855F7)"
-                        barWidth={100}
-                    />
-                    <StatCard
-                        value={String(totalErrors)}
-                        label="Errores de sincronización"
-                        sub="Requieren tu atención"
-                        icon={<AlertTriangleIcon size={22} color={totalErrors > 0 ? "#E11D48" : "#9CA3AF"} />}
-                        iconBg={totalErrors > 0 ? "#FFF1F2" : "#F3F4F6"}
-                        badge={totalErrors > 0 ? "Revisar" : "Todo Ok"}
-                        badgeBg={totalErrors > 0 ? "#FFE4E6" : "#F3F4F6"}
-                        badgeText={totalErrors > 0 ? "#E11D48" : "#4B5563"}
-                        bar={totalErrors > 0 ? "linear-gradient(90deg, #E11D48, #F43F5E)" : "#E5E7EB"}
-                        barWidth={totalErrors > 0 ? 100 : 0}
-                    />
-                </div>
 
-                <Card>
-                    <div className="px-6 py-5 border-b" style={{ borderColor: "#F3F0FF" }}>
-                        <h2 className="text-xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-                            Distribución de propiedades
-                        </h2>
-                        <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
-                            Panel de control unificado.
-                        </p>
-                    </div>
+                {/* Accesos directos */}
+                <section aria-label="Accesos directos" className="mt-6 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                    <Link
+                        to="/propiedades/nueva?publicar=1"
+                        className="sm:col-span-2 lg:col-span-2 rounded-2xl p-5 flex items-center gap-4 text-white min-h-[88px] transition-all hover:opacity-95 active:scale-[0.99]"
+                        style={{ background: "var(--gradient-brand)", boxShadow: "var(--shadow-cta)" }}
+                    >
+                        <span className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.2)" }} aria-hidden="true">
+                            <PlusIcon size={24} color="white" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-lg" style={{ fontWeight: 800 }}>Subir y publicar propiedad nueva</span>
+                            <span className="block text-sm mt-0.5" style={{ opacity: 0.95 }}>Cargala y elegí en qué portales sale, en dos pasos.</span>
+                        </span>
+                        <ArrowRightIcon size={20} color="white" />
+                    </Link>
 
-                    {properties.length === 0 ? (
-                        <EmptyState
-                            icon={<HomeIcon size={24} color="#7C3AED" />}
-                            title="Aún no hay propiedades"
-                            description="Cargá propiedades en tu CRM para empezar a distribuirlas."
+                    <ActionTile
+                        icon={<SearchIcon size={20} color="#7C3AED" />}
+                        title="Publicar una existente"
+                        help="Buscala en tu cartera y elegí canales."
+                        onClick={() => goToList()}
+                    />
+                    <div className="grid gap-3 grid-cols-1">
+                        {stats.errors > 0 && (
+                            <ActionTile
+                                icon={<AlertTriangleIcon size={20} color="#BE123C" />}
+                                title={`Resolver errores (${stats.errors})`}
+                                help="Mostrá solo lo que falló."
+                                tone="danger"
+                                onClick={() => goToList("error")}
+                            />
+                        )}
+                        <ActionTile
+                            icon={<PropertiesIcon size={20} color="#7C3AED" />}
+                            title="Conectar plataformas"
+                            help="Mirá qué necesita cada portal."
+                            onClick={() => scrollToId("plataformas")}
                         />
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full bg-white text-left" style={{ minWidth: 800 }}>
-                                <thead>
-                                    <tr style={{ background: "#FDFCFF", borderBottom: "1px solid #F3F0FF" }}>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Propiedad y Ubicación</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Características</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Canales Externos</th>
-                                        <th className="px-5 py-4 text-xs uppercase tracking-wide whitespace-nowrap text-right" style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {properties.map((p, idx) => {
-                                        const pubs = channelsOf(p);
-                                        const published = pubs.filter(c => c.status === "published");
-                                        const queuedCount = pubs.filter(c => c.status === "pending").length;
-                                        const errorCount = pubs.filter(c => c.status === "error").length;
-                                        const photo = (photos[p.id] || [])[0];
+                    </div>
+                </section>
 
-                                        return (
-                                            <tr
-                                                key={p.id}
-                                                onClick={() => navigate(`/publicador/${p.id}`)}
-                                                className="transition-all hover:bg-[#FAFAFF] cursor-pointer group"
-                                                style={{ borderBottom: idx < properties.length - 1 ? "1px solid #F9F7FF" : undefined }}
-                                            >
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative shadow-sm" style={{ background: "#F5F3FF" }}>
-                                                            {photo ? (
-                                                                <img src={photo} alt={p.title} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center"><HomeIcon size={20} color="#DDD6FE" /></div>
-                                                            )}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm truncate mb-0.5" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                                                                {p.title}
-                                                            </p>
-                                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <MapPinIcon size={12} color="#A78BFA" />
-                                                                <span className="text-xs truncate" style={{ color: "#7C6A99", fontWeight: 500 }}>
-                                                                    {[p.zone, p.province].filter(Boolean).join(", ")}
-                                                                </span>
-                                                            </div>
-                                                            <div className="mt-1">
-                                                                <Badge bg="#F5F3FF" text="#7C3AED" size="xs">{PROPERTY_TYPE_LABEL[p.type]}</Badge>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4 whitespace-nowrap">
-                                                    <div className="flex flex-col gap-1 text-xs" style={{ color: "#6B7280" }}>
-                                                        <span className="font-bold text-[#1F0A3C]">{money(p.price, p.currency)}</span>
-                                                        {p.surface_total && <span><strong style={{ color: "#1F0A3C" }}>{p.surface_total}</strong> m²</span>}
-                                                        {p.rooms && <span><strong style={{ color: "#1F0A3C" }}>{p.rooms}</strong> amb.</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                                                        {published.map(c => (
-                                                            <span key={c.info.channel} className="text-[10px] px-2 py-0.5 rounded-md border" style={{ background: "#F8FAFC", borderColor: "#E2E8F0", color: "#475569", fontWeight: 700 }}>
-                                                                {c.info.name}
-                                                            </span>
-                                                        ))}
-                                                        {queuedCount > 0 && (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-md border" style={{ background: "#FFFBEB", borderColor: "#FDE68A", color: "#B45309", fontWeight: 700 }}>
-                                                                {queuedCount} en cola
-                                                            </span>
-                                                        )}
-                                                        {errorCount > 0 && (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded-md border flex items-center gap-1" style={{ background: "#FFF1F2", borderColor: "#FECDD3", color: "#BE123C", fontWeight: 700 }}>
-                                                                <AlertTriangleIcon size={10} color="#BE123C" /> {errorCount} Error
-                                                            </span>
-                                                        )}
-                                                        
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4 text-right">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); navigate(`/publicador/${p.id}`); }}
-                                                        className="px-4 py-2 rounded-xl text-xs transition-all flex items-center justify-center border font-bold hover:shadow-md hover:bg-violet-50 active:scale-95 ml-auto"
-                                                        style={{ borderColor: "#EDE9FE", color: "#7C3AED", background: "white" }}
-                                                    >
-                                                        Configurar
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                {/* Métricas reales */}
+                <section aria-label="Resumen" className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Metric loading={loading} value={stats.withChannel} label="Propiedades en algún portal" sub={stats.withChannel === 0 ? "Todavía no publicaste ninguna." : `de ${properties.length} en tu cartera`} />
+                    <Metric loading={loading} value={stats.published} label="Publicaciones activas" sub={stats.published === 0 ? "Sin canales conectados todavía." : "En portales externos"} />
+                    <Metric loading={loading} value={stats.errors} label="Errores a resolver" sub={stats.errors === 0 ? "No hay errores." : "Requieren tu atención"} danger={stats.errors > 0} />
+                </section>
+
+                {/* Plataformas */}
+                <section id="plataformas" aria-labelledby="plataformas-h" className="mt-8 scroll-mt-4">
+                    <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
+                    <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
+                        Todavía no hay ninguna cuenta conectada. Mientras tanto, lo que publiques queda en cola.
+                    </p>
+                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
+                        {EXTERNAL_CHANNELS.map(info => <PlatformCard key={info.channel} info={info} />)}
+                    </div>
+                </section>
+
+                {/* Listado */}
+                <section id="listado-propiedades" aria-labelledby="listado-h" className="mt-8 scroll-mt-4">
+                    <Card>
+                        <div className="px-4 md:px-6 py-5 border-b" style={{ borderColor: "#F3F0FF" }}>
+                            <h2 id="listado-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Tus propiedades</h2>
+                            <div className="mt-4 flex flex-col lg:flex-row gap-3 lg:items-center">
+                                <label className="relative flex-1 min-w-0">
+                                    <span className="sr-only">Buscar propiedad por título, zona o ID</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"><SearchIcon size={16} color={LILA} /></span>
+                                    <input
+                                        ref={searchRef}
+                                        type="search"
+                                        value={query}
+                                        onChange={e => setQuery(e.target.value)}
+                                        placeholder="Buscar por título, zona o ID"
+                                        className="w-full min-h-[44px] pl-9 pr-3 rounded-xl border text-sm bg-white"
+                                        style={{ borderColor: "#DDD6FE", color: INK }}
+                                    />
+                                </label>
+                                <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
+                                    {FILTERS.map(f => (
+                                        <button
+                                            key={f.id}
+                                            type="button"
+                                            aria-pressed={filter === f.id}
+                                            onClick={() => setFilter(f.id)}
+                                            className="min-h-[44px] px-4 rounded-xl text-sm border transition-colors"
+                                            style={
+                                                filter === f.id
+                                                    ? { background: "#7C3AED", borderColor: "#7C3AED", color: "white", fontWeight: 700 }
+                                                    : { background: "white", borderColor: "#DDD6FE", color: "#4C3A7A", fontWeight: 600 }
+                                            }
+                                        >
+                                            {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                    )}
-                </Card>
+
+                        {loading ? (
+                            <ul aria-busy="true" aria-label="Cargando propiedades">
+                                {[0, 1, 2].map(i => (
+                                    <li key={i} className="px-4 md:px-6 py-4 flex items-center gap-4 border-b last:border-b-0" style={{ borderColor: "#F9F7FF" }}>
+                                        <div className="w-16 h-16 rounded-xl animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+                                        <div className="flex-1 space-y-2">
+                                            <div className="h-4 w-2/3 rounded animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+                                            <div className="h-3 w-1/3 rounded animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : properties.length === 0 ? (
+                            <ListEmpty
+                                title="Todavía no cargaste propiedades"
+                                description="Subí la primera y publicala en los portales en un solo flujo."
+                                cta={<NewPropertyLink />}
+                            />
+                        ) : visible.length === 0 ? (
+                            <ListEmpty
+                                title="No hay propiedades con ese criterio"
+                                description="Probá con otra búsqueda o mostrá todas."
+                                cta={
+                                    <button
+                                        type="button"
+                                        onClick={() => { setQuery(""); setFilter("all"); }}
+                                        className="min-h-[44px] px-5 rounded-xl text-sm border"
+                                        style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+                                    >
+                                        Limpiar filtros
+                                    </button>
+                                }
+                            />
+                        ) : (
+                            <ul>
+                                {visible.map(r => (
+                                    <PropertyRow key={r.p.id} {...r} photo={(photos[r.p.id] || [])[0]} />
+                                ))}
+                            </ul>
+                        )}
+                    </Card>
+                </section>
+            </div>
+        </>
+    );
+}
+
+function NewPropertyLink() {
+    return (
+        <Link
+            to="/propiedades/nueva?publicar=1"
+            className="inline-flex items-center gap-2 min-h-[44px] px-5 rounded-xl text-sm text-white"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700, boxShadow: "var(--shadow-cta)" }}
+        >
+            <PlusIcon size={16} color="white" /> Subir y publicar propiedad nueva
+        </Link>
+    );
+}
+
+function ListEmpty({ title, description, cta }: { title: string; description: string; cta: ReactNode }) {
+    return (
+        <div className="flex flex-col items-center text-center px-6 py-12 gap-3">
+            <span className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "#F5F3FF" }} aria-hidden="true">
+                <HomeIcon size={24} color="#7C3AED" />
+            </span>
+            <p style={{ color: INK, fontWeight: 700 }}>{title}</p>
+            <p className="text-sm max-w-sm" style={{ color: "#6B5A8E" }}>{description}</p>
+            {cta}
+        </div>
+    );
+}
+
+function ActionTile({
+    icon, title, help, onClick, tone,
+}: { icon: ReactNode; title: string; help: string; onClick: () => void; tone?: "danger" }) {
+    const danger = tone === "danger";
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left rounded-2xl p-4 border flex items-center gap-3 min-h-[72px] bg-white transition-all hover:shadow-md active:scale-[0.99]"
+            style={{ borderColor: danger ? "#FECDD3" : "#EDE9FE", boxShadow: "var(--shadow-card)" }}
+        >
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: danger ? "#FFF1F2" : "#F5F3FF" }} aria-hidden="true">
+                {icon}
+            </span>
+            <span className="min-w-0">
+                <span className="block text-sm" style={{ color: danger ? "#BE123C" : INK, fontWeight: 700 }}>{title}</span>
+                <span className="block text-xs mt-0.5" style={{ color: "#6B5A8E" }}>{help}</span>
+            </span>
+        </button>
+    );
+}
+
+function Metric({ value, label, sub, loading, danger }: { value: number; label: string; sub: string; loading: boolean; danger?: boolean }) {
+    // Un cero no se muestra como logro: se atenúa y el texto aclara el motivo.
+    const empty = value === 0;
+    return (
+        <div className="rounded-2xl border p-4 bg-white" style={{ borderColor: "#EDE9FE", boxShadow: "var(--shadow-card)" }}>
+            {loading ? (
+                <div className="h-8 w-16 rounded-lg animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+            ) : (
+                <p style={{ fontWeight: 800, fontSize: "1.5rem", color: danger ? "#BE123C" : empty ? "#6B7280" : INK }}>{value}</p>
+            )}
+            <p className="text-sm" style={{ color: "#4B5563", fontWeight: 600 }}>{label}</p>
+            {!loading && <p className="text-xs mt-0.5" style={{ color: "#6B5A8E" }}>{sub}</p>}
+        </div>
+    );
+}
+
+function PlatformCard({ info }: { info: ChannelInfo }) {
+    const [open, setOpen] = useState(false);
+    const panelId = useId();
+    const guide = INTEGRATION_GUIDES[info.channel];
+    const conn = CONNECTION_LABEL[connectionOf(info.channel)];
+    const diff = guide.difficulty ? DIFFICULTY_LABEL[guide.difficulty] : null;
+    // Texto oscuro sobre amarillo (ML) para mantener contraste en el logo.
+    const logoText = info.color === "#FFE600" ? "#1F2937" : "white";
+
+    return (
+        <Card padded>
+            <div className="flex items-start gap-3">
+                <span
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 text-sm"
+                    style={{ background: info.color, color: logoText, fontWeight: 800 }}
+                    aria-hidden="true"
+                >
+                    {info.short}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-sm" style={{ color: INK, fontWeight: 700 }}>{info.name}</h3>
+                    <p className="text-xs mt-0.5" style={{ color: "#6B5A8E" }}>{guide.tagline}</p>
+                </div>
             </div>
 
-        </>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+                <Badge bg={conn.bg} text={conn.fg}>{conn.text}</Badge>
+                {diff && <Badge bg={diff.bg} text={diff.fg}>{diff.text}</Badge>}
+                {!guide.verified && <Badge bg="#EDE9FE" text="#5B21B6">En validación</Badge>}
+            </div>
+            {guide.recommendation && <p className="text-xs mt-2" style={{ color: "#4B5563" }}>{guide.recommendation}</p>}
+
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    onClick={() => setOpen(o => !o)}
+                    className="flex-1 min-h-[44px] px-4 rounded-xl text-sm border flex items-center justify-center gap-2"
+                    style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700, background: "white" }}
+                >
+                    Cómo conectar
+                    <span style={{ transform: open ? "rotate(180deg)" : undefined, display: "inline-flex" }} aria-hidden="true">
+                        <ChevronDownIcon size={16} color="#5B21B6" />
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    disabled
+                    className="flex-1 min-h-[44px] px-4 rounded-xl text-sm cursor-not-allowed"
+                    style={{ background: "#F3F4F6", color: "#4B5563", fontWeight: 600 }}
+                >
+                    Conectar · Próximamente
+                </button>
+            </div>
+
+            <div id={panelId} hidden={!open} className="mt-4 text-sm" style={{ color: "#374151" }}>
+                {guide.estimatedTime && <p className="text-xs mb-2" style={{ color: LILA, fontWeight: 600 }}>Tiempo estimado: {guide.estimatedTime}</p>}
+                {guide.needs.length > 0 && (
+                    <>
+                        <p style={{ fontWeight: 700, color: INK }}>Qué necesitás</p>
+                        <ul className="list-disc pl-5 mb-3 space-y-1">{guide.needs.map((n, i) => <li key={i}>{n}</li>)}</ul>
+                    </>
+                )}
+                <p style={{ fontWeight: 700, color: INK }}>Pasos</p>
+                <ol className="list-decimal pl-5 space-y-1">{guide.steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+                {guide.warning && (
+                    <p className="mt-3 text-xs px-3 py-2 rounded-lg" style={{ background: "#FFFBEB", color: "#92400E" }}>{guide.warning}</p>
+                )}
+            </div>
+        </Card>
+    );
+}
+
+function ChannelChip({ c }: { c: ChannelState }) {
+    const style =
+        c.status === "error"
+            ? { background: "#FFF1F2", borderColor: "#FECDD3", color: "#BE123C" }
+            : c.status === "pending"
+              ? { background: "#FFFBEB", borderColor: "#FDE68A", color: "#92400E" }
+              : { background: "#F0FDF4", borderColor: "#BBF7D0", color: "#15803D" };
+    const state = c.status === "error" ? "con error" : c.status === "pending" ? "en cola" : "publicada";
+    return (
+        <span className="text-xs px-2 py-1 rounded-md border inline-flex items-center gap-1" style={{ ...style, fontWeight: 700 }}>
+            {c.status === "error" ? <AlertTriangleIcon size={12} color="#BE123C" /> : c.status === "published" ? <CheckCircleIcon size={12} color="#15803D" /> : null}
+            {c.info.name}
+            <span className="sr-only"> ({state})</span>
+            {c.status === "pending" && <span aria-hidden="true">· en cola</span>}
+            {c.status === "error" && <span aria-hidden="true">· error</span>}
+        </span>
+    );
+}
+
+function PropertyRow({
+    p, photo, published, queued, errored,
+}: { p: Property; photo?: string; published: ChannelState[]; queued: ChannelState[]; errored: ChannelState[] }) {
+    const navigate = useNavigate();
+    const chips = [...errored, ...queued, ...published];
+    const manage = chips.length > 0;
+    return (
+        <li
+            className="px-4 md:px-6 py-4 border-b last:border-b-0 flex flex-col md:flex-row md:items-center gap-3 md:gap-5"
+            style={{ borderColor: "#F9F7FF" }}
+        >
+            <div className="flex items-center gap-4 min-w-0 md:w-[38%]">
+                <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ background: "#F5F3FF" }}>
+                    {photo ? (
+                        <img src={photo} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center"><HomeIcon size={20} color="#A78BFA" /></div>
+                    )}
+                </div>
+                <div className="min-w-0">
+                    <p className="text-sm truncate" style={{ color: INK, fontWeight: 700 }}>{p.title}</p>
+                    <p className="text-xs mt-0.5 flex items-center gap-1 min-w-0" style={{ color: "#6B5A8E" }}>
+                        <MapPinIcon size={12} color={LILA} />
+                        <span className="truncate">{[p.zone, p.province].filter(Boolean).join(", ") || "Sin ubicación"}</span>
+                    </p>
+                    <p className="text-sm mt-0.5" style={{ color: INK, fontWeight: 700 }}>{money(p.price, p.currency)}</p>
+                </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                {chips.length === 0 ? (
+                    <span className="text-xs" style={{ color: "#6B5A8E" }}>Sin publicar en portales</span>
+                ) : (
+                    chips.map(c => <ChannelChip key={c.info.channel} c={c} />)
+                )}
+            </div>
+
+            <button
+                type="button"
+                onClick={() => navigate(`/publicador/${p.id}`)}
+                aria-label={`${manage ? "Gestionar" : "Publicar"} ${p.title}`}
+                className="min-h-[44px] px-5 rounded-xl text-sm border md:ml-auto transition-colors hover:bg-violet-50"
+                style={
+                    manage
+                        ? { borderColor: "#DDD6FE", color: "#5B21B6", background: "white", fontWeight: 700 }
+                        : { borderColor: "#7C3AED", color: "white", background: "#7C3AED", fontWeight: 700 }
+                }
+            >
+                {manage ? "Gestionar" : "Publicar"}
+            </button>
+        </li>
     );
 }
