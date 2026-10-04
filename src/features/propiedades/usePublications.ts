@@ -54,11 +54,14 @@ export function usePublications() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchAgencyPublications(agency.id).then((rows) => {
-      if (cancelled) return;
-      setRemote(rows);
-      setLoading(false);
-    });
+    // Si la petición falla (sin red, backend caído) se cae al modo local en vez de quedar cargando para siempre.
+    fetchAgencyPublications(agency.id)
+      .catch(() => null)
+      .then((rows) => {
+        if (cancelled) return;
+        setRemote(rows);
+        setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
