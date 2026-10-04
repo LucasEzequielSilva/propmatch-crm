@@ -12,6 +12,8 @@ import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
 import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
 import MultipublicadorVivoPage from "@/features/propiedades/MultipublicadorVivoPage";
 import InstagramPublisherPage from "@/features/instagram/InstagramPublisherPage";
+import InstagramStudioPage from "@/features/instagram/InstagramStudioPage";
+import InstagramEditorPage from "@/features/instagram/InstagramEditorPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
 import OfertasPage from "@/features/ofertas/OfertasPage";
 import InboxPage from "@/features/inbox/InboxPage";
@@ -64,6 +66,10 @@ export default function App() {
               <Route path="publicador" element={<MultipublicadorPage />} />
               <Route path="publicador/:propertyId" element={<MultipublicadorVivoPage />} />
               <Route path="publicador/:propertyId/instagram" element={<InstagramPublisherPage />} />
+
+              <Route path="instagram" element={<InstagramStudioPage />} />
+              <Route path="instagram/nueva" element={<InstagramEditorPage />} />
+              <Route path="instagram/:postId" element={<InstagramEditorPage />} />
 
               <Route path="oportunidades" element={<OportunidadesPage />} />
               <Route path="ofertas" element={<OfertasPage />} />

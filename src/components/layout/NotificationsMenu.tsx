@@ -6,6 +6,8 @@ import { relativeTime } from "@/lib/format";
 import { AUTHORIZATION_WARNING_DAYS, authorizationState } from "@/lib/authorization";
 import { lastSentAbout } from "@/lib/ownerReport";
 import { useFollowUps } from "@/data/useFollowUps";
+import { usePosts } from "@/features/instagram/postStore";
+import { dueForNotification, fireDueBrowserNotifications, postOfEvent } from "@/features/instagram/reminders";
 
 /**
  * Campana del header.
@@ -30,7 +32,7 @@ const EXPIRED_GRACE_DAYS = 30;
 /** Hasta cuántos matches se listan uno por uno antes de agruparlos. */
 const MAX_MATCH_ITEMS = 3;
 
-type Kind = "match" | "evento" | "tarea" | "oportunidad" | "autorizacion" | "avisar" | "seguimiento";
+type Kind = "match" | "evento" | "tarea" | "oportunidad" | "autorizacion" | "avisar" | "seguimiento" | "publicacion";
 
 interface Notification {
   id: string;
@@ -52,6 +54,7 @@ const KIND_STYLE: Record<Kind, { icon: string; bg: string; color: string }> = {
   autorizacion: { icon: "✎", bg: "#FFF1F2", color: "#BE123C" },
   avisar: { icon: "➚", bg: "#F0FDF4", color: "#15803D" },
   seguimiento: { icon: "☎", bg: "#FFF1F2", color: "#E11D48" },
+  publicacion: { icon: "▣", bg: "#FDF2F8", color: "#BE185D" },
 };
 
 function loadSeen(): Set<string> {
@@ -78,6 +81,14 @@ export function NotificationsMenu() {
   const followUps = useFollowUps();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(loadSeen);
+  const igPosts = usePosts();
+  // «Llegó la hora» depende del reloj, no solo de los datos: se reevalúa cada minuto.
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setTick(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => fireDueBrowserNotifications(igPosts, tick), [igPosts, tick]);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const mine = (ownerId: string | null) => !ownerId || !currentUserId || ownerId === currentUserId;
@@ -194,7 +205,20 @@ export function NotificationsMenu() {
         detail: contactById(e.contact_id)?.full_name ?? "Próximas 24 horas",
         at: e.starts_at,
         when: `${hour} · en ${Math.max(1, Math.round((start - now) / 3_600_000))} h`,
-        to: "/agenda",
+        to: e.type === "publicacion" && postOfEvent(e.id, igPosts) ? `/instagram/${postOfEvent(e.id, igPosts)!.id}` : "/agenda",
+      });
+    }
+
+    // Publicaciones de Instagram cuya hora ya llegó y siguen sin marcarse como publicadas.
+    for (const p of dueForNotification(igPosts, now)) {
+      out.push({
+        id: `instagram:${p.id}:${p.scheduledAt}`,
+        kind: "publicacion",
+        title: "Publicación lista para subir a Instagram",
+        detail: p.title.trim() || "Publicación sin título",
+        at: new Date(now + 3).toISOString(),
+        when: "Abrir en el Estudio",
+        to: `/instagram/${p.id}`,
       });
     }
 
@@ -240,7 +264,7 @@ export function NotificationsMenu() {
       if (fa !== fb) return fa ? -1 : 1;
       return fa ? ta - tb : tb - ta;
     });
-  }, [matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId, followUps]);
+  }, [matches, events, tasks, opportunities, properties, activities, contactById, propertyById, currentUserId, followUps, igPosts, tick]);
 
   const unread = items.filter((n) => !seen.has(n.id)).length;
 

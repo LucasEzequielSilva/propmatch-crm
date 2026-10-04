@@ -1837,6 +1837,7 @@ const EVENT_ACTIVITY: Record<EventType, ActivityType> = {
   llamada: "llamada",
   reunion: "nota",
   seguimiento: "nota",
+  publicacion: "nota",
 };
 
 export const STAGE_LABEL: Record<OpportunityStage, string> = {

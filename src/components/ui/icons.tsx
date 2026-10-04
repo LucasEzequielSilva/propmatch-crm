@@ -408,7 +408,19 @@ export function EventTypeIcon({ type, color, size = 14 }: { type: string; color:
         <path d="M17 14C19.761 14 22 16.239 22 19V21" stroke={color} strokeWidth="2" strokeLinecap="round" />
       </svg>
     );
+  if (type === "publicacion") return <InstagramIcon size={size} color={color} />;
   return <ClockIcon size={size} color={color} />;
+}
+
+/** Cámara genérica (cuadrado redondeado + lente). No es el logo de Instagram. */
+export function InstagramIcon({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="4" stroke={color} strokeWidth="1.8" />
+      <circle cx="17.2" cy="6.8" r="1.1" fill={color} />
+    </svg>
+  );
 }
 
 /** Logo de WhatsApp (glifo simplificado, un solo color). */

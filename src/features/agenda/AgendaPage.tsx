@@ -25,6 +25,7 @@ const TYPE_STYLES: Record<EventType, { bg: string; border: string; text: string;
   llamada: { bg: "rgba(59,130,246,0.07)", border: "#3B82F6", text: "#1E3A8A", sub: "#3B82F699", pill: "#DBEAFE", pillText: "#1D4ED8" },
   reunion: { bg: "rgba(236,72,153,0.07)", border: "#EC4899", text: "#831843", sub: "#EC489999", pill: "#FCE7F3", pillText: "#9D174D" },
   seguimiento: { bg: "rgba(245,158,11,0.07)", border: "#F59E0B", text: "#78350F", sub: "#F59E0B99", pill: "#FEF3C7", pillText: "#B45309" },
+  publicacion: { bg: "rgba(219,39,119,0.07)", border: "#DB2777", text: "#831843", sub: "#DB277799", pill: "#FCE7F3", pillText: "#9D174D" },
 };
 
 const TYPE_LABELS: Record<EventType, string> = {
@@ -32,6 +33,7 @@ const TYPE_LABELS: Record<EventType, string> = {
   llamada: "Llamada",
   reunion: "Reunión",
   seguimiento: "Seguimiento",
+  publicacion: "Publicación",
 };
 
 const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie"];

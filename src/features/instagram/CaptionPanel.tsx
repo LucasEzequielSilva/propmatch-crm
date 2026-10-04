@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { IG_LIMITS } from "./imageSpecs";
 import { countHashtags, joinCaption, TONES, truncateForMore, type CaptionOptions } from "./caption";
@@ -14,6 +14,10 @@ interface Props {
   onRegenerate: () => void;
   hasPhone: boolean;
   isStory: boolean;
+  /** Texto de ayuda bajo el título (el Estudio sin propiedad lo cambia). */
+  intro?: string;
+  /** Contenido extra arriba del texto (p. ej. «Autocompletar desde una propiedad»). */
+  extra?: ReactNode;
 }
 
 const toggles: { key: keyof Omit<CaptionOptions, "tone">; label: string }[] = [
@@ -25,7 +29,7 @@ const toggles: { key: keyof Omit<CaptionOptions, "tone">; label: string }[] = [
   { key: "showPrice", label: "Mostrar precio" },
 ];
 
-export function CaptionPanel({ body, onBody, hashtags, suggested, onHashtags, options, onOptions, onRegenerate, hasPhone, isStory }: Props) {
+export function CaptionPanel({ body, onBody, hashtags, suggested, onHashtags, options, onOptions, onRegenerate, hasPhone, isStory, intro, extra }: Props) {
   const [copied, setCopied] = useState("");
   const full = joinCaption(body, hashtags);
   const tagCount = countHashtags(full);
@@ -56,7 +60,7 @@ export function CaptionPanel({ body, onBody, hashtags, suggested, onHashtags, op
       <div className="px-5 py-4 border-b" style={{ borderColor: "#F3F0FF" }}>
         <h3 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>Texto de la publicación</h3>
         <p className="text-xs mt-0.5" style={{ color: "#6B5A8A" }}>
-          Se arma con los datos reales de la propiedad. Editalo libremente.
+          {intro ?? "Se arma con los datos reales de la propiedad. Editalo libremente."}
         </p>
         {isStory && (
           <p className="text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#F5F3FF", color: "#5B3FA8" }}>
@@ -65,6 +69,7 @@ export function CaptionPanel({ body, onBody, hashtags, suggested, onHashtags, op
         )}
       </div>
       <div className="p-5 flex flex-col gap-4">
+        {extra}
         <fieldset>
           <legend className="text-xs mb-1.5" style={{ color: "#7458C4", fontWeight: 700 }}>Tono</legend>
           <div className="flex flex-wrap gap-2">

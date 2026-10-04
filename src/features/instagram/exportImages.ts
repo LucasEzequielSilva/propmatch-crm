@@ -1,4 +1,5 @@
 import { cropRect, IG_LIMITS, type Focal, type IgFormat } from "./imageSpecs";
+import { drawEdited, type DrawOptions, type PhotoEdits } from "./photoEdits";
 
 export class ExportError extends Error {
   constructor(public code: "cors" | "decode" | "encode", message: string) {
@@ -59,4 +60,36 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(href), 10_000);
+}
+
+/**
+ * Como `exportPhotoJpeg`, pero hornea todas las ediciones (recorte con zoom, giro, color,
+ * filtro, viñeta, texto y sello). Es la misma función de dibujo que usa la vista previa.
+ */
+export async function exportEditedJpeg(
+  url: string,
+  format: IgFormat,
+  edits: PhotoEdits,
+  opts: DrawOptions = {},
+  width: number = format.width,
+): Promise<Blob> {
+  const img = await loadForCanvas(url);
+  const height = Math.round(width / format.ratio);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new ExportError("encode", "Tu navegador no pudo preparar el lienzo de exportación.");
+  drawEdited(ctx, img, img.naturalWidth, img.naturalHeight, edits, width, height, opts);
+  return new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new ExportError("encode", "No se pudo generar el JPEG."))),
+        "image/jpeg",
+        IG_LIMITS.exportJpegQuality,
+      );
+    } catch {
+      reject(new ExportError("cors", "El navegador bloqueó la lectura de la foto (CORS). Subila desde tu equipo."));
+    }
+  });
 }

@@ -201,3 +201,57 @@ export function truncateForMore(text: string, limit: number = IG_LIMITS.captionV
   if (back >= limit - 20) cut = back;
   return { visible: text.slice(0, cut).trimEnd(), rest: text.slice(cut), truncated: true };
 }
+
+/**
+ * Texto base del Estudio cuando NO hay propiedad: plantillas genéricas con [corchetes] para
+ * completar a mano y datos de la inmobiliaria. No inventa precios ni características.
+ */
+export function buildGenericCaption(agency: Pick<Agency, "name" | "phone" | "city">, o: CaptionOptions): string {
+  const city = agency.city?.trim();
+  const blocks: string[] = [];
+  if (o.hook) {
+    blocks.push(
+      {
+        calido: `✨ [Qué estás mostrando]${city ? ` en ${city}` : ""}. Un lugar pensado para sentirte en casa.`,
+        profesional: `[Tipo de propiedad] en [operación]${city ? ` en ${city}` : ""}.`,
+        premium: "[Título de la publicación]",
+        directo: `[VENTA / ALQUILER] · [Tipo]${city ? ` · ${city}` : ""}`,
+      }[o.tone],
+    );
+  }
+  if (o.showPrice) blocks.push({ calido: "💰 [Precio]", profesional: "Valor: [precio]", premium: "[Precio]", directo: "[Precio]" }[o.tone]);
+  if (o.tone !== "directo") blocks.push("[Contá en dos líneas lo que hace especial a este lugar.]");
+  if (o.details) {
+    const e = o.tone === "calido" || o.tone === "directo";
+    const b = (x: string) => (e ? `${x} ` : o.tone === "premium" ? "— " : "• ");
+    blocks.push([`${b("🛏️")}[dormitorios]`, `${b("🚿")}[baños]`, `${b("📐")}[m²]`].join("\n"));
+  }
+  if (o.cta) {
+    const base = {
+      calido: "💬 Escribinos por mensaje directo y coordinamos una visita.",
+      profesional: "Consultá por más información y coordiná tu visita.",
+      premium: "Visitas con cita previa.",
+      directo: "Consultá ahora.",
+    }[o.tone];
+    blocks.push(o.linkInBio ? `${base}\n${o.tone === "calido" ? "🔗 " : ""}Más fotos y detalles: link en la bio.` : base);
+  }
+  if (o.contact) {
+    const phone = agency.phone?.trim();
+    blocks.push(o.tone === "premium" ? `${agency.name}${phone ? ` — ${phone}` : ""}` : `${o.tone === "calido" ? "📲 " : ""}${agency.name}${phone ? ` · ${phone}` : ""}`);
+  }
+  return blocks.join("\n\n");
+}
+
+/** Hashtags de la inmobiliaria (sin propiedad). */
+export function genericHashtags(agency: Pick<Agency, "slug" | "city">): string[] {
+  return unique(
+    [agency.city, "inmobiliaria", "propiedades", "inmuebles", "bienesraices", "casaenventa", "departamentoenventa", agency.slug]
+      .filter((x): x is string => !!x)
+      .map(hashtagWord)
+      .filter((w) => w.length > 1)
+      .map((w) => `#${w}`),
+  );
+}
+
+/** `true` si el texto todavía tiene [campos] sin completar de la plantilla genérica. */
+export const hasPlaceholders = (text: string) => /\[[^\]\n]{2,}\]/.test(text);

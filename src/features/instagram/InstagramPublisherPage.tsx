@@ -15,9 +15,8 @@ import { getFormat, IG_FORMATS, IG_LIMITS, type IgFormatId } from "./imageSpecs"
 import { PhoneMockup, type PreviewTab } from "./PhoneMockup";
 import { PhotoPanel, type IgPhoto } from "./PhotoPanel";
 import { useImageInfos } from "./useImageInfos";
+import { INSTAGRAM_CONNECTED } from "./connection";
 
-/** Todavía no hay conexión con Meta. Cuando exista, esto sale del estado de la integración. */
-const INSTAGRAM_CONNECTED = false;
 
 interface EditorState {
   format: IgFormatId;
@@ -233,6 +232,13 @@ function Editor({ property }: { property: Property }) {
           style={{ borderColor: "#EDE9FE", color: "#7458C4", fontWeight: 700, background: "white" }}
         >
           <ChevronLeftIcon size={12} /> Volver
+        </button>
+        <button
+          onClick={() => navigate(`/instagram/nueva?propiedad=${property.id}`)}
+          className="px-3 min-h-11 md:min-h-9 rounded-xl text-xs text-white flex items-center gap-1 hover:opacity-90"
+          style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+        >
+          Abrir en el Estudio (carrusel, reel, edición)
         </button>
       </AppHeader>
 

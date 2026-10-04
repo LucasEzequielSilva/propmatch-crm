@@ -33,7 +33,8 @@ export type OpportunityStage =
   | "negociacion"
   | "cierre"
   | "perdida";
-export type EventType = "visita" | "llamada" | "reunion" | "seguimiento";
+/** "publicacion" = recordatorio de subir algo a Instagram (lo crea el Estudio de Instagram). */
+export type EventType = "visita" | "llamada" | "reunion" | "seguimiento" | "publicacion";
 export type AuthorizationType = "exclusiva" | "no_exclusiva";
 export type ActivityType =
   | "contacto_creado"

@@ -17,6 +17,7 @@ const TYPES: { value: EventType; label: string; color: string }[] = [
   { value: "llamada", label: "Llamada", color: "#3B82F6" },
   { value: "reunion", label: "Reunión", color: "#EC4899" },
   { value: "seguimiento", label: "Seguimiento", color: "#F59E0B" },
+  { value: "publicacion", label: "Publicación", color: "#DB2777" },
 ];
 
 const DURATIONS = [30, 45, 60, 90, 120];
