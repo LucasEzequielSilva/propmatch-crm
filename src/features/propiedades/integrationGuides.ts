@@ -32,9 +32,9 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     steps: [
       "Verificá en tu cuenta de Mercado Libre qué paquete de Inmuebles tenés y cuánto cupo te queda.",
       "Autorizar a PropMatch se hace con el login de Mercado Libre: no compartís tu contraseña con nosotros.",
-      CONNECT_SOON,
+      "Tocá «Conectar Mercado Libre», iniciá sesión con la cuenta de la inmobiliaria y aceptá los permisos.",
     ],
-    estimatedTime: "3 minutos una vez disponible el conector",
+    estimatedTime: "3 minutos",
     warning:
       "Si se agota el cupo del paquete, Mercado Libre puede pausar avisos. Sin paquete no se puede crear ningún aviso.",
     verified: true,

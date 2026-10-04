@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -18,12 +18,44 @@ import { money } from "@/lib/format";
 import type { Property, PublicationChannel } from "@/types/db";
 import { EXTERNAL_CHANNELS, usePublications, type ChannelInfo, type ChannelState } from "./usePublications";
 import { INTEGRATION_GUIDES } from "./integrationGuides";
+import { useMeliConnection } from "./useIntegrations";
 
-/** Hoy no hay ninguna integración: cuando exista `agency_integrations` se lee de ahí. */
 type ConnectionStatus = "not_connected" | "connected" | "error";
 
-function connectionOf(_channel: PublicationChannel): ConnectionStatus {
+type MeliConnection = ReturnType<typeof useMeliConnection>;
+
+/** Solo Mercado Libre tiene conector real por ahora; el resto sigue "sin conectar". */
+function connectionOf(channel: PublicationChannel, meli: MeliConnection): ConnectionStatus {
+    if (channel === "mercadolibre" && meli.connected) return "connected";
     return "not_connected";
+}
+
+const MELI_ERROR_REASONS: Record<string, string> = {
+    denied: "Cancelaste la autorización en Mercado Libre.",
+    expired: "La conexión tardó demasiado. Probá de nuevo.",
+};
+
+/** Aviso al volver del login de Mercado Libre (?meli=connected|error). Limpia el parámetro de la URL. */
+function useMeliReturnNotice(onDone: () => void) {
+    const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const result = params.get("meli");
+        if (!result) return;
+        if (result === "connected") {
+            setNotice({ ok: true, text: "Mercado Libre quedó conectado." });
+            onDone();
+        } else if (result === "error") {
+            const reason = MELI_ERROR_REASONS[params.get("reason") ?? ""];
+            setNotice({ ok: false, text: `No pudimos conectar Mercado Libre. ${reason ?? "Probá de nuevo en un rato."}` });
+        }
+        params.delete("meli");
+        params.delete("reason");
+        const qs = params.toString();
+        window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return notice;
 }
 
 const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; bg: string; fg: string }> = {
@@ -69,6 +101,8 @@ export default function MultipublicadorPage() {
     const [query, setQuery] = useState("");
     const [filter, setFilter] = useState<StatusFilter>("all");
     const searchRef = useRef<HTMLInputElement>(null);
+    const meli = useMeliConnection();
+    const meliNotice = useMeliReturnNotice(() => scrollToId("plataformas"));
 
     // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
     const rows = useMemo(
@@ -132,6 +166,16 @@ export default function MultipublicadorPage() {
                     </p>
                 )}
 
+                {meliNotice && (
+                    <p
+                        role="status"
+                        className="mt-6 text-sm px-4 py-3 rounded-xl"
+                        style={meliNotice.ok ? { background: "#F0FDF4", color: "#15803D" } : { background: "#FFF1F2", color: "#BE123C" }}
+                    >
+                        {meliNotice.text}
+                    </p>
+                )}
+
                 {/* Accesos directos */}
                 <section aria-label="Accesos directos" className="mt-6 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                     <Link
@@ -185,10 +229,12 @@ export default function MultipublicadorPage() {
                 <section id="plataformas" aria-labelledby="plataformas-h" className="mt-8 scroll-mt-4">
                     <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
                     <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
-                        Todavía no hay ninguna cuenta conectada. Mientras tanto, lo que publiques queda en cola.
+                        {meli.connected
+                            ? "Mercado Libre ya está conectado. Mientras tanto, lo que publiques queda en cola."
+                            : "Todavía no hay ninguna cuenta conectada. Mientras tanto, lo que publiques queda en cola."}
                     </p>
                     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
-                        {EXTERNAL_CHANNELS.map(info => <PlatformCard key={info.channel} info={info} />)}
+                        {EXTERNAL_CHANNELS.map(info => <PlatformCard key={info.channel} info={info} meli={meli} />)}
                     </div>
                 </section>
 
@@ -342,11 +388,11 @@ function Metric({ value, label, sub, loading, danger }: { value: number; label: 
     );
 }
 
-function PlatformCard({ info }: { info: ChannelInfo }) {
+function PlatformCard({ info, meli }: { info: ChannelInfo; meli: MeliConnection }) {
     const [open, setOpen] = useState(false);
     const panelId = useId();
     const guide = INTEGRATION_GUIDES[info.channel];
-    const conn = CONNECTION_LABEL[connectionOf(info.channel)];
+    const conn = CONNECTION_LABEL[connectionOf(info.channel, meli)];
     const diff = guide.difficulty ? DIFFICULTY_LABEL[guide.difficulty] : null;
     // Texto oscuro sobre amarillo (ML) para mantener contraste en el logo.
     const logoText = info.color === "#FFE600" ? "#1F2937" : "white";
@@ -388,14 +434,7 @@ function PlatformCard({ info }: { info: ChannelInfo }) {
                         <ChevronDownIcon size={16} color="#5B21B6" />
                     </span>
                 </button>
-                <button
-                    type="button"
-                    disabled
-                    className="flex-1 min-h-[44px] px-4 rounded-xl text-sm cursor-not-allowed"
-                    style={{ background: "#F3F4F6", color: "#4B5563", fontWeight: 600 }}
-                >
-                    Conectar · Próximamente
-                </button>
+                <ConnectButton info={info} meli={meli} />
             </div>
 
             <div id={panelId} hidden={!open} className="mt-4 text-sm" style={{ color: "#374151" }}>
@@ -413,6 +452,68 @@ function PlatformCard({ info }: { info: ChannelInfo }) {
                 )}
             </div>
         </Card>
+    );
+}
+
+function ConnectButton({ info, meli }: { info: ChannelInfo; meli: MeliConnection }) {
+    const [busy, setBusy] = useState(false);
+    const isMeli = info.channel === "mercadolibre";
+    const disabledStyle = { background: "#F3F4F6", color: "#4B5563", fontWeight: 600 };
+
+    if (!isMeli || (!meli.loading && !meli.configured)) {
+        return (
+            <button type="button" disabled className="flex-1 min-h-[44px] px-4 rounded-xl text-sm cursor-not-allowed" style={disabledStyle}>
+                Conectar · Próximamente
+            </button>
+        );
+    }
+    if (meli.loading) {
+        return (
+            <button type="button" disabled className="flex-1 min-h-[44px] px-4 rounded-xl text-sm cursor-wait" style={disabledStyle}>
+                Verificando…
+            </button>
+        );
+    }
+
+    const run = async (fn: () => Promise<void>) => {
+        setBusy(true);
+        try { await fn(); } finally { setBusy(false); }
+    };
+
+    return (
+        <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+            {meli.connected ? (
+                <>
+                    <p className="text-xs" style={{ color: "#15803D", fontWeight: 700 }}>
+                        Conectada{meli.nickname ? ` · ${meli.nickname}` : ""}
+                    </p>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                            if (window.confirm("¿Desconectar Mercado Libre? Dejás de poder publicar desde PropMatch hasta volver a conectarla.")) {
+                                void run(meli.disconnect);
+                            }
+                        }}
+                        className="min-h-[44px] px-4 rounded-xl text-sm border disabled:opacity-60"
+                        style={{ borderColor: "#FECDD3", color: "#BE123C", background: "white", fontWeight: 700 }}
+                    >
+                        Desconectar
+                    </button>
+                </>
+            ) : (
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(meli.connect)}
+                    className="min-h-[44px] px-4 rounded-xl text-sm text-white disabled:opacity-60"
+                    style={{ background: "#7C3AED", fontWeight: 700 }}
+                >
+                    Conectar Mercado Libre
+                </button>
+            )}
+            {meli.error && <p role="alert" className="text-xs" style={{ color: "#BE123C" }}>{meli.error}</p>}
+        </div>
     );
 }
 
