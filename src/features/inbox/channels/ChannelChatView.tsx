@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeftIcon } from "@/components/ui/icons";
 import { fetchMediaUrl, type ChannelConversation, type ChannelMessage } from "@/lib/inbox/api";
 import { cleanIncoming, closedHint, windowInfo } from "@/lib/inbox/window";
@@ -6,6 +6,9 @@ import { Avatar } from "../ConversationList";
 import { displayName, SOURCE_META, SourceIcon } from "./channelMeta";
 import { TemplatePicker } from "./TemplatePicker";
 import { useChannelMessages } from "./useChannelMessages";
+import { useStore } from "@/data/store";
+import { InboxAssist } from "@/features/proppi/InboxAssist";
+import { toAssistConversation, toAssistMessages } from "./proppiAdapter";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -104,6 +107,11 @@ export function ChannelChatView({
   const [text, setText] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const scroller = useRef<HTMLDivElement>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const { contacts } = useStore();
+  const linked = conversation.crm_contact_id ? contacts.find((c) => c.id === conversation.crm_contact_id) : undefined;
+  const assistConv = useMemo(() => toAssistConversation(conversation, linked), [conversation, linked]);
+  const assistMsgs = useMemo(() => toAssistMessages(conversation, messages), [conversation, messages]);
   const name = displayName(conversation);
   const meta = SOURCE_META[conversation.channel];
 
@@ -246,9 +254,19 @@ export function ChannelChatView({
             {error}
           </p>
         )}
+        {win.open && (
+          <InboxAssist
+            conversation={assistConv}
+            messages={assistMsgs}
+            text={text}
+            setText={setText}
+            focusInput={() => area.current?.focus()}
+          />
+        )}
         {win.open ? (
           <div className="flex items-end gap-2">
             <textarea
+              ref={area}
               value={text}
               rows={1}
               onChange={(e) => setText(e.target.value)}
