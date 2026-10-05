@@ -26,8 +26,9 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     difficulty: "media",
     recommendation: "Recomendado para empezar: es el único portal con alta propia, sin contrato previo.",
     needs: [
-      "Una cuenta de Mercado Libre a nombre de la inmobiliaria.",
-      "Un paquete de publicación de Inmuebles con cupo disponible.",
+      "Una cuenta de Mercado Libre a nombre de la inmobiliaria, habilitada como inmobiliaria (si no lo está, se pide a Mercado Libre desde su formulario de soporte).",
+      "Un paquete de publicación de Inmuebles con cupo disponible (tipo Plata; Oro y Oro Premium son destaques).",
+      "Que la propiedad esté sincronizada con la app: las fotos tienen que tener una URL pública.",
     ],
     steps: [
       "Verificá en tu cuenta de Mercado Libre qué paquete de Inmuebles tenés y cuánto cupo te queda.",

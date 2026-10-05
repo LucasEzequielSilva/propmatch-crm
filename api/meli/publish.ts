@@ -209,6 +209,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const mode: Action = action === "publish" && live ? "update" : action;
 
     if (mode === "update" && !itemId) return json(res, 409, { error: "not_published", message: "Esta propiedad todavía no tiene aviso en Mercado Libre." });
+    // Al actualizar, la ubicación ya está en el aviso: solo se manda si se eligió una nueva.
+    if (mode === "update") prep.issues = prep.issues.filter((i) => i.field !== "location");
 
     let packNote: string | null = null;
     let listingType = wanted;

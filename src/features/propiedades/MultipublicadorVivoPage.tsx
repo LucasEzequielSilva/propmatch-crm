@@ -19,6 +19,8 @@ import { MATCH_THRESHOLD } from "@/lib/matching";
 import { diagnose } from "@/lib/listingDiagnostics";
 import type { PublicationChannel } from "@/types/db";
 import { usePublications, type ChannelState } from "./usePublications";
+import { useMeliConnection } from "./useIntegrations";
+import { MeliPublishPanel } from "./MeliPublishPanel";
 
 const initialsOf = (name: string) =>
   name
@@ -56,12 +58,19 @@ function ChannelRow({
 }) {
   const { info, status } = ch;
   const isWeb = info.channel === "web";
-  const selectable = !isWeb && status === null;
+  // Mercado Libre se publica de verdad desde su panel, no por la cola.
+  const isMeli = info.channel === "mercadolibre";
+  const selectable = !isWeb && !isMeli && status === null;
 
   let line: { text: string; color: string; icon: React.ReactNode };
   if (isWeb) line = { text: "Publicada · canal propio", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
   else if (status === "published") line = { text: "Publicada", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
-  else if (status === "pending") line = { text: "En cola · conector pendiente", color: "#B45309", icon: <ClockIcon size={13} color="#D97706" /> };
+  else if (status === "pending")
+    line = isMeli
+      ? { text: "Enviando / en revisión", color: "#B45309", icon: <ClockIcon size={13} color="#D97706" /> }
+      : { text: "En cola · conector pendiente", color: "#B45309", icon: <ClockIcon size={13} color="#D97706" /> };
+  else if (status === "paused") line = { text: "Pausada", color: "#B45309", icon: <ClockIcon size={13} color="#D97706" /> };
+  else if (status === "removed") line = { text: "Finalizada", color: "#6B7280", icon: null };
   else if (status === "error") line = { text: "Error", color: "#BE123C", icon: <AlertTriangleIcon size={13} color="#E11D48" /> };
   else line = { text: "Sin publicar", color: "#9CA3AF", icon: null };
 
@@ -119,7 +128,16 @@ function ChannelRow({
             Ver ficha
           </a>
         )}
-        {status === "error" && (
+        {isMeli && (
+          <a
+            href="#mercadolibre"
+            className="px-3 py-1.5 rounded-lg text-xs border hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 700 }}
+          >
+            Gestionar
+          </a>
+        )}
+        {status === "error" && !isMeli && (
           <button
             onClick={onRetry}
             className="px-3 py-1.5 rounded-lg text-xs border hover:bg-rose-50"
@@ -147,7 +165,8 @@ export default function MultipublicadorVivoPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
   const navigate = useNavigate();
   const { properties, photos, matches, contactById, profileById, coverPhoto } = useStore();
-  const { channelsOf, queue, loading, error } = usePublications();
+  const { channelsOf, queue, applyRow, loading, error } = usePublications();
+  const meli = useMeliConnection();
   const [selected, setSelected] = useState<PublicationChannel[]>([]);
 
   const property = properties.find((p) => p.id === propertyId);
@@ -187,6 +206,9 @@ export default function MultipublicadorVivoPage() {
   const published = channels.filter((c) => c.status === "published").length;
   const pending = channels.filter((c) => c.status === "pending").length;
   const errored = channels.filter((c) => c.status === "error");
+  // Los reintentos masivos son para la cola; Mercado Libre se reintenta desde su panel.
+  const erroredQueued = errored.filter((c) => c.info.channel !== "mercadolibre");
+  const meliChannel = channels.find((c) => c.info.channel === "mercadolibre")!;
   const involved = channels.filter((c) => c.status !== null).length;
 
   const checks = diagnose(property, photoList.length);
@@ -349,9 +371,9 @@ export default function MultipublicadorVivoPage() {
                   >
                     Publicar en {selected.length} {selected.length === 1 ? "canal" : "canales"}
                   </button>
-                  {errored.length > 0 && (
+                  {erroredQueued.length > 0 && (
                     <button
-                      onClick={() => void queue(property, errored.map((c) => c.info.channel))}
+                      onClick={() => void queue(property, erroredQueued.map((c) => c.info.channel))}
                       className="px-5 py-2.5 rounded-xl text-sm border hover:bg-rose-50"
                       style={{ borderColor: "#FECDD3", color: "#BE123C", fontWeight: 700 }}
                     >
@@ -364,10 +386,20 @@ export default function MultipublicadorVivoPage() {
                     <circle cx="12" cy="12" r="10" />
                     <path d="M12 16v-4M12 8h.01" />
                   </svg>
-                  El envío automático a cada portal se habilita al conectar su cuenta. Mientras tanto, tus canales quedan en cola.
+                  Mercado Libre se publica de verdad desde su panel. El resto de los portales todavía no tiene conector: esos canales quedan en cola.
                 </p>
               </div>
             </Card>
+
+            <div id="mercadolibre" className="scroll-mt-6">
+              <MeliPublishPanel
+                property={property}
+                channel={meliChannel}
+                photos={photoList}
+                meli={meli}
+                onRow={applyRow}
+              />
+            </div>
           </div>
 
           {/* Columna lateral */}
