@@ -7,6 +7,8 @@ import { OPERATION_LABEL, money } from "@/lib/format";
 import type { Contact, Property } from "@/types/db";
 import { ownerReport } from "@/lib/ownerReport";
 import { authorizationState } from "@/lib/authorization";
+import { isSample, isSamplePhone } from "@/lib/samples";
+import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 
 /**
  * Mensaje de WhatsApp a un contacto.
@@ -89,7 +91,9 @@ export function WhatsAppModal({
   const [text, setText] = useState("");
   const [edited, setEdited] = useState(false);
 
-  const number = normalizeWhatsappNumber(contact.phone);
+  // Contacto de ejemplo: su teléfono es inventado y whatsappLink no lo usa (WhatsApp abre sin destinatario).
+  const sampleContact = isSample(contact) || isSamplePhone(contact.phone);
+  const number = sampleContact ? null : normalizeWhatsappNumber(contact.phone);
   const name = firstName(contact.full_name);
   const me = firstName(profile.full_name);
 
@@ -213,10 +217,14 @@ export function WhatsAppModal({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-lg tracking-tight truncate" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              WhatsApp a {contact.full_name}
+              WhatsApp a {contact.full_name} <SampleBadge record={contact} show={sampleContact} />
             </p>
-            <p className="text-xs mt-0.5" style={{ color: number ? "#7C6A99" : "#E11D48" }}>
-              {number ? `+${number}` : "Sin teléfono válido: vas a elegir el chat a mano"}
+            <p className="text-xs mt-0.5" style={{ color: number || sampleContact ? "#7C6A99" : "#E11D48" }}>
+              {sampleContact
+                ? "Teléfono de ejemplo: no se usa"
+                : number
+                  ? `+${number}`
+                  : "Sin teléfono válido: vas a elegir el chat a mano"}
             </p>
           </div>
           <button
@@ -230,6 +238,12 @@ export function WhatsAppModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {sampleContact && (
+            <SampleNotice>
+              Es un contacto de ejemplo: su teléfono es inventado. WhatsApp se va a abrir sin destinatario para que
+              pruebes el mensaje sin escribirle a nadie real.
+            </SampleNotice>
+          )}
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <button

@@ -8,6 +8,8 @@
  * le puede pasar a un agente delante de un cliente.
  */
 
+import { isSamplePhone } from "./samples";
+
 /** Largo de un número argentino sin 54 ni 9: área + abonado. */
 const AR_NATIONAL_LENGTH = 10;
 
@@ -47,7 +49,9 @@ export function normalizeWhatsappNumber(raw: string | null | undefined): string 
 
 /** Link que abre el chat con el mensaje escrito. Sin número, abre el selector de contactos. */
 export function whatsappLink(phone: string | null | undefined, text: string): string {
-  const number = normalizeWhatsappNumber(phone);
+  // Seguridad: los teléfonos de los contactos de ejemplo (+54 221 555-01xx) son
+  // inventados. Nunca se arma un chat con ellos: WhatsApp abre sin destinatario.
+  const number = isSamplePhone(phone) ? null : normalizeWhatsappNumber(phone);
   const query = `text=${encodeURIComponent(text)}`;
   return number ? `https://wa.me/${number}?${query}` : `https://wa.me/?${query}`;
 }

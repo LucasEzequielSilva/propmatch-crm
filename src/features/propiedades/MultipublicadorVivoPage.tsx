@@ -21,6 +21,8 @@ import type { PublicationChannel } from "@/types/db";
 import { usePublications, type ChannelState } from "./usePublications";
 import { useMeliConnection } from "./useIntegrations";
 import { MeliPublishPanel } from "./MeliPublishPanel";
+import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
+import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 
 const initialsOf = (name: string) =>
   name
@@ -225,7 +227,9 @@ export default function MultipublicadorVivoPage() {
 
   const toggle = (c: PublicationChannel) =>
     setSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  const sample = isSample(property);
   const publish = () => {
+    if (sample) return;
     void queue(property, selected);
     setSelected([]);
   };
@@ -254,6 +258,11 @@ export default function MultipublicadorVivoPage() {
           {/* Columna principal */}
           <div className="lg:col-span-2 flex flex-col gap-6 min-w-0">
             <Card padded>
+              {sample && (
+                <div className="mb-4">
+                  <SampleNotice>{SAMPLE_PUBLISH_BLOCKED}. Sirve para ver cómo funciona el multipublicador.</SampleNotice>
+                </div>
+              )}
               <p className="text-[11px] uppercase" style={{ color: "#7C3AED", fontWeight: 700, letterSpacing: "0.08em" }}>
                 Distribución multicanal
               </p>
@@ -295,7 +304,7 @@ export default function MultipublicadorVivoPage() {
                     <Badge bg="#F5F3FF" text="#7C3AED" size="xs">{PROPERTY_TYPE_LABEL[property.type]}</Badge>
                   </div>
                   <p className="text-sm mt-1" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                    {property.title}
+                    {property.title} <SampleBadge record={property} />
                   </p>
                   {address && (
                     <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "#7C6A99" }}>
@@ -365,7 +374,8 @@ export default function MultipublicadorVivoPage() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={publish}
-                    disabled={selected.length === 0}
+                    disabled={selected.length === 0 || sample}
+                    title={sample ? SAMPLE_PUBLISH_BLOCKED : undefined}
                     className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
                   >
