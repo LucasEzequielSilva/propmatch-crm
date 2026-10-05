@@ -285,6 +285,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         created.status === 0
           ? "Mercado Libre no respondió a tiempo. Antes de reintentar, revisá en tu cuenta de Mercado Libre si el aviso se creó, para no duplicarlo."
           : readableMeliError(created.status, created.body);
+      // Para diagnosticar desde los logs de Vercel: estado + error/causas de ML (sin tokens ni datos personales).
+      console.warn("[meli/publish] rechazo", created.status, JSON.stringify(created.body ?? null).slice(0, 1500));
       const row = await savePublication(db, key, { status: "error", error_message: message });
       return json(res, 422, { error: "meli_rejected", message, row });
     }
