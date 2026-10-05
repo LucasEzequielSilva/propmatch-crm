@@ -423,12 +423,14 @@ export function readableMeliError(status: number, body: unknown): string {
     String(b.message ?? ""),
   ].join(" | ");
   const known = KNOWN_CAUSES.find((k) => k.test.test(raw));
-  const detail = errors
+  // Sin causas detalladas, ML igual manda `error` y `message` (p. ej. "body.invalid_fields"): se muestran.
+  const fromCauses = errors
     .map((c) => String(c.message ?? c.code ?? ""))
     .filter(Boolean)
     .slice(0, 3)
-    .join(" · ")
-    .slice(0, 300);
+    .join(" · ");
+  const fromBody = [b.message, b.error].map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean).join(" · ");
+  const detail = (fromCauses || fromBody).slice(0, 300);
   if (known) return detail ? `${known.text} (Detalle: ${detail})` : known.text;
   return detail ? `Mercado Libre rechazó el aviso: ${detail}` : "Mercado Libre rechazó el aviso.";
 }
