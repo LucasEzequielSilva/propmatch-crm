@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { useStore } from "@/data/store";
+import { supabase } from "@/lib/supabase";
 import BrandPanel, { LogoMark } from "./BrandPanel";
 
 /**
@@ -28,6 +29,8 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+  /** Error que Supabase deja en la URL al volver de un link de email (vencido o ya usado). */
+  const [linkError, setLinkError] = useState<LinkErrorKind | null>(readLinkErrorFromUrl);
   const tabRefs = useRef<Record<Mode, HTMLButtonElement | null>>({ login: null, signup: null });
   const uid = useId();
 
@@ -122,6 +125,15 @@ export default function LoginPage() {
           </span>
         </div>
       </div>
+
+      {linkError && (
+        <LinkErrorNotice
+          kind={linkError}
+          email={email}
+          onEmailChange={setEmail}
+          onDismiss={() => setLinkError(null)}
+        />
+      )}
 
       <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
         {isSignup ? "Creá tu cuenta" : "Entrá a PropMatch"}
@@ -383,6 +395,96 @@ function PendingLink({
         style={{ borderColor: "#EDE9FE", color: "#3B0764", fontWeight: 600 }}
       >
         Volver al inicio
+      </button>
+    </div>
+  );
+}
+
+type LinkErrorKind = "expired" | "other";
+
+/**
+ * Al volver de un link de email (confirmación de cuenta) con error, Supabase
+ * deja `#error=...&error_code=otp_expired` en la URL. Se lee una vez y se
+ * limpia la URL para que no quede ahí.
+ */
+function readLinkErrorFromUrl(): LinkErrorKind | null {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+  const params = new URLSearchParams(hash);
+  if (!params.get("error")) return null;
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  return params.get("error_code") === "otp_expired" ? "expired" : "other";
+}
+
+function LinkErrorNotice({
+  kind,
+  email,
+  onEmailChange,
+  onDismiss,
+}: {
+  kind: LinkErrorKind;
+  email: string;
+  onEmailChange: (v: string) => void;
+  onDismiss: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function resend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || state === "sending") return;
+    setState("sending");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setState(error ? "error" : "sent");
+  }
+
+  return (
+    <div role="alert" className="mb-6 rounded-2xl p-4 border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+      <p className="text-sm" style={{ color: "#92400E", fontWeight: 700 }}>
+        {kind === "expired" ? "El link del email venció o ya se usó" : "No pudimos validar el link del email"}
+      </p>
+      <p className="text-xs mt-1 leading-relaxed" style={{ color: "#92400E" }}>
+        Pasa si el link es viejo o si se abrió dos veces (algunos correos lo abren solos para revisarlo). Pedí uno
+        nuevo y abrilo una sola vez. Si tu cuenta ya está confirmada, ingresá directamente.
+      </p>
+      {state === "sent" ? (
+        <p className="text-xs mt-3" style={{ color: "#166534", fontWeight: 700 }}>
+          Listo: te mandamos un email nuevo a {email.trim()}. Revisá también spam.
+        </p>
+      ) : (
+        <form onSubmit={resend} className="mt-3 flex flex-col sm:flex-row gap-2">
+          <label className="sr-only" htmlFor="resend-email">
+            Email de la cuenta
+          </label>
+          <input
+            id="resend-email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => onEmailChange(e.target.value)}
+            placeholder="tu@email.com"
+            className="flex-1 min-h-11 px-3 rounded-xl text-sm border bg-white outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE]"
+            style={{ borderColor: "#FDE68A" }}
+          />
+          <button
+            type="submit"
+            disabled={state === "sending"}
+            className="min-h-11 px-4 rounded-xl text-sm text-white disabled:opacity-60"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+          >
+            {state === "sending" ? "Enviando…" : "Reenviar email"}
+          </button>
+        </form>
+      )}
+      {state === "error" && (
+        <p className="text-xs mt-2" style={{ color: "#E11D48" }}>
+          No se pudo reenviar. Esperá un minuto y probá de nuevo (hay un límite de envíos).
+        </p>
+      )}
+      <button type="button" onClick={onDismiss} className="mt-2 text-xs underline" style={{ color: "#92400E" }}>
+        Cerrar
       </button>
     </div>
   );

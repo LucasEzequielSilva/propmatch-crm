@@ -3,6 +3,8 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader } from "@/components/ui/Card";
 import { useStore, type AgencyInput, type ProfileInput } from "@/data/store";
 import { avatarGradient, initials } from "@/lib/format";
+import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
+import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
 import { SampleDataCard } from "./SampleDataCard";
 import { SampleBadge } from "@/components/ui/SampleBadge";
 
@@ -91,9 +93,12 @@ export default function ConfiguracionPage() {
             </p>
           </Card>
 
+          <ChannelsSettings />
           <SampleDataCard onDone={setToast} />
 
           <ResetCard onReset={reset} />
+
+          <ProppiSettingsCard key={`proppi-${agency.id}`} onSaved={setToast} />
         </div>
       </div>
 

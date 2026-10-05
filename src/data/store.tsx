@@ -867,7 +867,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const { data: res, error } = await supabase.auth.signUp({
       email: input.email.trim(),
       password: input.password,
-      options: { data: { name: input.name.trim(), agency_name: input.agencyName.trim() } },
+      options: {
+        data: { name: input.name.trim(), agency_name: input.agencyName.trim() },
+        // El link del email vuelve al CRM desde donde se registró (tiene que
+        // estar en Auth > URL Configuration > Redirect URLs de Supabase).
+        emailRedirectTo: window.location.origin,
+      },
     });
     if (error) {
       const msg = error.message.toLowerCase();

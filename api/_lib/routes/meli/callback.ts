@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { decrypt, encrypt, safeEqual } from "../_lib/crypto.js";
-import { appUrl, env, isConfigured } from "../_lib/env.js";
-import { allowMethod, fail, readCookie, redirect } from "../_lib/http.js";
-import { MELI_API, meliTokenRequest } from "../_lib/meli.js";
-import { supabaseAdmin } from "../_lib/supabaseAdmin.js";
+import { decrypt, encrypt, safeEqual } from "../../crypto.js";
+import { appUrl, env, isConfigured } from "../../env.js";
+import { allowMethod, fail, readCookie, redirect } from "../../http.js";
+import { MELI_API, meliTokenRequest } from "../../meli.js";
+import { supabaseAdmin } from "../../supabaseAdmin.js";
 
 const CLEAR_COOKIE = "meli_oauth=; HttpOnly; Secure; SameSite=Lax; Path=/api/meli; Max-Age=0";
 

@@ -16,6 +16,7 @@ import {
   LogoutIcon,
   type IconProps,
 } from "@/components/ui/icons";
+import { MercadoIcon } from "@/features/mercado/MercadoIcon";
 
 interface NavItem {
   to: string;
@@ -29,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/inbox", label: "Inbox", icon: InboxIcon, badge: "inbox" },
   { to: "/contactos", label: "Contactos", icon: ContactsIcon },
   { to: "/propiedades", label: "Propiedades", icon: PropertiesIcon },
+  { to: "/mercado", label: "Mercado", icon: MercadoIcon },
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
   { to: "/publicador", label: "Publicaciones", icon: PropertiesIcon },
   { to: "/instagram", label: "Instagram", icon: InstagramIcon },

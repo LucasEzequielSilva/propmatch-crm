@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/states";
 import { money } from "@/lib/format";
@@ -33,6 +34,16 @@ export function DiagnosticoSection({
   onShare: () => void;
 }) {
   const { diagnostic: d, loading, marketError, recalc } = useDiagnostic(property, channelsPublished);
+  const { hash } = useLocation();
+  const scrolled = useRef(false);
+
+  // Links con `#diagnostico` (p. ej. desde Mercado): bajar hasta acá una vez calculado.
+  useEffect(() => {
+    if (hash !== "#diagnostico" || loading || scrolled.current) return;
+    scrolled.current = true;
+    document.getElementById("diagnostico")?.scrollIntoView({ block: "start" });
+    document.getElementById("diagnostico-title")?.focus({ preventScroll: true });
+  }, [hash, loading]);
 
   return (
     <section id="diagnostico" aria-labelledby="diagnostico-title" className="scroll-mt-4">

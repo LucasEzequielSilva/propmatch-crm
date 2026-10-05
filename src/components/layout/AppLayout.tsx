@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
+import { ProppiPanel } from "@/features/proppi/ProppiPanel";
 import { SampleBanner } from "./SampleBanner";
 
 /**
@@ -39,6 +40,7 @@ export function AppLayout() {
         </div>
       </main>
       <MobileNav />
+      <ProppiPanel />
     </div>
   );
 }

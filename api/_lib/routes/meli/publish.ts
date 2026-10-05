@@ -17,10 +17,10 @@
  * docs/multipublicador-puesta-en-marcha.md.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireAgencyMember } from "../_lib/auth.js";
-import { env, isConfigured } from "../_lib/env.js";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { getMeliSession, type MeliSession } from "../_lib/meli.js";
+import { requireAgencyMember } from "../../auth.js";
+import { env, isConfigured } from "../../env.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { getMeliSession, type MeliSession } from "../../meli.js";
 import {
   categoryAttributes,
   isPubliclyReachable,
@@ -29,8 +29,8 @@ import {
   savePublication,
   type MeliItem,
   type PublicationRow,
-} from "../_lib/meliItems.js";
-import { supabaseAdmin } from "../_lib/supabaseAdmin.js";
+} from "../../meliItems.js";
+import { supabaseAdmin } from "../../supabaseAdmin.js";
 import {
   MELI_LISTING_TYPES,
   buildMeliItem,
@@ -47,7 +47,7 @@ import {
   type MeliListingType,
   type MeliOperation,
   type MeliPropertyType,
-} from "../../shared/meliListing.js";
+} from "../../../../shared/meliListing.js";
 
 const ACTIONS = ["check", "publish", "update", "pause", "activate", "close", "sync"] as const;
 type Action = (typeof ACTIONS)[number];

@@ -11,6 +11,7 @@
     "test:meli": "node --test scripts/meliListing.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@supabase/supabase-js": "^2.45.0",
     "@vercel/functions": "^3.9.11",
     "react": "^19.0.0",
