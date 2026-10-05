@@ -151,6 +151,10 @@ function loadData(key: string = STORAGE_KEY): StoreData {
     // Se completa con la semilla por si el guardado es de una versión anterior.
     // markLegacySamples: lo de la semilla guardado antes de existir `is_sample` queda marcado.
     const merged = markLegacySamples({ ...seedData(), ...parsed });
+    // La versión de los ejemplos sale SOLO de lo guardado: sin ella, adoptSamples
+    // sabe que es un guardado viejo (purgado o con la semilla anterior) y lo migra.
+    merged.samplesVersion = parsed.samplesVersion;
+    merged.samplesHidden = parsed.samplesHidden;
     // Deal room: pasos/documentos de boolean a {done, at, by, note}, número PM-0001 e historial.
     merged.deals = migrateDeals(merged.deals ?? [], (id) => merged.opportunities.find((o) => o.id === id)?.owner_id ?? null);
     merged.syncedAppEventIds = merged.syncedAppEventIds ?? [];

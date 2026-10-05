@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { marketInventory } from "@/lib/samples";
 import { useStore } from "@/data/store";
 import { fetchActiveAppProperties, MarketDataError } from "@/lib/marketData";
 import { buildMarketPool, sortByMisalignment, type PortfolioRow } from "@/lib/market";
@@ -15,7 +16,9 @@ export type AppMarketState =
  * con el inventario, y `app` dice por qué.
  */
 export function useMarket() {
-  const { properties, photos, activities, appOffers, matches, opportunities, events, agency } = useStore();
+  const { properties, photos, activities, appOffers, matches, opportunities, events, agency, isDemo } = useStore();
+  // Comparables: sin los ejemplos en cuentas reales (sus precios son inventados).
+  const comparables = useMemo(() => marketInventory(properties, isDemo), [properties, isDemo]);
   const [app, setApp] = useState<AppMarketState>({ status: "loading" });
   const [computedAt, setComputedAt] = useState(() => Date.now());
 
@@ -43,7 +46,7 @@ export function useMarket() {
 
   const appListings = app.status === "ok" ? app.listings : null;
 
-  const pool = useMemo(() => buildMarketPool(properties, appListings), [properties, appListings]);
+  const pool = useMemo(() => buildMarketPool(comparables, appListings), [comparables, appListings]);
 
   /** Tus disponibles, cada una con su diagnóstico (mismo cálculo que la ficha). */
   const portfolio: PortfolioRow[] = useMemo(() => {
@@ -53,7 +56,7 @@ export function useMarket() {
       .map((p) => ({
         property: p,
         diagnostic: computeDiagnostic(p, {
-          inventory: properties,
+          inventory: comparables,
           appListings,
           photoCount: (photos[p.id] ?? []).length,
           activities,
@@ -66,13 +69,13 @@ export function useMarket() {
         }),
       }));
     return sortByMisalignment(rows);
-  }, [app.status, appListings, properties, photos, activities, appOffers, matches, opportunities, events, computedAt]);
+  }, [app.status, appListings, properties, comparables, photos, activities, appOffers, matches, opportunities, events, computedAt]);
 
   return {
     app,
     loading: app.status === "loading",
     appListings,
-    inventory: properties,
+    inventory: comparables,
     agencyId: agency.id,
     pool,
     portfolio,
