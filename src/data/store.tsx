@@ -30,6 +30,7 @@ import type {
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
 import { isDeadPhotoUrl } from "@/lib/images";
+import { isDemoActive, setDemoFlag } from "@/lib/demo";
 import { applyDealPatch, dealRoomDefaults, migrateDeals, nextDealNumber } from "@/lib/dealRoom";
 import { supabase } from "@/lib/supabase";
 import {
@@ -71,26 +72,7 @@ import { isSample } from "@/lib/samples";
 const STORAGE_KEY = "propmatch.store.v1";
 /** Datos de la demo (cuenta `u-1`, sin Supabase), separados de los reales. */
 const DEMO_STORAGE_KEY = "propmatch.store.demo.v1";
-/** Marca de "estoy en la demo" que sobrevive a un refresh, no a cerrar la pestaña. */
-const DEMO_FLAG_KEY = "propmatch.demo";
 const DEMO_USER_ID = "u-1";
-
-function isDemoActive(): boolean {
-  try {
-    return sessionStorage.getItem(DEMO_FLAG_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function setDemoFlag(on: boolean) {
-  try {
-    if (on) sessionStorage.setItem(DEMO_FLAG_KEY, "1");
-    else sessionStorage.removeItem(DEMO_FLAG_KEY);
-  } catch {
-    // Storage bloqueado: la demo dura hasta el próximo refresh.
-  }
-}
 const SESSION_KEY = "propmatch.session.v1";
 
 export interface StoreData {

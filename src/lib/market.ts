@@ -14,6 +14,7 @@
 import type { Activity, AppOffer, CalendarEvent, Match, OperationType, Opportunity, Property, PropertyType } from "@/types/db";
 import {
   computeDiagnostic,
+  dropPriceOutliers,
   median,
   normalizeText,
   percentile,
@@ -122,7 +123,9 @@ export function computeZoneStats(pool: MarketPoint[]): ZoneStat[] {
   }
 
   const out: ZoneStat[] = [];
-  for (const [key, list] of groups) {
+  for (const [key, all] of groups) {
+    // Mismo filtro de precios absurdos que el diagnóstico (avisos de prueba, etc.).
+    const list = dropPriceOutliers(all);
     const prices = list.map((p) => p.price);
     const perM2 = list.filter((p) => p.surface).map((p) => p.price / p.surface!);
     const enough = prices.length >= MIN_MARKET_SAMPLE;

@@ -356,6 +356,27 @@ function buildCandidates(target: Property, ctx: DiagnosticContext): { list: Cand
 }
 
 /**
+ * Saca precios absurdos antes de calcular rangos (p. ej. avisos de prueba en
+ * la app con USD 500 por una casa en venta). Con 3 o más: fuera lo que esté a
+ * más de 5× de la mediana para cualquier lado. Con 5 o más, además, la regla
+ * de Tukey (1,5 × rango intercuartil). Con menos de 3 no hay referencia y no
+ * se toca nada.
+ */
+export function dropPriceOutliers<T extends { price: number }>(list: T[]): T[] {
+  if (list.length < 3) return list;
+  const med = median(list.map((c) => c.price));
+  let kept = list.filter((c) => c.price >= med / 5 && c.price <= med * 5);
+  if (kept.length >= 5) {
+    const prices = kept.map((c) => c.price);
+    const q1 = percentile(prices, 25);
+    const q3 = percentile(prices, 75);
+    const fence = 1.5 * (q3 - q1);
+    kept = kept.filter((c) => c.price >= q1 - fence && c.price <= q3 + fence);
+  }
+  return kept;
+}
+
+/**
  * Escalonado: zona+tipo → zona → tipo. Se usa el primer nivel con al menos
  * MIN_COMPARABLES; si ninguno llega, el más específico que tenga alguno.
  */
@@ -364,9 +385,9 @@ function pickComparables(target: Property, candidates: Candidate[]) {
   const similar = candidates.filter((c) => isSimilarSize(target, c));
   const inZone = (c: Candidate) => targetZones.length > 0 && c.zoneKeys.some((z) => targetZones.includes(z));
   const byLevel: Record<ComparableLevel, Candidate[]> = {
-    zona_tipo: similar.filter((c) => inZone(c) && c.type === target.type),
-    zona: similar.filter((c) => inZone(c)),
-    tipo: similar.filter((c) => c.type === target.type),
+    zona_tipo: dropPriceOutliers(similar.filter((c) => inZone(c) && c.type === target.type)),
+    zona: dropPriceOutliers(similar.filter((c) => inZone(c))),
+    tipo: dropPriceOutliers(similar.filter((c) => c.type === target.type)),
   };
   const order: ComparableLevel[] = ["zona_tipo", "zona", "tipo"];
   const level =

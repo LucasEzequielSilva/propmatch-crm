@@ -8,6 +8,7 @@
  */
 
 import { supabase } from "./supabase";
+import { isDemoActive } from "./demo";
 import { OPERATION_FROM_APP, TYPE_FROM_APP } from "./propertySync";
 import type { MarketListing } from "./propertyDiagnostic";
 
@@ -39,8 +40,10 @@ export function fetchActiveAppProperties(opts: { force?: boolean } = {}): Promis
   const promise = (async () => {
     // Sin sesión real (modo demo) la RLS devuelve 0 filas sin error: eso se
     // leería como "no hay mercado", que es falso. Se corta antes.
+    // En la demo tampoco: aunque el navegador tenga una sesión real abierta, la
+    // demo trabaja solo con datos de ejemplo.
     const { data: session } = await supabase.auth.getSession();
-    if (!session.session) {
+    if (!session.session || isDemoActive()) {
       throw new MarketDataError("no_session", "No hay una sesión de PropMatch abierta.");
     }
     const { data, error } = await supabase

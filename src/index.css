@@ -149,7 +149,10 @@ body,
 
 /* Contenido de cada pantalla al cambiar de ruta */
 .pm-enter {
-  animation: pm-fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* `backwards` y no `both`: al terminar no deja un transform aplicado, que
+     convertiría este div en el contenedor de los `fixed` (los modales no
+     tapaban la barra lateral). */
+  animation: pm-fade-up 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 /* Fondo oscuro de los modales */
