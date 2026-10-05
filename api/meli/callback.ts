@@ -53,14 +53,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch {
       return back("token");
     }
-    if (!tokens.refresh_token) return back("token");
+    // Sin refresh token la conexión muere a las 6 h: la app tiene que tener el scope offline_access.
+    if (!tokens.refresh_token) return back("offline");
 
     const me = await fetch(`${MELI_API}/users/me`, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     if (!me.ok) return back("identity");
     const who = (await me.json()) as { id?: number | string; nickname?: string };
     if (who.id == null) return back("identity");
 
-    const { error } = await supabaseAdmin()
+    const db = supabaseAdmin();
+    // Una cuenta de Mercado Libre pertenece a una sola inmobiliaria: si no, las
+    // notificaciones (que solo traen el user_id) no sabrían a quién actualizar.
+    const { data: taken } = await db
+      .from("agency_integrations")
+      .select("agency_id")
+      .eq("provider", "mercadolibre")
+      .eq("external_account_id", String(who.id))
+      .neq("agency_id", c.agencyId)
+      .limit(1);
+    if (taken && taken.length > 0) return back("in_use");
+
+    const { error } = await db
       .from("agency_integrations")
       .upsert(
         {

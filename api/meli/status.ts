@@ -25,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     json(res, 200, {
       configured: true,
       connected: data.status === "connected",
+      needsReauth: data.status === "needs_reauth",
       status: data.status,
       nickname: data.account_label ?? undefined,
       connectedAt: data.created_at,
