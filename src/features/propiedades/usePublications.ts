@@ -31,7 +31,7 @@ export const EXTERNAL_CHANNELS: ChannelInfo[] = [
   { channel: "zonaprop", name: "Zonaprop", short: "ZP", color: "#F26122" },
   { channel: "argenprop", name: "Argenprop", short: "AP", color: "#0F766E" },
   { channel: "cabaprop", name: "CABAPROP", short: "CP", color: "#1D4ED8" },
-  { channel: "facebook", name: "Facebook Marketplace & Page", short: "f", color: "#1877F2" },
+  { channel: "facebook", name: "Facebook", short: "f", color: "#1877F2" },
   { channel: "instagram", name: "Instagram", short: "IG", color: "#E1306C" },
 ];
 export const WEB_CHANNEL: ChannelInfo = { channel: "web", name: "Sitio web PropMatch", short: "W", color: "#7C3AED" };
