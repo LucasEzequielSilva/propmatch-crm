@@ -7,6 +7,7 @@
  */
 
 import type { StoredStatus } from "./postStore";
+import { buildIcsCalendar, foldLine } from "@/lib/ics";
 
 export const AR_TZ = "America/Argentina/Buenos_Aires";
 /** Argentina no usa horario de verano desde 2009: el offset es fijo (-03:00). */
@@ -116,32 +117,9 @@ export function shortcuts(now: number = Date.now()): Shortcut[] {
 
 /* ── .ics (RFC 5545) ──────────────────────────────────────────────────────── */
 
-const icsText = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
-
-const icsUtc = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-
-/** Pliega líneas a 75 octetos (UTF-8) con CRLF + espacio, sin cortar un carácter por la mitad. */
-export function foldLine(line: string): string {
-  const enc = new TextEncoder();
-  if (enc.encode(line).length <= 75) return line;
-  const out: string[] = [];
-  let cur = "";
-  let bytes = 0;
-  let limit = 75;
-  for (const ch of line) {
-    const n = enc.encode(ch).length;
-    if (bytes + n > limit) {
-      out.push(cur);
-      cur = "";
-      bytes = 0;
-      limit = 74; // la línea de continuación empieza con un espacio
-    }
-    cur += ch;
-    bytes += n;
-  }
-  out.push(cur);
-  return out.join("\r\n ");
-}
+// El armado del archivo vive en `@/lib/ics` (lo comparte la Agenda). Se
+// reexporta `foldLine` para no romper a quien lo importaba desde acá.
+export { foldLine };
 
 export interface IcsInput {
   uid: string;
@@ -156,30 +134,19 @@ export interface IcsInput {
 
 /** Evento con recordatorio (VALARM) `alarmMinutes` antes. El celular lo avisa aunque la app esté cerrada. */
 export function buildIcs(i: IcsInput): string {
-  const start = new Date(i.startIso);
-  const end = new Date(start.getTime() + (i.durationMin ?? AGENDA_BLOCK_MIN) * MIN);
-  const alarm = i.alarmMinutes ?? REMINDER_MINUTES_BEFORE;
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//PropMatch//Estudio de Instagram//ES",
-    "CALSCALE:GREGORIAN",
-    "BEGIN:VEVENT",
-    `UID:${i.uid}@propmatch`,
-    `DTSTAMP:${icsUtc(i.stampIso ? new Date(i.stampIso) : new Date())}`,
-    `DTSTART:${icsUtc(start)}`,
-    `DTEND:${icsUtc(end)}`,
-    `SUMMARY:${icsText(i.title)}`,
-    ...(i.description ? [`DESCRIPTION:${icsText(i.description)}`] : []),
-    "BEGIN:VALARM",
-    "ACTION:DISPLAY",
-    `DESCRIPTION:${icsText(i.title)}`,
-    `TRIGGER:-PT${alarm}M`,
-    "END:VALARM",
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ];
-  return lines.map(foldLine).join("\r\n") + "\r\n";
+  return buildIcsCalendar(
+    [
+      {
+        uid: i.uid,
+        title: i.title,
+        description: i.description,
+        startIso: i.startIso,
+        durationMin: i.durationMin ?? AGENDA_BLOCK_MIN,
+        alarmMinutes: i.alarmMinutes ?? REMINDER_MINUTES_BEFORE,
+      },
+    ],
+    { product: "Estudio de Instagram", stampIso: i.stampIso },
+  );
 }
 
 /** Evento de agenda que representa a la publicación. */
