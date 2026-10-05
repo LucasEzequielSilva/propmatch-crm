@@ -26,7 +26,7 @@ function Positioning({ d }: { d: PropertyDiagnostic }) {
 const range = (d: PropertyDiagnostic) =>
   d.price.showRange ? `${money(d.price.p25, d.currency)} – ${money(d.price.p75, d.currency)}` : "—";
 const days = (d: PropertyDiagnostic) => (d.demand.daysPublished != null ? `${d.demand.daysPublished} d` : "—");
-const score = (d: PropertyDiagnostic) => (d.score.value != null ? String(d.score.value) : "—");
+const score = (d: PropertyDiagnostic) => (d.score.value != null ? String(d.score.value) : "Sin datos");
 
 function DiagLink({ id, title }: { id: string; title: string }) {
   return (

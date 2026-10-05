@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { money, PROPERTY_TYPE_LABEL } from "@/lib/format";
-import { estimatePrice, type ValuationInput } from "@/lib/market";
+import { estimatePrice, MIN_MARKET_SAMPLE, type ValuationInput } from "@/lib/market";
 import { formatPct, type MarketListing, type PropertyDiagnostic } from "@/lib/propertyDiagnostic";
 import type { OperationType, Property, PropertyType } from "@/types/db";
 import { RangeBar } from "@/features/propiedades/diagnostico/RangeBar";
@@ -242,6 +242,14 @@ function Result({ d, input }: { d: PropertyDiagnostic; input: ValuationInput }) 
         {input.operation === "alquiler" && " (precio mensual)"}
       </p>
 
+      {d.level && d.level !== "zona_tipo" && n > 0 && (
+        <p role="note" className="rounded-xl px-4 py-3 text-sm border" style={{ background: "#FFFBEB", borderColor: "#FDE68A", color: "#92400E" }}>
+          {d.level === "zona"
+            ? `No hubo ${MIN_MARKET_SAMPLE} similares del mismo tipo en ${input.zone}: se usaron propiedades de la zona de cualquier tipo.`
+            : `No hubo ${MIN_MARKET_SAMPLE} similares en ${input.zone}: se usaron propiedades del mismo tipo («${PROPERTY_TYPE_LABEL[input.type]}») de otras zonas. Tomalo como referencia general, no como precio de la zona.`}
+        </p>
+      )}
+
       {price.showRange ? (
         <div className="grid gap-4 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)] items-stretch">
           <div className="rounded-2xl p-4 flex flex-col justify-center" style={{ background: "#FDFCFF", border: "1px solid #EDE9FE" }}>
@@ -263,7 +271,7 @@ function Result({ d, input }: { d: PropertyDiagnostic; input: ValuationInput }) 
             <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
               <Metric label="Rango competitivo (P25–P75)" value={`${money(price.p25, "USD")} – ${money(price.p75, "USD")}`} hint={`Mediana ${money(price.median, "USD")}`} />
               <Metric
-                label="USD/m² de la zona"
+                label={d.level === "tipo" ? "USD/m² de los comparables" : "USD/m² de la zona"}
                 value={price.zonePricePerM2 != null ? money(price.zonePricePerM2, "USD") : null}
                 hint={`Mediana de ${price.zonePricePerM2Count} comparables con m²`}
                 missingReason={`Solo ${price.zonePricePerM2Count} comparables tienen m² (hacen falta 3; la app no guarda m²).`}

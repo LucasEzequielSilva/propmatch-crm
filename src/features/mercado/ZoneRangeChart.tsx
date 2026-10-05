@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { money, moneyCompact, PROPERTY_TYPE_LABEL } from "@/lib/format";
-import type { ZoneStat } from "@/lib/market";
+import { MIN_MARKET_SAMPLE, type ZoneStat } from "@/lib/market";
 
 const MAX_ROWS = 12;
 
@@ -32,7 +32,7 @@ export function ZoneRangeChart({ stats }: { stats: ZoneStat[] }) {
   if (rows.length === 0) {
     return (
       <p className="text-sm rounded-xl px-4 py-3" style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", color: "#475569" }}>
-        Ninguna zona tiene 3 o más publicaciones con este filtro: no hay rangos para graficar.
+        Ninguna zona tiene {MIN_MARKET_SAMPLE} o más publicaciones con este filtro: no hay rangos para graficar.
       </p>
     );
   }
@@ -48,7 +48,7 @@ export function ZoneRangeChart({ stats }: { stats: ZoneStat[] }) {
   const summary =
     rows.length === 1
       ? `${rowLabel(top)}: mediana ${money(top.median)}, rango ${money(top.p25)} a ${money(top.p75)}.`
-      : `${rows.length} combinaciones de zona y tipo con 3 o más publicaciones. Mediana más alta: ${rowLabel(top)} (${money(top.median)}). ` +
+      : `${rows.length} combinaciones de zona y tipo con ${MIN_MARKET_SAMPLE} o más publicaciones. Mediana más alta: ${rowLabel(top)} (${money(top.median)}). ` +
         `Más baja: ${rowLabel(bottom)} (${money(bottom.median)}).`;
 
   return (
@@ -83,7 +83,7 @@ export function ZoneRangeChart({ stats }: { stats: ZoneStat[] }) {
                 onPointerLeave={() => setActive((k) => (k === r.key ? null : k))}
                 onFocus={() => setActive(r.key)}
                 onBlur={() => setActive((k) => (k === r.key ? null : k))}
-                className="grid grid-cols-1 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] gap-x-3 gap-y-0.5 items-center rounded-lg px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+                className="grid grid-cols-1 sm:grid-cols-[minmax(0,210px)_minmax(0,1fr)] gap-x-3 gap-y-0.5 items-center rounded-lg px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 style={{ background: isActive ? "#F5F3FF" : undefined }}
               >
                 <span className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }} title={label}>
@@ -112,7 +112,7 @@ export function ZoneRangeChart({ stats }: { stats: ZoneStat[] }) {
                     <span
                       role="presentation"
                       className="absolute z-10 bottom-full mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs pointer-events-none"
-                      style={{ left: `clamp(80px, ${pos(r.median)}, calc(100% - 80px))`, background: "#1F0A3C", color: "white", boxShadow: "var(--shadow-pop)" }}
+                      style={{ left: `clamp(170px, ${pos(r.median)}, calc(100% - 170px))`, background: "#1F0A3C", color: "white", boxShadow: "var(--shadow-pop)" }}
                     >
                       <strong>{money(r.median)}</strong> mediana · {money(r.p25)} – {money(r.p75)} · {r.count} publ.
                     </span>
@@ -124,7 +124,7 @@ export function ZoneRangeChart({ stats }: { stats: ZoneStat[] }) {
         </ol>
 
         {/* Eje X */}
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] gap-x-3 px-2 mt-1" aria-hidden="true">
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,210px)_minmax(0,1fr)] gap-x-3 px-2 mt-1" aria-hidden="true">
           <span className="hidden sm:block" />
           <span className="relative h-4 block">
             {ticks.map((t, i) => (
