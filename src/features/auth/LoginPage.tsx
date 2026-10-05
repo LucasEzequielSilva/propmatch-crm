@@ -15,7 +15,7 @@ import BrandPanel, { LogoMark } from "./BrandPanel";
 type Mode = "login" | "signup";
 
 export default function LoginPage() {
-  const { signIn, signUp, signInWithGoogle, pendingLinkEmail, dismissPendingLink } = useStore();
+  const { signIn, signUp, signInWithGoogle, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
 
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
@@ -181,6 +181,19 @@ export default function LoginPage() {
         >
           {googleBusy ? <Spinner dark /> : <GoogleLogo />}
           Continuar con Google
+        </button>
+
+        <button
+          type="button"
+          onClick={enterDemo}
+          disabled={anyBusy}
+          className="mt-2.5 w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
+          style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700 }}
+        >
+          Entrar a la demo
+          <span className="block text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+            Sin cuenta, con datos de ejemplo
+          </span>
         </button>
 
         <div className="flex items-center gap-3 my-5" aria-hidden="true">

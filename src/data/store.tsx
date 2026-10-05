@@ -72,6 +72,28 @@ import {
  */
 
 const STORAGE_KEY = "propmatch.store.v1";
+/** Datos de la demo (cuenta `u-1`, sin Supabase), separados de los reales. */
+const DEMO_STORAGE_KEY = "propmatch.store.demo.v1";
+/** Marca de "estoy en la demo" que sobrevive a un refresh, no a cerrar la pestaña. */
+const DEMO_FLAG_KEY = "propmatch.demo";
+const DEMO_USER_ID = "u-1";
+
+function isDemoActive(): boolean {
+  try {
+    return sessionStorage.getItem(DEMO_FLAG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setDemoFlag(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(DEMO_FLAG_KEY, "1");
+    else sessionStorage.removeItem(DEMO_FLAG_KEY);
+  } catch {
+    // Storage bloqueado: la demo dura hasta el próximo refresh.
+  }
+}
 const SESSION_KEY = "propmatch.session.v1";
 
 interface StoreData {
@@ -152,9 +174,9 @@ function purgeSeed(d: StoreData): StoreData {
   };
 }
 
-function loadData(): StoreData {
+function loadData(key: string = STORAGE_KEY): StoreData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return seedData();
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
@@ -299,6 +321,8 @@ interface StoreValue extends StoreData {
   /** Email de una cuenta creada que aún no tiene inmobiliaria (o `null`). */
   pendingLinkEmail: string | null;
   dismissPendingLink: () => void;
+  /** Entra a la demo con datos de ejemplo, sin cuenta ni Supabase. */
+  enterDemo: () => void;
   signOut: () => void;
   /** Derivado: se recalcula solo cuando cambian propiedades o requerimientos. */
   matches: Match[];
@@ -373,19 +397,24 @@ export const UNLINKED_AGENCY_PREFIX = "local-";
 export const isLinkedAgencyId = (id: string) => !id.startsWith(UNLINKED_AGENCY_PREFIX) && id !== "ag-1";
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<StoreData>(loadData);
+  // La demo guarda en su propia clave: así sus datos de ejemplo nunca se
+  // mezclan con los de una cuenta real en el mismo navegador.
+  const [storageKey, setStorageKey] = useState(() => (isDemoActive() ? DEMO_STORAGE_KEY : STORAGE_KEY));
+  const storageKeyRef = useRef(storageKey);
+  storageKeyRef.current = storageKey;
+  const [data, setData] = useState<StoreData>(() => loadData(storageKey));
   /** `true` si el último guardado falló (cuota llena, storage bloqueado). */
   const [persistFailed, setPersistFailed] = useState(false);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(storageKey, JSON.stringify(data));
       setPersistFailed(false);
     } catch {
       // La app sigue andando, pero lo nuevo se pierde al recargar: hay que avisar.
       setPersistFailed(true);
     }
-  }, [data]);
+  }, [data, storageKey]);
 
   /**
    * Los matches no se guardan: se derivan. Es lo que en la base hace el
@@ -412,14 +441,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   /** Busca la agencia del usuario y arma su Profile local si hace falta. */
   const applySession = useCallback(async (userId: string, email: string | null) => {
-    if (userId === "u-1") {
-      setAgencyContext({
-        agencyId: "ag-1",
-        agencyOwnerUserId: "u-1",
-        managedByUserId: "u-1",
-      });
-      setCurrentUserId("u-1");
-      return null;
+    // Al entrar con una cuenta real se vuelve a los datos reales del navegador.
+    setDemoFlag(false);
+    if (storageKeyRef.current !== STORAGE_KEY) {
+      setStorageKey(STORAGE_KEY);
+      setData(loadData(STORAGE_KEY));
     }
 
     const { data: membership } = await supabase
@@ -485,11 +511,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
+  /**
+   * Demo para mostrar el CRM sin cuenta: datos de ejemplo (`seed.ts`) en su
+   * propia clave del navegador y sin tocar Supabase (sin `agencyContext`).
+   */
+  const enterDemo = useCallback(() => {
+    setDemoFlag(true);
+    if (storageKeyRef.current !== DEMO_STORAGE_KEY) {
+      setStorageKey(DEMO_STORAGE_KEY);
+      setData(loadData(DEMO_STORAGE_KEY));
+    }
+    setPendingLinkEmail(null);
+    setAgencyContext(null);
+    setCurrentUserId(DEMO_USER_ID);
+  }, []);
+
   // Restaura la sesión de Supabase si ya había una (refresh de la página).
   useEffect(() => {
     (async () => {
       try {
         localStorage.removeItem(SESSION_KEY); // limpieza del login viejo, sin backend
+        if (isDemoActive()) {
+          enterDemo();
+          return;
+        }
         const { data: sessionData } = await supabase.auth.getSession();
         const user = sessionData.session?.user;
         if (user) await applySession(user.id, user.email ?? null);
@@ -497,7 +542,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setSessionLoading(false);
       }
     })();
-  }, [applySession]);
+  }, [applySession, enterDemo]);
 
   // Trae las propiedades de agencia que ya existen en Supabase y todavía no
   // están en este navegador (ej. las creó otro agente desde otra máquina).
@@ -777,7 +822,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback<StoreValue["signIn"]>(async (email, password) => {
     if (email.trim() === "valen@propmatch.com" && password === "123456") {
-      return applySession("u-1", email);
+      enterDemo();
+      return null;
     }
 
     const { data: authData, error } = await supabase.auth.signInWithPassword({
@@ -786,7 +832,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
     if (error || !authData.user) return "Email o contraseña incorrectos.";
     return applySession(authData.user.id, authData.user.email ?? null);
-  }, [applySession]);
+  }, [applySession, enterDemo]);
 
   /**
    * Alta con email. `handle_new_user` (trigger de la app) crea la fila en
@@ -842,6 +888,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     void supabase.auth.signOut();
     setAgencyContext(null);
     setCurrentUserId(null);
+    if (storageKeyRef.current === DEMO_STORAGE_KEY) {
+      setDemoFlag(false);
+      setStorageKey(STORAGE_KEY);
+      setData(loadData(STORAGE_KEY));
+    }
   }, []);
 
   /**
@@ -1725,7 +1776,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const reset = useCallback(() => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKeyRef.current);
     } catch {
       // Storage bloqueado: igual se vuelve a la semilla en memoria.
     }
@@ -1747,6 +1798,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle,
       pendingLinkEmail,
       dismissPendingLink,
+      enterDemo,
       signOut,
       matches: matchesWithReview,
       contactById: (id) => (id ? contactIndex.get(id) : undefined),
@@ -1801,6 +1853,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     pendingLinkEmail,
     dismissPendingLink,
+    enterDemo,
     signOut,
     addProperty,
     updateProperty,
