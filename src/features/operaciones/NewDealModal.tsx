@@ -25,7 +25,7 @@ export function NewDealModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const { properties, contacts, opportunities, addDeal, contactById, propertyById } = useStore();
+  const { properties, contacts, opportunities, addDeal, contactById, propertyById, updateProperty } = useStore();
 
   const [propertyId, setPropertyId] = useState(initialPropertyId ?? "");
   const [clientId, setClientId] = useState(initialContactId ?? "");
@@ -88,6 +88,8 @@ export function NewDealModal({
       docs: {},
       notes: "",
     });
+    // La propiedad queda reservada mientras dure la operación (si se cae, vuelve a disponible).
+    if (property.status === "disponible") updateProperty(property.id, { status: "reservada" });
     onCreated(deal.id);
   };
 

@@ -562,12 +562,13 @@ function migrateDoc(v: unknown): DealDocState {
 
 /** Campos nuevos con valores por defecto para un deal recién creado. */
 export function dealRoomDefaults(input: Partial<Deal>, actorId: string | null, number: number, nowIso: string) {
+  const responsible = input.responsible_id !== undefined ? input.responsible_id : actorId;
   return {
     number,
     stage: "negociacion" as DealStage,
     stage_since: nowIso,
     created_by: actorId,
-    responsible_id: input.responsible_id ?? actorId,
+    responsible_id: responsible,
     co_agent_id: input.co_agent_id ?? null,
     expected_close_date: input.expected_close_date ?? null,
     signing_date: input.signing_date ?? null,
@@ -575,7 +576,8 @@ export function dealRoomDefaults(input: Partial<Deal>, actorId: string | null, n
     escribano_email: input.escribano_email ?? "",
     signatures: input.signatures ?? {},
     payments: input.payments ?? [],
-    commission: input.commission ?? defaultCommission(input),
+    // Sin co-agente, el reparto interno es 100% del responsable.
+    commission: input.commission ?? { ...defaultCommission(input), splits: responsible ? [{ user_id: responsible, share_pct: 100 }] : [] },
     event_ids: input.event_ids ?? [],
     events: input.events ?? [],
   };
@@ -608,7 +610,7 @@ export function migrateDeals(raw: unknown[], opportunityOwner: (id: string | nul
     const merged = { ...defaults, ...d, steps, docs } as Deal;
     merged.number = numbers.get(d) ?? merged.number;
     merged.responsible_id = defaults.responsible_id;
-    merged.commission = { ...defaultCommission(d), ...(d.commission ?? {}), splits: d.commission?.splits ?? [] };
+    merged.commission = d.commission ? { ...defaultCommission(d), ...d.commission, splits: d.commission.splits ?? [] } : defaults.commission;
     if (!d.events) {
       const events: DealEvent[] = [makeEvent("created", "Operación iniciada", null, null, createdAt)];
       if (d.notes && d.notes.trim()) events.push(makeEvent("note", d.notes.trim(), "Notas anteriores al historial", null, d.updated_at ?? createdAt));
