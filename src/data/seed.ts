@@ -239,7 +239,7 @@ const propertyDetails: Record<string, Partial<Property>> = {
   "p-2": { lat: -34.9187, lng: -57.9511, subtype: "Departamento", floor: "6", unit: "A", orientation: "NE", layout: "frente", expenses_currency: "ARS", credit_eligible: true, keys_custody: true,
     description: "Departamento de tres ambientes muy luminoso, con balcón al frente sobre calle 7. Edificio con amenities: SUM, gimnasio y terraza con parrilla. Cocina separada con lavadero, dos dormitorios con placard. A metros de todo." },
   "p-3": { lat: -34.8801, lng: -58.0201, subtype: "Casa quinta", toilettes: 1, surface_uncovered: 70, orientation: "N", layout: "frente", accepts_swap: true, reserve_min_price: 220000, reserve_min_currency: "USD", keys_custody: true,
-    description: "Gran casa familiar sobre Camino Centenario con pileta, parque arbolado y quincho con parrilla. Cuatro dormitorios, tres baños, escritorio y cochera para dos autos. Reservada: firma de boleto en curso (operación PM-0001)." },
+    description: "Gran casa familiar sobre Camino Centenario con pileta, parque arbolado y quincho con parrilla. Cuatro dormitorios, tres baños, escritorio y cochera para dos autos. Reservada: la firma del boleto está en curso." },
   "p-4": { lat: -34.9061, lng: -57.9622, subtype: "PH en 2 plantas", toilettes: 1, orientation: "SE", layout: "contrafrente",
     description: "PH de dos plantas al contrafrente, sin expensas, con terraza propia y parrilla. Planta baja con living comedor y cocina; arriba tres dormitorios y dos baños. Cochera cubierta. La autorización venció: falta renovarla." },
   "p-5": { subtype: "Casa quinta", orientation: "O",
@@ -430,7 +430,7 @@ const eventSeeds: EventSeed[] = [
   // Semana que viene
   { id: "e-16", owner_id: "u-1", type: "visita", title: "Departamento a estrenar en el centro", contact_id: "c-8", property_id: "p-12", opportunity_id: "o-1", starts_at: weekday(7, 11), ends_at: weekday(7, 12), notes: "Primera visita. Llevar folleto de amenities.", extra: toConfirm },
   { id: "e-17", owner_id: "u-4", type: "visita", title: "Departamento en La Plata Norte", contact_id: "c-7", property_id: "p-11", opportunity_id: "o-4", starts_at: weekday(8, 16), ends_at: weekday(8, 16, 45), notes: null, extra: confirmed },
-  { id: "e-18", owner_id: "u-1", type: "reunion", title: "Firma de boleto — Casa con parque en Gonnet", contact_id: "c-4", property_id: "p-3", opportunity_id: "o-15", starts_at: weekday(9, 12), ends_at: weekday(9, 13, 30), notes: "Escribanía Ferreyra. Operación PM-0001. Llevar recibos de reserva y refuerzo." },
+  { id: "e-18", owner_id: "u-1", type: "reunion", title: "Firma de boleto — Casa con parque en Gonnet", contact_id: "c-4", property_id: "p-3", opportunity_id: "o-15", starts_at: weekday(9, 12), ends_at: weekday(9, 13, 30), notes: "Escribanía Ferreyra. Llevar recibos de reserva y refuerzo." },
   { id: "e-19", owner_id: "u-3", type: "llamada", title: "Renovar autorización del PH", contact_id: "c-17", property_id: "p-4", opportunity_id: null, starts_at: weekday(10, 10), ends_at: weekday(10, 10, 30), notes: null },
   { id: "e-20", owner_id: "u-1", type: "visita", title: "Segunda visita — Casa en City Bell", contact_id: "c-1", property_id: "p-14", opportunity_id: "o-19", starts_at: weekday(11, 15), ends_at: weekday(11, 16), notes: null, extra: toConfirm },
   { id: "e-21", owner_id: "u-4", type: "visita", title: "Depto. frente a Plaza Moreno", contact_id: "c-20", property_id: "p-13", opportunity_id: "o-18", starts_at: weekday(8, 18, 30), ends_at: weekday(8, 19), notes: "Viene con la madre (garante).", extra: confirmed },
@@ -449,7 +449,7 @@ export const seedTasks: Task[] = [
   { id: "t-2", agency_id: AGENCY_ID, owner_id: "u-1", text: "Enviar propiedades a Lucía Fernández", is_priority: false, is_done: false, due_date: null, contact_id: "c-2", created_at: iso(1) },
   { id: "t-3", agency_id: AGENCY_ID, owner_id: "u-1", text: "Contactar nuevo lead — Federico Álvarez", is_priority: false, is_done: false, due_date: null, contact_id: "c-8", created_at: iso(0) },
   { id: "t-4", agency_id: AGENCY_ID, owner_id: "u-1", text: "Actualizar fichas de propiedades", is_priority: false, is_done: false, due_date: null, contact_id: null, created_at: iso(2) },
-  { id: "t-5", agency_id: AGENCY_ID, owner_id: "u-1", text: "Pedir asentimiento conyugal a Alberto Ríos (PM-0001)", is_priority: true, is_done: false, due_date: dateFromToday(2), contact_id: "c-19", created_at: iso(3) },
+  { id: "t-5", agency_id: AGENCY_ID, owner_id: "u-1", text: "Pedir asentimiento conyugal a Alberto Ríos (boleto de Gonnet)", is_priority: true, is_done: false, due_date: dateFromToday(2), contact_id: "c-19", created_at: iso(3) },
   { id: "t-6", agency_id: AGENCY_ID, owner_id: "u-1", text: "Responder la oferta de Lucía por el depto. del centro", is_priority: true, is_done: false, due_date: dateFromToday(0), contact_id: "c-2", created_at: iso(1) },
   { id: "t-7", agency_id: AGENCY_ID, owner_id: "u-3", text: "Llamar a Mirta Aguirre para renovar la autorización", is_priority: false, is_done: false, due_date: dateFromToday(3), contact_id: "c-17", created_at: iso(4) },
   { id: "t-8", agency_id: AGENCY_ID, owner_id: "u-4", text: "Pedir recibos de sueldo a Micaela Ponce", is_priority: false, is_done: true, due_date: dateFromToday(-1), contact_id: "c-20", created_at: iso(5) },
@@ -459,7 +459,7 @@ export const seedTasks: Task[] = [
  * Ofertas de ejemplo. Viven en `appOffers` porque es donde las lee toda la
  * app (Dashboard, Ofertas, ficha, diagnóstico), pero su `app_offer_id` es
  * inventado (`sample-of-N`): `respondOffer` las resuelve SOLO en el navegador.
- * La aceptada es la que originó la operación PM-0001.
+ * La aceptada es la que originó la operación de la casa de Gonnet (d-1).
  */
 export const seedOffers: AppOffer[] = [
   { id: "of-1", app_offer_id: "sample-of-1", contact_id: "c-2", property_id: "p-2", amount_usd: 90000, status: "pending", created_at: iso(1, 19, 5) },
