@@ -18,6 +18,7 @@ import { SignaturesCard } from "./room/SignaturesCard";
 import { HistoryCard } from "./room/HistoryCard";
 import { FinanceCard, PaymentModal } from "./room/FinanceCard";
 import { AlertsBox, KeyDatesCard } from "./room/KeyDatesCard";
+import { DocumentsCard } from "./room/DocumentsCard";
 import { NotesContactCard } from "./room/NotesContactCard";
 import { PublicationCard } from "./room/PublicationCard";
 import { DealDataCard } from "./room/DealDataCard";
@@ -225,6 +226,7 @@ export default function OperacionDetallePage() {
             <div className="hidden xl:block">
               <AlertsBox deal={deal} />
             </div>
+            <DocumentsCard room={room} onOpen={openDocument} />
             <FinanceCard room={room} onRegisterPayment={() => setPaying(true)} />
             <KeyDatesCard room={room} />
             <NotesContactCard room={room} />
