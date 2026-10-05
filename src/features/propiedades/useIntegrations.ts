@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 interface StatusResponse {
   configured?: boolean;
   connected?: boolean;
+  needsReauth?: boolean;
   nickname?: string;
   isAdmin?: boolean;
 }
@@ -22,6 +23,7 @@ export function useMeliConnection() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [needsReauth, setNeedsReauth] = useState(false);
   const [nickname, setNickname] = useState<string | undefined>();
   const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +38,13 @@ export function useMeliConnection() {
       const j = (await r.json()) as StatusResponse;
       setConfigured(!!j.configured);
       setConnected(!!j.connected);
+      setNeedsReauth(!!j.needsReauth);
       setNickname(j.nickname);
       setIsAdmin(!!j.isAdmin);
     } catch {
       setConfigured(false);
       setConnected(false);
+      setNeedsReauth(false);
       setNickname(undefined);
     } finally {
       setLoading(false);
@@ -82,11 +86,12 @@ export function useMeliConnection() {
       }
       if (!r.ok) throw new Error();
       setConnected(false);
+      setNeedsReauth(false);
       setNickname(undefined);
     } catch {
       setError("No pudimos desconectar la cuenta. Probá de nuevo en un rato.");
     }
   }, []);
 
-  return { loading, configured, connected, nickname, isAdmin, connect, disconnect, error };
+  return { loading, configured, connected, needsReauth, nickname, isAdmin, connect, disconnect, error };
 }

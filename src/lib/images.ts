@@ -10,7 +10,7 @@
 const MAX_SIDE = 1280;
 const QUALITY = 0.72;
 
-/** Achica la imagen a `MAX_SIDE` px de lado mayor y la devuelve como data URL WebP (o JPEG). */
+/** Achica la imagen a `MAX_SIDE` px de lado mayor y la devuelve como data URL JPEG. */
 export async function compressImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
@@ -25,9 +25,9 @@ export async function compressImage(file: File): Promise<string> {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
-  const webp = canvas.toDataURL("image/webp", QUALITY);
-  // Safari viejo no codifica WebP y devuelve PNG: ahí conviene JPEG.
-  return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", QUALITY);
+  // JPEG y no WebP: las fotos terminan en portales, y Mercado Libre documenta
+  // solo JPG/JPEG/PNG (https://developers.mercadolibre.com.ar/es_ar/trabajar-con-imagenes).
+  return canvas.toDataURL("image/jpeg", QUALITY);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

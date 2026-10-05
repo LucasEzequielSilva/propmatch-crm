@@ -27,12 +27,20 @@ type MeliConnection = ReturnType<typeof useMeliConnection>;
 /** Solo Mercado Libre tiene conector real por ahora; el resto sigue "sin conectar". */
 function connectionOf(channel: PublicationChannel, meli: MeliConnection): ConnectionStatus {
     if (channel === "mercadolibre" && meli.connected) return "connected";
+    if (channel === "mercadolibre" && meli.needsReauth) return "error";
     return "not_connected";
 }
 
 const MELI_ERROR_REASONS: Record<string, string> = {
     denied: "Cancelaste la autorización en Mercado Libre.",
     expired: "La conexión tardó demasiado. Probá de nuevo.",
+    state: "La respuesta de Mercado Libre no coincidió con tu pedido. Probá de nuevo.",
+    invalid: "La respuesta de Mercado Libre llegó incompleta. Probá de nuevo.",
+    token: "Mercado Libre no entregó la autorización. Revisá que la URL de redirección de la app coincida.",
+    offline: "La app de Mercado Libre no tiene el permiso offline_access: sin él la conexión se corta a las 6 horas.",
+    in_use: "Esa cuenta de Mercado Libre ya está conectada a otra inmobiliaria en PropMatch.",
+    identity: "No pudimos leer los datos de la cuenta de Mercado Libre.",
+    save: "No pudimos guardar la conexión. ¿Está aplicada la migración de agency_integrations?",
 };
 
 /** Aviso al volver del login de Mercado Libre (?meli=connected|error). Limpia el parámetro de la URL. */
@@ -482,6 +490,11 @@ function ConnectButton({ info, meli }: { info: ChannelInfo; meli: MeliConnection
 
     return (
         <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+            {meli.needsReauth && !meli.connected && (
+                <p className="text-xs" style={{ color: "#BE123C", fontWeight: 700 }}>
+                    La conexión venció: volvé a conectar la cuenta.
+                </p>
+            )}
             {meli.connected ? (
                 <>
                     <p className="text-xs" style={{ color: "#15803D", fontWeight: 700 }}>
@@ -509,7 +522,7 @@ function ConnectButton({ info, meli }: { info: ChannelInfo; meli: MeliConnection
                     className="min-h-[44px] px-4 rounded-xl text-sm text-white disabled:opacity-60"
                     style={{ background: "#7C3AED", fontWeight: 700 }}
                 >
-                    Conectar Mercado Libre
+                    {meli.needsReauth ? "Reconectar Mercado Libre" : "Conectar Mercado Libre"}
                 </button>
             )}
             {meli.error && <p role="alert" className="text-xs" style={{ color: "#BE123C" }}>{meli.error}</p>}

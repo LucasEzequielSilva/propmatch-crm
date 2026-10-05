@@ -5,8 +5,9 @@
  * base (`app_property_id`), todo se guarda ahí. Si no, queda en memoria
  * (modo local) con el mismo shape, para que la pantalla no distinga.
  *
- * Todavía no hay conectores reales a los portales: `queue` deja los canales
- * en `pending` ("en cola"). Nunca marca `published` ni inventa IDs externos.
+ * `queue` deja los canales sin conector en `pending` ("en cola"). Nunca marca
+ * `published` ni inventa IDs externos. Mercado Libre tiene conector real: lo
+ * escribe el servidor (api/meli/publish) y la fila que devuelve entra por `applyRow`.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -129,5 +130,14 @@ export function usePublications() {
     [agency.id, isPersistent],
   );
 
-  return { channelsOf, queue, isPersistent, loading, error, persistentMode: remote !== null };
+  /** Reemplaza (o agrega) una fila que ya guardó el servidor. */
+  const applyRow = useCallback((row: PropertyPublication) => {
+    setRemote((prev) =>
+      prev === null
+        ? [row]
+        : [...prev.filter((r) => !(r.property_id === row.property_id && r.channel === row.channel)), row],
+    );
+  }, []);
+
+  return { channelsOf, queue, applyRow, isPersistent, loading, error, persistentMode: remote !== null };
 }
