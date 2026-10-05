@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 import LoginPage from "@/features/auth/LoginPage";
+import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import ContactosPage from "@/features/contactos/ContactosPage";
 import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
@@ -41,6 +42,7 @@ import DocumentoPage from "@/features/operaciones/DocumentoPage";
 export default function App() {
   return (
     <StoreProvider>
+      <PasswordRecovery />
       <BrowserRouter>
         <Routes>
           {/* Ficha que recibe el cliente: pública, sin sesión y sin el layout del CRM. */}

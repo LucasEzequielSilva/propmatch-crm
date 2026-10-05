@@ -278,6 +278,7 @@ export default function LoginPage() {
               </button>
             </div>
             {isSignup && password.length > 0 && <StrengthMeter level={strength} />}
+            {!isSignup && <ForgotPassword email={email} />}
           </Field>
 
           {isSignup && (
@@ -396,6 +397,49 @@ function PendingLink({
       >
         Volver al inicio
       </button>
+    </div>
+  );
+}
+
+/** Manda el email de "restablecer contraseña"; al volver, `PasswordRecovery` pide la nueva. */
+function ForgotPassword({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error" | "need_email">("idle");
+
+  async function send() {
+    if (!email.trim()) {
+      setState("need_email");
+      return;
+    }
+    setState("sending");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    setState(error ? "error" : "sent");
+  }
+
+  return (
+    <div className="mt-1.5 text-xs" aria-live="polite">
+      {state === "sent" ? (
+        <p style={{ color: "#166534", fontWeight: 600 }}>
+          Si {email.trim()} tiene cuenta, te llegó un email para elegir una contraseña nueva. Abrilo una sola vez.
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={send}
+            disabled={state === "sending"}
+            className="underline disabled:opacity-60"
+            style={{ color: "#6D28D9", fontWeight: 600 }}
+          >
+            {state === "sending" ? "Enviando…" : "¿Olvidaste tu contraseña?"}
+          </button>
+          {state === "need_email" && <span style={{ color: "#E11D48" }}> Escribí tu email arriba primero.</span>}
+          {state === "error" && (
+            <span style={{ color: "#E11D48" }}> No se pudo enviar. Esperá un minuto y probá de nuevo.</span>
+          )}
+        </>
+      )}
     </div>
   );
 }
