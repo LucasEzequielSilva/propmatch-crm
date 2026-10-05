@@ -24,7 +24,7 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
   mercadolibre: {
     tagline: "Publicá y actualizá tus propiedades en Mercado Libre Inmuebles desde PropMatch.",
     difficulty: "media",
-    recommendation: "Recomendado para empezar: es el único portal con alta propia, sin contrato previo.",
+    recommendation: "Disponible ahora: conectá tu cuenta y publicá en minutos.",
     needs: [
       "Una cuenta de Mercado Libre a nombre de la inmobiliaria, habilitada como inmobiliaria (si no lo está, se pide a Mercado Libre desde su formulario de soporte).",
       "Un paquete de publicación de Inmuebles con cupo disponible (tipo Plata; Oro y Oro Premium son destaques).",
@@ -43,10 +43,10 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
   zonaprop: {
     tagline: "Publicá en Zonaprop sin volver a cargar las propiedades.",
     difficulty: "dificil",
-    recommendation: "Depende de un acuerdo con Zonaprop: todavía no está disponible.",
+    recommendation: null,
     needs: [
       "Cuenta de Zonaprop con un plan de publicación contratado.",
-      "Que Zonaprop habilite tu cuenta para integraciones (a confirmar con Zonaprop).",
+      "Que Zonaprop habilite tu cuenta para integraciones.",
     ],
     steps: [
       "Escribile a tu ejecutivo de Zonaprop y pedile habilitar la integración con PropMatch.",
@@ -54,13 +54,13 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
       CONNECT_SOON,
     ],
     estimatedTime: null,
-    warning: "El tiempo de respuesta y las condiciones dependen de Zonaprop (no verificado).",
+    warning: null,
     verified: false,
   },
   argenprop: {
     tagline: "Publicá en Argenprop desde PropMatch y asigná puntos a tus avisos.",
     difficulty: "dificil",
-    recommendation: "Depende de un acuerdo con Argenprop: todavía no está disponible.",
+    recommendation: null,
     needs: [
       "Suscripción activa en Argenprop.",
       "Las credenciales de integración que te manda Argenprop: usuario (termina en @api.com), contraseña e ID de anunciante. No sirven tu mail y clave de siempre.",
@@ -72,13 +72,13 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     ],
     estimatedTime: null,
     warning:
-      "Al activar la integración, Argenprop puede dar de baja los avisos que ya tenías publicados, y desconectar no los despublica (no verificado en la documentación oficial).",
+      "Antes de activar la integración, consultale a Argenprop qué pasa con los avisos que ya tenés publicados.",
     verified: false,
   },
   cabaprop: {
     tagline: "Publicá en CABAPROP y mantené precio, fotos y planos sincronizados.",
     difficulty: "facil",
-    recommendation: "Conexión simple con clave API, pendiente de confirmar que PropMatch pueda usar su endpoint.",
+    recommendation: null,
     needs: [
       "Cuenta de administrador en CABAPROP (profesional matriculado).",
       "Mínimo 3 fotos por propiedad.",
@@ -95,7 +95,7 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
   facebook: {
     tagline: "Publicá tus propiedades como posteos en la página de Facebook de la inmobiliaria.",
     difficulty: "media",
-    recommendation: "Publica en tu Página, no en Marketplace.",
+    recommendation: null,
     needs: ["Ser administrador de la página de Facebook de la inmobiliaria."],
     steps: [
       "Confirmá que sos administrador de la página y que figura en tu Meta Business.",
@@ -104,13 +104,13 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     ],
     estimatedTime: "5 minutos",
     warning:
-      "Facebook Marketplace de inmuebles no está disponible: es solo para partners aprobados por Meta. PropMatch también necesita la aprobación de Meta (revisión de la app), que puede tardar semanas.",
+      "Se publica como posteo en la Página de la inmobiliaria (no en Marketplace).",
     verified: true,
   },
   instagram: {
     tagline: "Publicá fotos de tus propiedades en el Instagram de la inmobiliaria.",
     difficulty: "media",
-    recommendation: "Alcance rápido por vía oficial, sujeto a la aprobación de Meta.",
+    recommendation: null,
     needs: [
       "Cuenta de Instagram profesional (empresa o creador) vinculada a una página de Facebook.",
       "Ser administrador de esa página.",
@@ -122,7 +122,7 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     ],
     estimatedTime: "5 minutos",
     warning:
-      "Instagram acepta imágenes JPEG, hasta 10 por carrusel y un máximo de 100 publicaciones por día vía API. Es una publicación del feed, no un aviso clasificado.",
+      "Se publica en el feed de tu Instagram (hasta 10 fotos por carrusel). No es un aviso clasificado.",
     verified: true,
   },
   web: {

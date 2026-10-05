@@ -72,12 +72,6 @@ const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; bg: string; fg:
     error: { text: "Error de conexión", bg: "#FFE4E6", fg: "#BE123C" },
 };
 
-const DIFFICULTY_LABEL = {
-    facil: { text: "Fácil de conectar", bg: "#DCFCE7", fg: "#15803D" },
-    media: { text: "Dificultad media", bg: "#FEF3C7", fg: "#92400E" },
-    dificil: { text: "Más complejo", bg: "#FFE4E6", fg: "#BE123C" },
-} as const;
-
 type StatusFilter = "all" | "unpublished" | "queued" | "error" | "published";
 
 const FILTERS: { id: StatusFilter; label: string }[] = [
@@ -401,7 +395,6 @@ function PlatformCard({ info, meli }: { info: ChannelInfo; meli: MeliConnection 
     const panelId = useId();
     const guide = INTEGRATION_GUIDES[info.channel];
     const conn = CONNECTION_LABEL[connectionOf(info.channel, meli)];
-    const diff = guide.difficulty ? DIFFICULTY_LABEL[guide.difficulty] : null;
     // Texto oscuro sobre amarillo (ML) para mantener contraste en el logo.
     const logoText = info.color === "#FFE600" ? "#1F2937" : "white";
 
@@ -423,8 +416,7 @@ function PlatformCard({ info, meli }: { info: ChannelInfo; meli: MeliConnection 
 
             <div className="flex flex-wrap gap-1.5 mt-3">
                 <Badge bg={conn.bg} text={conn.fg}>{conn.text}</Badge>
-                {diff && <Badge bg={diff.bg} text={diff.fg}>{diff.text}</Badge>}
-                {!guide.verified && <Badge bg="#EDE9FE" text="#5B21B6">En validación</Badge>}
+                {/* Sin "dificultad" ni "en validación": son notas internas, no para la inmobiliaria. */}
             </div>
             {guide.recommendation && <p className="text-xs mt-2" style={{ color: "#4B5563" }}>{guide.recommendation}</p>}
 
