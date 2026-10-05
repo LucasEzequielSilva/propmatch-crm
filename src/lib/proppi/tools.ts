@@ -1,3 +1,4 @@
+import { isSample } from "@/lib/samples";
 import type {
   Activity,
   AppOffer,
@@ -75,6 +76,8 @@ function propertyShort(p: Property) {
     ambientes: p.rooms,
     dormitorios: p.bedrooms,
     m2_totales: p.surface_total,
+    // Dato de ejemplo: Proppi lo puede mostrar, pero tiene que aclarar que no es real.
+    ...(isSample(p) ? { is_sample: true } : {}),
   };
 }
 
@@ -87,6 +90,7 @@ function contactShort(c: Contact, lastActivity: string | null) {
     telefono: c.phone,
     email: c.email,
     ultima_actividad: lastActivity,
+    ...(isSample(c) ? { is_sample: true } : {}),
   };
 }
 
@@ -289,6 +293,7 @@ const HANDLERS: Record<string, Handler> = {
           razones: m.reasons,
           presupuesto: [r.budget_min, r.budget_max, r.currency],
           tiene_oportunidad: d.opportunities.some((o) => o.contact_id === r.contact_id && o.property_id === p.id),
+          ...(isSample(c) ? { is_sample: true } : {}),
         };
       }),
     };
@@ -367,6 +372,7 @@ const HANDLERS: Record<string, Handler> = {
         contacto: d.contacts.find((c) => c.id === e.contact_id)?.full_name ?? null,
         propiedad: d.properties.find((p) => p.id === e.property_id)?.title ?? null,
         notas: clip(e.notes, 120),
+        ...(isSample(e) ? { is_sample: true } : {}),
       })),
     };
   },
@@ -389,6 +395,7 @@ const HANDLERS: Record<string, Handler> = {
         moneda: o.currency,
         dias_en_etapa: daysSince(o.stage_since),
         prioritaria: o.is_priority,
+        ...(isSample(o) ? { is_sample: true } : {}),
       })),
     };
   },
@@ -409,6 +416,7 @@ const HANDLERS: Record<string, Handler> = {
           contacto: d.contacts.find((c) => c.id === o.contact_id)?.full_name ?? null,
           propiedad: p?.title ?? null,
           precio_publicado: p ? [p.price, p.currency] : null,
+          ...(isSample(o) ? { is_sample: true } : {}),
         };
       }),
     };

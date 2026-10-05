@@ -6,6 +6,7 @@ import { useStore } from "@/data/store";
 import { inboxApi, type ChannelConversation } from "@/lib/inbox/api";
 import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 import type { Contact } from "@/types/db";
+import { isSample } from "@/lib/samples";
 import { Avatar } from "../ConversationList";
 import { norm } from "../conversations";
 import { displayName, SOURCE_META } from "./channelMeta";
@@ -34,16 +35,21 @@ export function ChannelProfilePanel({ conversation, onBack }: { conversation: Ch
 
   const linked = conversation.crm_contact_id ? contacts.find((c) => c.id === conversation.crm_contact_id) : undefined;
   const byPhone = useMemo(
-    () => (conversation.contact_phone ? contacts.filter((c) => samePhone(c.phone, conversation.contact_phone)) : []),
+    // Una conversación real nunca se vincula a un contacto de ejemplo (ni su id viaja al servidor).
+    () => (conversation.contact_phone ? contacts.filter((c) => !isSample(c) && samePhone(c.phone, conversation.contact_phone)) : []),
     [contacts, conversation.contact_phone],
   );
   const results = useMemo(() => {
     const q = norm(query.trim());
     if (!q) return byPhone;
-    return contacts.filter((c) => norm(`${c.full_name} ${c.phone ?? ""} ${c.email ?? ""}`).includes(q)).slice(0, 8);
+    return contacts.filter((c) => !isSample(c) && norm(`${c.full_name} ${c.phone ?? ""} ${c.email ?? ""}`).includes(q)).slice(0, 8);
   }, [contacts, query, byPhone]);
 
   async function link(contact: Contact | null) {
+    if (isSample(contact)) {
+      setError("Es un contacto de ejemplo: no se puede vincular a una conversación real.");
+      return;
+    }
     setBusy(true);
     setError(null);
     const r = await inboxApi("/api/inbox/conversations", {

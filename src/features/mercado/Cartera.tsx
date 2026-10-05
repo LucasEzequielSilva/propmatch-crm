@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { Card } from "@/components/ui/Card";
 import { money, OPERATION_LABEL, PROPERTY_TYPE_LABEL } from "@/lib/format";
 import type { PortfolioRow } from "@/lib/market";
@@ -84,7 +85,7 @@ export function Cartera({ rows }: { rows: PortfolioRow[] }) {
                     <tr key={p.id} className="border-t" style={{ borderColor: "#F3F0FF" }}>
                       <th scope="row" className="px-5 py-2.5 text-left font-normal min-w-0">
                         <Link to={`/propiedades/${p.id}`} className="hover:underline" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                          {p.title}
+                          {p.title} <SampleBadge record={p} />
                         </Link>
                         <span className="block text-xs" style={{ color: "#7C6A99" }}>
                           {[p.zone ?? p.locality, PROPERTY_TYPE_LABEL[p.type], OPERATION_LABEL[p.operation]].filter(Boolean).join(" · ")}
@@ -109,7 +110,7 @@ export function Cartera({ rows }: { rows: PortfolioRow[] }) {
               {rows.map(({ property: p, diagnostic: d }) => (
                 <li key={p.id} className="rounded-xl p-3 border" style={{ borderColor: "#F3F0FF", background: "#FDFCFF" }}>
                   <Link to={`/propiedades/${p.id}`} className="hover:underline" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                    {p.title}
+                    {p.title} <SampleBadge record={p} />
                   </Link>
                   <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
                     {[p.zone ?? p.locality, PROPERTY_TYPE_LABEL[p.type]].filter(Boolean).join(" · ")}

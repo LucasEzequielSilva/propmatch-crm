@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { marketInventory } from "@/lib/samples";
 import { useStore } from "@/data/store";
 import { fetchActiveAppProperties, MarketDataError } from "@/lib/marketData";
 import { computeDiagnostic, type MarketListing, type PropertyDiagnostic } from "@/lib/propertyDiagnostic";
@@ -15,7 +16,9 @@ type MarketState =
  * inventario del CRM y `marketError` lo dice.
  */
 export function useDiagnostic(property: Property, channelsPublished: number | null) {
-  const { properties, photos, activities, appOffers, matches, opportunities, events } = useStore();
+  const { properties: allProperties, photos, activities, appOffers, matches, opportunities, events, isDemo } = useStore();
+  // Los ejemplos no son comparables de una propiedad real (precios inventados), salvo en la demo.
+  const properties = useMemo(() => marketInventory(allProperties, isDemo), [allProperties, isDemo]);
   const [market, setMarket] = useState<MarketState>({ status: "loading" });
   const [computedAt, setComputedAt] = useState(() => Date.now());
 

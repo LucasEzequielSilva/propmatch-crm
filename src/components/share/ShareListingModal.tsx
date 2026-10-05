@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { isSample } from "@/lib/samples";
+import { SampleNotice } from "@/components/ui/SampleBadge";
 import { useStore } from "@/data/store";
 import { buildSharedListing, listingUrl, localOnlyPhotos } from "@/lib/share";
 import { avatarGradient, initials, relativeTime } from "@/lib/format";
@@ -103,6 +105,9 @@ export function ShareListingModal({ property, onClose }: { property: Property; o
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {isSample(property) && (
+            <SampleNotice>Es una propiedad de ejemplo: la ficha sirve para probar, no la compartas con clientes reales.</SampleNotice>
+          )}
           <div>
             <div className="flex gap-2">
               <input

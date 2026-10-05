@@ -45,3 +45,13 @@ export function isSamplePhone(phone: string | null | undefined): boolean {
 /** Valor para la columna "Ejemplo" de los CSV. */
 export const sampleCsvCell = (record: { is_sample?: boolean } | null | undefined) =>
   isSample(record) ? "Sí (dato de ejemplo)" : "";
+
+/**
+ * Inventario que sirve como comparable de mercado (Mercado, tasador,
+ * diagnóstico). Los precios de ejemplo son inventados: en una cuenta real no
+ * cuentan como "tu inventario" para las estadísticas. En la demo sí (si no,
+ * no habría nada que mostrar sin la app).
+ */
+export function marketInventory<T extends { is_sample?: boolean }>(properties: T[], isDemo: boolean): T[] {
+  return isDemo ? properties : properties.filter((p) => !isSample(p));
+}
