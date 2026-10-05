@@ -19,6 +19,7 @@ import type { Property, PublicationChannel } from "@/types/db";
 import { EXTERNAL_CHANNELS, usePublications, type ChannelInfo, type ChannelState } from "./usePublications";
 import { INTEGRATION_GUIDES } from "./integrationGuides";
 import { useMeliConnection } from "./useIntegrations";
+import { PlatformPublishPicker } from "./PlatformPublishPicker";
 
 type ConnectionStatus = "not_connected" | "connected" | "error";
 
@@ -105,6 +106,21 @@ export default function MultipublicadorPage() {
     const searchRef = useRef<HTMLInputElement>(null);
     const meli = useMeliConnection();
     const meliNotice = useMeliReturnNotice(() => scrollToId("plataformas"));
+    /** Plataforma desde la que se abrió «Publicar una propiedad». */
+    const [picker, setPicker] = useState<ChannelInfo | null>(null);
+    /** «Ver mis avisos» de una plataforma: la lista muestra solo lo que tiene algo en ese canal. */
+    const [channelFilter, setChannelFilter] = useState<ChannelInfo | null>(null);
+    const statusIn = (p: Property, ch: PublicationChannel) => channelsOf(p).find(c => c.info.channel === ch)?.status ?? null;
+    const countsIn = (ch: PublicationChannel) => {
+        const c = { published: 0, paused: 0, error: 0 };
+        for (const p of properties) {
+            const st = statusIn(p, ch);
+            if (st === "published") c.published++;
+            else if (st === "paused") c.paused++;
+            else if (st === "error") c.error++;
+        }
+        return c;
+    };
 
     // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
     const rows = useMemo(
@@ -137,6 +153,7 @@ export default function MultipublicadorPage() {
                 const hay = [r.p.title, r.p.zone, r.p.province, r.p.id].filter(Boolean).join(" ").toLowerCase();
                 if (!hay.includes(q)) return false;
             }
+            if (channelFilter && !statusIn(r.p, channelFilter.channel)) return false;
             switch (filter) {
                 case "unpublished": return r.published.length + r.queued.length + r.errored.length === 0;
                 case "queued": return r.queued.length > 0;
@@ -145,7 +162,8 @@ export default function MultipublicadorPage() {
                 default: return true;
             }
         });
-    }, [rows, query, filter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rows, query, filter, channelFilter]);
 
     function goToList(next?: StatusFilter) {
         if (next) setFilter(next);
@@ -232,11 +250,24 @@ export default function MultipublicadorPage() {
                     <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
                     <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
                         {meli.connected
-                            ? "Mercado Libre ya está conectado. Mientras tanto, lo que publiques queda en cola."
-                            : "Todavía no hay ninguna cuenta conectada. Mientras tanto, lo que publiques queda en cola."}
+                            ? "Mercado Libre está conectado: publicá desde su tarjeta o desde cada propiedad."
+                            : "Conectá Mercado Libre para publicar. El resto de los portales llega pronto."}
                     </p>
                     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
-                        {EXTERNAL_CHANNELS.map(info => <PlatformCard key={info.channel} info={info} meli={meli} />)}
+                        {EXTERNAL_CHANNELS.map(info => (
+                            <PlatformCard
+                                key={info.channel}
+                                info={info}
+                                meli={meli}
+                                counts={countsIn(info.channel)}
+                                onPublish={() => setPicker(info)}
+                                onViewAds={() => {
+                                    setChannelFilter(info);
+                                    setFilter("all");
+                                    scrollToId("listado-propiedades");
+                                }}
+                            />
+                        ))}
                     </div>
                 </section>
 
@@ -245,6 +276,19 @@ export default function MultipublicadorPage() {
                     <Card>
                         <div className="px-4 md:px-6 py-5 border-b" style={{ borderColor: "#F3F0FF" }}>
                             <h2 id="listado-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Tus propiedades</h2>
+                            {channelFilter && (
+                                <p className="mt-2 text-sm flex flex-wrap items-center gap-2" style={{ color: "#4B5563" }}>
+                                    Mostrando solo lo publicado en <strong style={{ color: INK }}>{channelFilter.name}</strong>
+                                    <button
+                                        type="button"
+                                        onClick={() => setChannelFilter(null)}
+                                        className="min-h-[36px] px-3 rounded-full text-xs border"
+                                        style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+                                    >
+                                        Ver todas ✕
+                                    </button>
+                                </p>
+                            )}
                             <div className="mt-4 flex flex-col lg:flex-row gap-3 lg:items-center">
                                 <label className="relative flex-1 min-w-0">
                                     <span className="sr-only">Buscar propiedad por título, zona o ID</span>
@@ -323,6 +367,13 @@ export default function MultipublicadorPage() {
                     </Card>
                 </section>
             </div>
+            {picker && (
+                <PlatformPublishPicker
+                    info={picker}
+                    statusOf={p => statusIn(p, picker.channel)}
+                    onClose={() => setPicker(null)}
+                />
+            )}
         </>
     );
 }
@@ -390,7 +441,22 @@ function Metric({ value, label, sub, loading, danger }: { value: number; label: 
     );
 }
 
-function PlatformCard({ info, meli }: { info: ChannelInfo; meli: MeliConnection }) {
+type ChannelCounts = { published: number; paused: number; error: number };
+
+function PlatformCard({
+    info,
+    meli,
+    counts,
+    onPublish,
+    onViewAds,
+}: {
+    info: ChannelInfo;
+    meli: MeliConnection;
+    counts: ChannelCounts;
+    onPublish: () => void;
+    onViewAds: () => void;
+}) {
+    const isConnected = connectionOf(info.channel, meli) === "connected";
     const [open, setOpen] = useState(false);
     const panelId = useId();
     const guide = INTEGRATION_GUIDES[info.channel];
@@ -418,7 +484,32 @@ function PlatformCard({ info, meli }: { info: ChannelInfo; meli: MeliConnection 
                 <Badge bg={conn.bg} text={conn.fg}>{conn.text}</Badge>
                 {/* Sin "dificultad" ni "en validación": son notas internas, no para la inmobiliaria. */}
             </div>
-            {guide.recommendation && <p className="text-xs mt-2" style={{ color: "#4B5563" }}>{guide.recommendation}</p>}
+            {guide.recommendation && !isConnected && <p className="text-xs mt-2" style={{ color: "#4B5563" }}>{guide.recommendation}</p>}
+            {isConnected && (
+                <>
+                    <p className="text-xs mt-2" style={{ color: "#4B5563" }}>
+                        {counts.published} publicadas · {counts.paused} pausadas · {counts.error} con error
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                        <button
+                            type="button"
+                            onClick={onPublish}
+                            className="flex-1 min-h-[44px] px-4 rounded-xl text-sm text-white"
+                            style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+                        >
+                            + Publicar una propiedad
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onViewAds}
+                            className="flex-1 min-h-[44px] px-4 rounded-xl text-sm border bg-white"
+                            style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+                        >
+                            Ver mis avisos
+                        </button>
+                    </div>
+                </>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2 mt-4">
                 <button
