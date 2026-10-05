@@ -30,6 +30,7 @@ import {
   canPublishToApp,
   fetchAgencyProperties,
   pushStatusToApp,
+  roomsOf,
   uploadPropertyPhotos,
   upsertAppProperty,
   TYPE_FROM_APP,
@@ -225,6 +226,11 @@ export interface NewPropertyInput {
   commission_pct: number | null;
   surface_total: number | null;
   surface_covered: number | null;
+  /**
+   * Ambientes. Opcional para no romper el importador: sin definir se deriva
+   * de dormitorios + 1 (estar), que era la única regla antes de poder editarlo.
+   */
+  rooms?: number | null;
   bedrooms: number;
   bathrooms: number;
   garages: number;
@@ -921,9 +927,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         commission_pct: input.commission_pct,
         surface_total: input.surface_total,
         surface_covered: input.surface_covered,
-        // El formulario pide dormitorios, baños y cocheras; los "ambientes"
-        // que muestran las cards se derivan de dormitorios + 1 (estar).
-        rooms: input.bedrooms + 1,
+        rooms: roomsOf(input),
         bedrooms: input.bedrooms,
         bathrooms: input.bathrooms,
         garages: input.garages,
@@ -1018,7 +1022,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               commission_pct: input.commission_pct,
               surface_total: input.surface_total,
               surface_covered: input.surface_covered,
-              rooms: input.bedrooms + 1,
+              rooms: roomsOf(input),
               bedrooms: input.bedrooms,
               bathrooms: input.bathrooms,
               garages: input.garages,
@@ -1439,7 +1443,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       commission_pct: input.commission_pct,
       surface_total: input.surface_total,
       surface_covered: input.surface_covered,
-      rooms: input.bedrooms ? input.bedrooms + 1 : null,
+      rooms: input.rooms !== undefined ? input.rooms : input.bedrooms ? input.bedrooms + 1 : null,
       bedrooms: input.bedrooms,
       bathrooms: input.bathrooms,
       garages: input.garages,

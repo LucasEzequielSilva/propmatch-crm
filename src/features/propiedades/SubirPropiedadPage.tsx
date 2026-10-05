@@ -93,6 +93,9 @@ export default function SubirPropiedadPage() {
   const [surfaceTotal, setSurfaceTotal] = useState(num(editing?.surface_total));
   const [surfaceCovered, setSurfaceCovered] = useState(num(editing?.surface_covered));
   const [bedrooms, setBedrooms] = useState(editing?.bedrooms ?? 3);
+  // Vacío = se sugiere dormitorios + 1 (estar). Un monoambiente o un
+  // departamento con escritorio no siguen esa regla: se puede pisar.
+  const [rooms, setRooms] = useState(num(editing?.rooms));
   const [bathrooms, setBathrooms] = useState(editing?.bathrooms ?? 2);
   const [garages, setGarages] = useState(editing?.garages ?? 1);
   const [age, setAge] = useState(num(editing?.age_years));
@@ -132,7 +135,7 @@ export default function SubirPropiedadPage() {
    */
   const snapshot = JSON.stringify([
     type, operation, title, description, street, streetNumber, locality, province,
-    price, currency, surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, age,
+    price, currency, surfaceTotal, surfaceCovered, rooms, bedrooms, bathrooms, garages, age,
     photos, expenses, taxes, commission, status, agentId, [...features].sort(),
     ownerId, authType, authExpires,
   ]);
@@ -156,6 +159,8 @@ export default function SubirPropiedadPage() {
    * como texto fijo. Acá corre el mismo motor que usa la pantalla de Matches
    * contra los requerimientos reales, mientras se completa el formulario.
    */
+  const roomsValue = rooms ? Number(rooms) : bedrooms + 1;
+
   const potential = useMemo(() => {
     const priceNum = Number(price) || null;
     if (!priceNum) return null;
@@ -186,7 +191,7 @@ export default function SubirPropiedadPage() {
       commission_pct: null,
       surface_total: Number(surfaceTotal) || null,
       surface_covered: Number(surfaceCovered) || null,
-      rooms: bedrooms + 1,
+      rooms: roomsValue,
       bedrooms,
       bathrooms,
       garages,
@@ -212,7 +217,7 @@ export default function SubirPropiedadPage() {
   }, [
     price, currency, type, operation, locality, province, street, streetNumber,
     surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, features,
-    requirements, title, description, agentId,
+    requirements, title, description, agentId, roomsValue,
   ]);
 
   function validate(): boolean {
@@ -249,6 +254,7 @@ export default function SubirPropiedadPage() {
       commission_pct: commission ? Number(commission) : null,
       surface_total: surfaceTotal ? Number(surfaceTotal) : null,
       surface_covered: surfaceCovered ? Number(surfaceCovered) : null,
+      rooms: roomsValue,
       bedrooms,
       bathrooms,
       garages,
@@ -533,7 +539,16 @@ export default function SubirPropiedadPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-4">
+                <Field label="Ambientes">
+                  <input
+                    value={rooms}
+                    onChange={(e) => setRooms(e.target.value.replace(/[^\d]/g, ""))}
+                    inputMode="numeric"
+                    placeholder={`${bedrooms + 1} (sugerido)`}
+                    className={inputClass(false)}
+                  />
+                </Field>
                 <Stepper label="Dormitorios" value={bedrooms} onChange={setBedrooms} />
                 <Stepper label="Baños" value={bathrooms} onChange={setBathrooms} />
                 <Stepper label="Cocheras" value={garages} onChange={setGarages} />
@@ -940,7 +955,7 @@ export default function SubirPropiedadPage() {
                 <SummaryRow label="Operación" value={OPERATIONS.find((o) => o.value === operation)!.label} />
                 <SummaryRow label="Precio" value={price ? money(Number(price), currency) : "—"} />
                 <SummaryRow label="Ubicación" value={locality} />
-                <SummaryRow label="Ambientes" value={`${bedrooms + 1}`} />
+                <SummaryRow label="Ambientes" value={`${roomsValue}`} />
                 <SummaryRow label="Fotos" value={`${photos.length}`} />
               </div>
             </Card>
