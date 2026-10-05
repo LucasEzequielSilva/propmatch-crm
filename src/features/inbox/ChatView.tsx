@@ -10,6 +10,7 @@ import { useAutomationState } from "./automationState";
 import { buildTemplateContext, missingPropertyVars, renderTemplate } from "./templates";
 import { useMatchChat } from "./useMatchChat";
 import type { MessageRow } from "@/lib/leadSync";
+import { InboxAssist } from "@/features/proppi/InboxAssist";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -216,6 +217,13 @@ ${t}` : t));
       </div>
 
       <div className="border-t px-3 md:px-4 pt-2 pb-3 flex-shrink-0" style={{ borderColor: "#EDE9FE" }}>
+        <InboxAssist
+          conversation={conversation}
+          messages={messages}
+          text={text}
+          setText={setText}
+          focusInput={() => area.current?.focus()}
+        />
         <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Respuestas rápidas">
           {config.snippets.map((s) => {
             const missing = missingPropertyVars(s.text, tplCtx);
