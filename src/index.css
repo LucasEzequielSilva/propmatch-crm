@@ -44,6 +44,9 @@
   --color-state-blue-bg: #EFF6FF;
   --color-state-blue-text: #2563EB;
   --color-state-blue-border: #BFDBFE;
+  --color-state-red-bg: #FFF1F2;
+  --color-state-red-text: #BE123C;
+  --color-state-red-border: #FECDD3;
 }
 
 @layer theme {
