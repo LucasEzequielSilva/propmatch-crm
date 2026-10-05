@@ -22,6 +22,10 @@ import { usePublications, type ChannelState } from "./usePublications";
 import { useMeliConnection } from "./useIntegrations";
 import { MeliPublishPanel } from "./MeliPublishPanel";
 import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
+import { metaEnv } from "@/lib/inbox/metaSdk";
+import { useMetaConnection } from "./useMetaConnection";
+import { MetaPublishPanel } from "./MetaPublishPanel";
+import { WebChannelPanel } from "./WebChannelPanel";
 import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 
 const initialsOf = (name: string) =>
@@ -62,10 +66,16 @@ function ChannelRow({
   const isWeb = info.channel === "web";
   // Mercado Libre se publica de verdad desde su panel, no por la cola.
   const isMeli = info.channel === "mercadolibre";
-  const selectable = !isWeb && !isMeli && status === null;
+  // Con la publicación de Meta habilitada, Facebook/Instagram se publican desde su panel (no por la cola).
+  const isMeta = metaEnv.publishEnabled && (info.channel === "facebook" || info.channel === "instagram");
+  const selectable = !isWeb && !isMeli && !isMeta && status === null;
 
   let line: { text: string; color: string; icon: React.ReactNode };
-  if (isWeb) line = { text: "Publicada · canal propio", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
+  if (isWeb)
+    line =
+      status === "published"
+        ? { text: "En tu web", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> }
+        : { text: status === "removed" ? "Oculta en tu web" : status === "paused" ? "No disponible" : "Sin sincronizar", color: "#6B7280", icon: null };
   else if (status === "published") line = { text: "Publicada", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
   else if (status === "pending")
     line = isMeli
@@ -130,9 +140,9 @@ function ChannelRow({
             Ver ficha
           </a>
         )}
-        {isMeli && (
+        {(isMeli || isMeta || isWeb) && (
           <a
-            href="#mercadolibre"
+            href={isMeli ? "#mercadolibre" : isWeb ? "#web" : "#meta"}
             className="px-3 py-1.5 rounded-lg text-xs border hover:bg-violet-50"
             style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 700 }}
           >
@@ -167,8 +177,9 @@ export default function MultipublicadorVivoPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
   const navigate = useNavigate();
   const { properties, photos, matches, contactById, profileById, coverPhoto } = useStore();
-  const { channelsOf, queue, applyRow, loading, error } = usePublications();
+  const { channelsOf, queue, applyRow, setWeb, loading, error } = usePublications();
   const meli = useMeliConnection();
+  const meta = useMetaConnection();
   const [selected, setSelected] = useState<PublicationChannel[]>([]);
 
   const property = properties.find((p) => p.id === propertyId);
@@ -409,6 +420,21 @@ export default function MultipublicadorVivoPage() {
                 meli={meli}
                 onRow={applyRow}
               />
+            </div>
+
+            <div id="meta" className="scroll-mt-6">
+              <MetaPublishPanel
+                property={property}
+                photos={photoList}
+                facebook={channels.find((c) => c.info.channel === "facebook")!}
+                instagram={channels.find((c) => c.info.channel === "instagram")!}
+                meta={meta}
+                onRow={applyRow}
+              />
+            </div>
+
+            <div id="web" className="scroll-mt-6">
+              <WebChannelPanel property={property} web={channels.find((c) => c.info.channel === "web")!} setWeb={setWeb} />
             </div>
           </div>
 
