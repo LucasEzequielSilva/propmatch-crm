@@ -1,3 +1,4 @@
+import { isSample } from "@/lib/samples";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -115,7 +116,9 @@ export default function DashboardPage() {
                 {pendingOffers.length} {pendingOffers.length === 1 ? "oferta pendiente" : "ofertas pendientes"}
               </p>
               <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
-                Gente real hizo una oferta por tus propiedades — click para revisarlas.
+                {pendingOffers.every(isSample)
+                  ? "Ofertas de ejemplo, para que veas cómo llegan — click para revisarlas."
+                  : "Gente real hizo una oferta por tus propiedades — click para revisarlas."}
               </p>
             </div>
           </div>
