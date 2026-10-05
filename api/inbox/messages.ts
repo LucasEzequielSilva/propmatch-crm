@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let q = crmDb()
       .from("messages")
-      .select("id, direction, type, body, media_id, media_url, media_mime, template_name, status, status_at, error_code, error_title, echo, sent_by, created_at")
+      .select("id, direction, type, body, external_message_id, media_id, media_url, media_mime, template_name, status, status_at, error_code, error_title, echo, sent_by, created_at")
       .eq("agency_id", ctx.agencyId)
       .eq("conversation_id", cid)
       .order("created_at", { ascending: false })
@@ -46,7 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...m,
       // El navegador nunca ve el media id de WhatsApp: pide el proxy.
       media_id: undefined,
+      external_message_id: undefined,
       has_media: !!(m.media_id || m.media_url),
+      // Meta lo aceptó (hay id externo) aunque todavía no llegó ningún estado.
+      accepted: !!m.external_message_id,
     }));
     return json(res, 200, { messages: rows, hasMore: (data ?? []).length === limit });
   }

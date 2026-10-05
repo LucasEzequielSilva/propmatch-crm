@@ -111,10 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? await waSendTemplate(acc, conv.external_thread_id, tplRow.name, tplRow.language, params)
           : await waSendText(acc, conv.external_thread_id, text)
         : await metaSendText(acc, conv.external_thread_id, text, humanAgent);
-    // Si el webhook del eco/estado llegó antes, ya existe ese id: no se pisa.
+    // Queda "pending" con id externo (= aceptado por Meta). Los tildes
+    // (sent/delivered/read) los pone SOLO el webhook de estados.
+    // Si el eco del webhook llegó antes, ese id ya existe: se borra el local.
     const { error } = await db
       .from("messages")
-      .update({ external_message_id: externalId, status: "sent", status_at: new Date().toISOString() })
+      .update({ external_message_id: externalId })
       .eq("id", local.messageId);
     if (error) await db.from("messages").delete().eq("id", local.messageId);
     return json(res, 200, { ok: true, messageId: local.messageId });
