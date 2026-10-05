@@ -8,6 +8,12 @@ export interface DiagnosticCheck {
   detail: string;
 }
 
+/** Reglas de publicación. Las usan el diagnóstico y los contadores del alta. */
+export const TITLE_MIN = 20;
+export const TITLE_MAX = 100;
+export const DESCRIPTION_MIN = 100;
+export const PHOTOS_MIN = 5;
+
 /** Validaciones previas a publicar una propiedad en portales externos. */
 export function diagnose(p: Property, photoCount: number): DiagnosticCheck[] {
   const titleLen = p.title.trim().length;
@@ -34,23 +40,29 @@ export function diagnose(p: Property, photoCount: number): DiagnosticCheck[] {
     {
       id: "title",
       label: "Título",
-      ok: titleLen >= 20 && titleLen <= 100,
+      ok: titleLen >= TITLE_MIN && titleLen <= TITLE_MAX,
       detail:
-        titleLen >= 20 && titleLen <= 100
-          ? `${titleLen} caracteres (ideal 20 a 100).`
-          : `Tiene ${titleLen} caracteres; debe tener entre 20 y 100.`,
+        titleLen >= TITLE_MIN && titleLen <= TITLE_MAX
+          ? `${titleLen} caracteres (ideal ${TITLE_MIN} a ${TITLE_MAX}).`
+          : `Tiene ${titleLen} caracteres; debe tener entre ${TITLE_MIN} y ${TITLE_MAX}.`,
     },
     {
       id: "description",
       label: "Descripción",
-      ok: descLen >= 100,
-      detail: descLen >= 100 ? `${descLen} caracteres.` : `Tiene ${descLen} caracteres; se necesitan al menos 100.`,
+      ok: descLen >= DESCRIPTION_MIN,
+      detail:
+        descLen >= DESCRIPTION_MIN
+          ? `${descLen} caracteres.`
+          : `Tiene ${descLen} caracteres; se necesitan al menos ${DESCRIPTION_MIN}.`,
     },
     {
       id: "photos",
       label: "Fotos",
-      ok: photoCount >= 5,
-      detail: photoCount >= 5 ? `${photoCount} fotos cargadas.` : `Hay ${photoCount}; se necesitan al menos 5.`,
+      ok: photoCount >= PHOTOS_MIN,
+      detail:
+        photoCount >= PHOTOS_MIN
+          ? `${photoCount} fotos cargadas.`
+          : `Hay ${photoCount}; se necesitan al menos ${PHOTOS_MIN}.`,
     },
     {
       id: "price",
