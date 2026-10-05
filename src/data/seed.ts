@@ -310,9 +310,16 @@ export const seedTasks: Task[] = [
   { id: "t-4", agency_id: AGENCY_ID, owner_id: "u-1", text: "Actualizar fichas de propiedades", is_priority: false, is_done: false, due_date: null, contact_id: null, created_at: iso(2) },
 ];
 
+/**
+ * Amenities. El matching compara estos textos tal cual (matching.ts,
+ * scoreFeatures): renombrar uno rompe los requerimientos ya guardados. Solo
+ * se agregan al final.
+ */
 export const FEATURE_CHIPS = [
   "Jardín", "Balcón", "Cochera", "Piscina", "Terraza",
   "Seguridad", "Mascotas", "Parrilla", "Luminoso",
+  "Gimnasio", "Solarium", "SUM", "Lavadero", "Aire acondicionado",
+  "Seguridad 24 hs", "Ascensor", "Placards", "Apto profesional",
 ];
 
 export const ZONES = [

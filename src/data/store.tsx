@@ -25,6 +25,7 @@ import type {
   VisitChecklist,
   VisitFeedback,
   VisitStatus,
+  PropertyCrmDetails,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
@@ -35,6 +36,7 @@ import {
   canPublishToApp,
   fetchAgencyProperties,
   pushStatusToApp,
+  roomsOf,
   uploadPropertyPhotos,
   upsertAppProperty,
   TYPE_FROM_APP,
@@ -242,7 +244,7 @@ export interface NewContactInput {
   requirement: RequirementInput | null;
 }
 
-export interface NewPropertyInput {
+export interface NewPropertyInput extends PropertyCrmDetails {
   title: string;
   description: string | null;
   type: Property["type"];
@@ -259,6 +261,17 @@ export interface NewPropertyInput {
   commission_pct: number | null;
   surface_total: number | null;
   surface_covered: number | null;
+  /**
+   * Ambientes. Opcional para no romper el importador: sin definir se deriva
+   * de dormitorios + 1 (estar), que era la única regla antes de poder editarlo.
+   */
+  rooms?: number | null;
+  /**
+   * Coordenadas del pin. Solo viven en el CRM (ver buildAppPayload). Sin
+   * definir = el formulario no las tocó: al editar se conservan las que había.
+   */
+  lat?: number | null;
+  lng?: number | null;
   bedrooms: number;
   bathrooms: number;
   garages: number;
@@ -269,6 +282,22 @@ export interface NewPropertyInput {
   authorization_type: Property["authorization_type"];
   authorization_expires_at: string | null;
   photos: string[];
+}
+
+const CRM_DETAIL_KEYS = [
+  "subtype", "toilettes", "surface_semicovered", "surface_uncovered", "layout", "orientation",
+  "floor", "unit", "expenses_currency", "credit_eligible", "accepts_swap",
+  "reserve_min_price", "reserve_min_currency",
+] as const satisfies readonly (keyof PropertyCrmDetails)[];
+
+/**
+ * Copia solo los datos "de CRM" que vinieron definidos. Al editar, lo que no
+ * vino se conserva tal como estaba en la propiedad.
+ */
+function pickCrmDetails(input: PropertyCrmDetails): PropertyCrmDetails {
+  const out: Record<string, unknown> = {};
+  for (const key of CRM_DETAIL_KEYS) if (input[key] !== undefined) out[key] = input[key];
+  return out as PropertyCrmDetails;
 }
 
 export interface NewEventInput {
@@ -991,8 +1020,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         locality: input.locality,
         province: input.province,
         zone: input.locality,
-        lat: null,
-        lng: null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
         price: input.price,
         currency: input.currency,
         expenses: input.expenses,
@@ -1000,14 +1029,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         commission_pct: input.commission_pct,
         surface_total: input.surface_total,
         surface_covered: input.surface_covered,
-        // El formulario pide dormitorios, baños y cocheras; los "ambientes"
-        // que muestran las cards se derivan de dormitorios + 1 (estar).
-        rooms: input.bedrooms + 1,
+        rooms: roomsOf(input),
         bedrooms: input.bedrooms,
         bathrooms: input.bathrooms,
         garages: input.garages,
         age_years: input.age_years,
         features: input.features,
+        ...pickCrmDetails(input),
         is_featured: false,
         published_to_marketplace: false,
         published_at: nowIso,
@@ -1090,6 +1118,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               locality: input.locality,
               province: input.province,
               zone: input.locality,
+              lat: input.lat !== undefined ? input.lat : p.lat,
+              lng: input.lng !== undefined ? input.lng : p.lng,
               price: input.price,
               currency: input.currency,
               expenses: input.expenses,
@@ -1097,7 +1127,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               commission_pct: input.commission_pct,
               surface_total: input.surface_total,
               surface_covered: input.surface_covered,
-              rooms: input.bedrooms + 1,
+              rooms: roomsOf(input),
               bedrooms: input.bedrooms,
               bathrooms: input.bathrooms,
               garages: input.garages,
@@ -1107,6 +1137,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               owner_contact_id: input.owner_contact_id,
               authorization_type: input.authorization_type,
               authorization_expires_at: input.authorization_expires_at,
+              ...pickCrmDetails(input),
               updated_at: nowIso,
               sync_status: agencyContextRef.current
                 ? willPublish
@@ -1528,8 +1559,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       locality: input.locality,
       province: input.province,
       zone: input.locality,
-      lat: null,
-      lng: null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
       price: input.price,
       currency: input.currency,
       expenses: input.expenses,
@@ -1537,7 +1568,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       commission_pct: input.commission_pct,
       surface_total: input.surface_total,
       surface_covered: input.surface_covered,
-      rooms: input.bedrooms ? input.bedrooms + 1 : null,
+      rooms: input.rooms !== undefined ? input.rooms : input.bedrooms ? input.bedrooms + 1 : null,
       bedrooms: input.bedrooms,
       bathrooms: input.bathrooms,
       garages: input.garages,

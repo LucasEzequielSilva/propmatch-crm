@@ -112,7 +112,40 @@ export interface ContactRequirement {
   updated_at: string;
 }
 
-export interface Property {
+export type PropertyLayout = "frente" | "contrafrente" | "lateral" | "interno";
+export type PropertyOrientation = "N" | "NE" | "NO" | "S" | "SE" | "SO" | "E" | "O";
+
+/**
+ * Datos de la ficha que solo viven en el CRM (localStorage). No van a la app:
+ * `buildAppPayload` arma su payload campo por campo y no los toca.
+ *
+ * Todos opcionales: las propiedades guardadas antes de que existieran se
+ * siguen leyendo igual (sin definir = sin dato).
+ */
+export interface PropertyCrmDetails {
+  /** Texto libre con sugerencias por tipo: "Chalet", "Monoambiente", "Lote en barrio cerrado"… */
+  subtype?: string | null;
+  toilettes?: number | null;
+  surface_semicovered?: number | null;
+  surface_uncovered?: number | null;
+  layout?: PropertyLayout | null;
+  orientation?: PropertyOrientation | null;
+  /** Texto porque hay "PB", "EP", "11". */
+  floor?: string | null;
+  unit?: string | null;
+  /** Moneda de `expenses`. Sin definir = ARS (lo que se asumía antes). */
+  expenses_currency?: CurrencyCode | null;
+  credit_eligible?: boolean | null;
+  accepts_swap?: boolean | null;
+  /**
+   * CONFIDENCIAL: precio mínimo que acepta el propietario. Nunca sale del CRM:
+   * no va a la ficha pública, ni a los CSV, ni al informe al propietario, ni a la app.
+   */
+  reserve_min_price?: number | null;
+  reserve_min_currency?: CurrencyCode | null;
+}
+
+export interface Property extends PropertyCrmDetails {
   id: string;
   agency_id: string;
   owner_agent_id: string | null;

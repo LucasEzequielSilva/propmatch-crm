@@ -82,6 +82,15 @@ export function canPublishToApp(input: { currency: CurrencyCode }): boolean {
   return input.currency === "USD";
 }
 
+/**
+ * Ambientes de la propiedad. Si el formulario los mandó (aunque sea `null`,
+ * "no sé"), manda eso; si no vinieron (importador, datos viejos), se usa la
+ * regla de siempre: dormitorios + 1 (estar).
+ */
+export function roomsOf(input: { rooms?: number | null; bedrooms: number }): number | null {
+  return input.rooms !== undefined ? input.rooms : input.bedrooms + 1;
+}
+
 function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
   const [header, base64] = dataUrl.split(",");
   const mime = header.match(/data:(.*?);base64/)?.[1] ?? "image/webp";
@@ -143,7 +152,10 @@ function buildAppPayload(input: NewPropertyInput, ctx: AppPropertyContext, photo
     barrio: input.locality,
     type: TYPE_TO_APP[input.type],
     operation_type: OPERATION_TO_APP[input.operation],
-    rooms: input.bedrooms + 1,
+    rooms: roomsOf(input),
+    // lat/lng NO se mandan todavía: pendiente de decidir con Lucas. La app
+    // oculta la ubicación exacta hasta el match (ver AGENCY_PROPERTY_COLUMNS)
+    // y no está definido cómo debería tratar el pin que carga la agencia.
     amenities: input.features,
     price_usd_month: isRent ? input.price : null,
     price_usd_sale: isRent ? null : input.price,
