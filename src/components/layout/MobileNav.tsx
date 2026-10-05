@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
+import { countUnanswered, useInboxFeed } from "@/features/inbox/inboxFeed";
 import {
   AgendaIcon,
   ContactsIcon,
   HomeIcon,
+  InboxIcon,
   LogoutIcon,
   MatchesIcon,
   OpportunitiesIcon,
   OperacionesIcon,
   PropertiesIcon,
+  InstagramIcon,
   ReportesIcon,
   SettingsIcon,
   type IconProps,
 } from "@/components/ui/icons";
+import { MercadoIcon } from "@/features/mercado/MercadoIcon";
 
 /**
  * Navegación en el celular.
@@ -32,13 +36,18 @@ interface Item {
 
 const TABS: Item[] = [
   { to: "/", label: "Inicio", icon: HomeIcon },
+  { to: "/inbox", label: "Inbox", icon: InboxIcon },
   { to: "/contactos", label: "Contactos", icon: ContactsIcon },
   { to: "/propiedades", label: "Propiedades", icon: PropertiesIcon },
-  { to: "/agenda", label: "Agenda", icon: AgendaIcon },
 ];
 
 const MORE: Item[] = [
+  { to: "/agenda", label: "Agenda", icon: AgendaIcon },
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
+  { to: "/mercado", label: "Mercado", icon: MercadoIcon },
+  { to: "/publicador", label: "Publicaciones", icon: PropertiesIcon },
+  { to: "/instagram", label: "Instagram", icon: InstagramIcon },
+  { to: "/ofertas", label: "Ofertas", icon: OperacionesIcon },
   { to: "/operaciones", label: "Operaciones", icon: OperacionesIcon },
   { to: "/matches", label: "Matches", icon: MatchesIcon },
   { to: "/reportes", label: "Reportes", icon: ReportesIcon },
@@ -51,6 +60,7 @@ export function MobileNav() {
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
+  const unanswered = countUnanswered(useInboxFeed(agency.id));
   const moreActive = MORE.some((i) => pathname.startsWith(i.to)) || pathname.startsWith("/importar");
 
   // Al navegar, la hoja se cierra sola.
@@ -75,7 +85,9 @@ export function MobileNav() {
             end={item.to === "/"}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 h-16"
           >
-            {({ isActive }) => <TabContent item={item} active={isActive} />}
+            {({ isActive }) => (
+              <TabContent item={item} active={isActive} badge={item.to === "/inbox" ? unanswered : 0} />
+            )}
           </NavLink>
         ))}
         <button
@@ -174,15 +186,24 @@ export function MobileNav() {
   );
 }
 
-function TabContent({ item, active }: { item: Item; active: boolean }) {
+function TabContent({ item, active, badge = 0 }: { item: Item; active: boolean; badge?: number }) {
   const Icon = item.icon;
   return (
     <>
       <span
-        className="w-12 h-7 rounded-full flex items-center justify-center transition-all"
+        className="relative w-12 h-7 rounded-full flex items-center justify-center transition-all"
         style={{ background: active ? "#EDE9FE" : "transparent" }}
       >
         <Icon size={19} color={active ? "#7C3AED" : "#9CA3AF"} />
+        {badge > 0 && (
+          <span
+            className="absolute -top-1 right-0 min-w-[16px] h-4 px-1 rounded-full text-white text-[10px] flex items-center justify-center"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+          >
+            {badge}
+            <span className="sr-only"> sin responder</span>
+          </span>
+        )}
       </span>
       <span className="text-[11px]" style={{ color: active ? "#7C3AED" : "#6B7280", fontWeight: active ? 700 : 500 }}>
         {item.label}

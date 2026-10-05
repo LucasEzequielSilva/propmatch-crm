@@ -17,6 +17,18 @@ export interface OwnerReport {
   inProgress: number;
   visitsDone: number;
   visitsUpcoming: number;
+  /** Contactos que, según el feedback cargado, quedaron con interés alto. */
+  veryInterested: number;
+}
+
+/**
+ * Una visita pasada cuenta como hecha salvo que el feedback o el estado digan
+ * lo contrario. Sin feedback ni estado se mantiene el criterio de siempre
+ * (pasó la hora = se hizo), para no cambiar los informes ya mandados.
+ */
+function countsAsDone(e: CalendarEvent): boolean {
+  if (e.feedback) return e.feedback.happened === "si";
+  return e.status !== "no_show" && e.status !== "cancelada" && e.status !== "reprogramada";
 }
 
 export function ownerReport(
@@ -35,8 +47,11 @@ export function ownerReport(
     inProgress: data.opportunities.filter(
       (o) => o.property_id === propertyId && o.stage !== "perdida" && o.stage !== "cierre",
     ).length,
-    visitsDone: visits.filter((e) => new Date(e.starts_at).getTime() <= now).length,
-    visitsUpcoming: visits.filter((e) => new Date(e.starts_at).getTime() > now).length,
+    visitsDone: visits.filter((e) => new Date(e.starts_at).getTime() <= now && countsAsDone(e)).length,
+    visitsUpcoming: visits.filter((e) => new Date(e.starts_at).getTime() > now && e.status !== "cancelada").length,
+    veryInterested: new Set(
+      visits.filter((e) => e.feedback?.interest === "alto").map((e) => e.contact_id ?? e.id),
+    ).size,
   };
 }
 

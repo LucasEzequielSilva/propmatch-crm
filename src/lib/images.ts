@@ -10,7 +10,7 @@
 const MAX_SIDE = 1280;
 const QUALITY = 0.72;
 
-/** Achica la imagen a `MAX_SIDE` px de lado mayor y la devuelve como data URL WebP (o JPEG). */
+/** Achica la imagen a `MAX_SIDE` px de lado mayor y la devuelve como data URL JPEG. */
 export async function compressImage(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
@@ -25,8 +25,44 @@ export async function compressImage(file: File): Promise<string> {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
+  // JPEG y no WebP: las fotos terminan en portales, y Mercado Libre documenta
+  // solo JPG/JPEG/PNG (https://developers.mercadolibre.com.ar/es_ar/trabajar-con-imagenes).
+  return canvas.toDataURL("image/jpeg", QUALITY);
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    // Las fotos ya sincronizadas vienen del Storage público (con CORS): sin
+    // esto el canvas queda "contaminado" y no se puede exportar.
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+    img.src = src;
+  });
+}
+
+/**
+ * Gira la foto 90° a la derecha y la devuelve como data URL, con el mismo
+ * tope de tamaño y calidad que `compressImage`. Si era una URL del Storage,
+ * pasa a ser una foto nueva: se vuelve a subir en la próxima sincronización.
+ */
+export async function rotateImage(src: string): Promise<string> {
+  const img = await loadImage(src);
+  const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * scale);
+  const h = Math.round(img.naturalHeight * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = h;
+  canvas.height = w;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas no disponible");
+  ctx.translate(h, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(img, 0, 0, w, h);
+
   const webp = canvas.toDataURL("image/webp", QUALITY);
-  // Safari viejo no codifica WebP y devuelve PNG: ahí conviene JPEG.
   return webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", QUALITY);
 }
 

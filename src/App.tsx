@@ -3,13 +3,21 @@ import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
 
 import LoginPage from "@/features/auth/LoginPage";
+import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import ContactosPage from "@/features/contactos/ContactosPage";
 import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
 import PropiedadesPage from "@/features/propiedades/PropiedadesPage";
 import SubirPropiedadPage from "@/features/propiedades/SubirPropiedadPage";
 import PropiedadDetallePage from "@/features/propiedades/PropiedadDetallePage";
+import MultipublicadorPage from "@/features/propiedades/MultipublicadorPage";
+import MultipublicadorVivoPage from "@/features/propiedades/MultipublicadorVivoPage";
+import InstagramPublisherPage from "@/features/instagram/InstagramPublisherPage";
+import InstagramStudioPage from "@/features/instagram/InstagramStudioPage";
+import InstagramEditorPage from "@/features/instagram/InstagramEditorPage";
 import OportunidadesPage from "@/features/oportunidades/OportunidadesPage";
+import OfertasPage from "@/features/ofertas/OfertasPage";
+import InboxPage from "@/features/inbox/InboxPage";
 import MatchesPage from "@/features/matches/MatchesPage";
 import VerMatchPage from "@/features/matches/VerMatchPage";
 import AgendaPage from "@/features/agenda/AgendaPage";
@@ -17,6 +25,7 @@ import ReportesPage from "@/features/reportes/ReportesPage";
 import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
 import FichaPage from "@/features/ficha/FichaPage";
 import ImportarPage from "@/features/importar/ImportarPage";
+import MercadoPage from "@/features/mercado/MercadoPage";
 import OperacionesPage from "@/features/operaciones/OperacionesPage";
 import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
 import DocumentoPage from "@/features/operaciones/DocumentoPage";
@@ -33,6 +42,7 @@ import DocumentoPage from "@/features/operaciones/DocumentoPage";
 export default function App() {
   return (
     <StoreProvider>
+      <PasswordRecovery />
       <BrowserRouter>
         <Routes>
           {/* Ficha que recibe el cliente: pública, sin sesión y sin el layout del CRM. */}
@@ -47,6 +57,7 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
 
+              <Route path="inbox" element={<InboxPage />} />
               <Route path="contactos" element={<ContactosPage />} />
               <Route path="contactos/:contactId" element={<ContactoDetallePage />} />
 
@@ -54,8 +65,18 @@ export default function App() {
               <Route path="propiedades/nueva" element={<SubirPropiedadPage />} />
               <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
               <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
+              <Route path="mercado" element={<MercadoPage />} />
+
+              <Route path="publicador" element={<MultipublicadorPage />} />
+              <Route path="publicador/:propertyId" element={<MultipublicadorVivoPage />} />
+              <Route path="publicador/:propertyId/instagram" element={<InstagramPublisherPage />} />
+
+              <Route path="instagram" element={<InstagramStudioPage />} />
+              <Route path="instagram/nueva" element={<InstagramEditorPage />} />
+              <Route path="instagram/:postId" element={<InstagramEditorPage />} />
 
               <Route path="oportunidades" element={<OportunidadesPage />} />
+              <Route path="ofertas" element={<OfertasPage />} />
               <Route path="operaciones" element={<OperacionesPage />} />
               <Route path="operaciones/:dealId" element={<OperacionDetallePage />} />
 
@@ -76,16 +97,18 @@ export default function App() {
   );
 }
 
-/** Área privada: sin sesión abierta, al login. */
+/** Área privada: sin sesión abierta, al login. Espera a que se resuelva la sesión de Supabase antes de redirigir, para no mandar al login a alguien que ya estaba logueado. */
 function RequireSession() {
-  const { currentUserId } = useStore();
+  const { currentUserId, sessionLoading } = useStore();
+  if (sessionLoading) return null;
   if (!currentUserId) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
 /** Con la sesión ya abierta, el login no tiene sentido. */
 function PublicOnly() {
-  const { currentUserId } = useStore();
+  const { currentUserId, sessionLoading } = useStore();
+  if (sessionLoading) return null;
   if (currentUserId) return <Navigate to="/" replace />;
   return <Outlet />;
 }

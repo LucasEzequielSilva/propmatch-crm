@@ -1,230 +1,630 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useStore } from "@/data/store";
-import { MatchesSolidIcon } from "@/components/ui/icons";
-import { avatarGradient, initials } from "@/lib/format";
+import { supabase } from "@/lib/supabase";
+import BrandPanel, { LogoMark } from "./BrandPanel";
 
 /**
- * Inicio de sesión.
+ * Acceso: ingresar, crear cuenta y continuar con Google.
  *
- * IMPORTANTE: esto es la pantalla, no la seguridad. Sin backend no hay
- * contraseñas guardadas ni tokens: alcanza con el mail de un agente para
- * entrar. Existe para que el flujo esté completo y para saber qué agente está
- * usando el CRM (de eso dependen "a cargo de", el avatar del header y el
- * ranking del equipo). Cuando haya backend se reemplaza por auth real.
+ * Auth real contra el mismo Supabase que usa la app. Una cuenta recién creada
+ * (o de Google) entra aunque no pertenezca a ninguna inmobiliaria, en modo
+ * local (ver `applySession` del store). Si hay que confirmar el email, se
+ * muestran los pasos (`pendingLinkEmail` del store). El alta real de la
+ * agencia es una decisión pendiente.
  */
-export default function LoginPage() {
-  const { signIn, profiles, agency } = useStore();
 
+type Mode = "login" | "signup";
+
+export default function LoginPage() {
+  const { signIn, signUp, signInWithGoogle, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
+
+  const [mode, setMode] = useState<Mode>("login");
+  const [name, setName] = useState("");
+  const [agencyName, setAgencyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  /** Error que Supabase deja en la URL al volver de un link de email (vencido o ya usado). */
+  const [linkError, setLinkError] = useState<LinkErrorKind | null>(readLinkErrorFromUrl);
+  const tabRefs = useRef<Record<Mode, HTMLButtonElement | null>>({ login: null, signup: null });
+  const uid = useId();
 
-  function handleSubmit(e: React.FormEvent) {
+  const isSignup = mode === "signup";
+  const strength = passwordStrength(password);
+  const anyBusy = busy || googleBusy;
+
+  function changeMode(next: Mode) {
+    setMode(next);
+    setError(null);
+  }
+
+  function onTabKey(e: React.KeyboardEvent) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
+    const next: Mode = e.key === "ArrowLeft" || e.key === "Home" ? "login" : "signup";
+    changeMode(next);
+    tabRefs.current[next]?.focus();
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (anyBusy) return;
+    setError(null);
+
+    if (!isSignup) {
+      setBusy(true);
+      setError(await signIn(email, password));
+      setBusy(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("La contraseña tiene que tener al menos 8 caracteres.");
+      return;
+    }
+    if (!accepted) {
+      setError("Aceptá los términos para crear tu cuenta.");
+      return;
+    }
     setBusy(true);
-    const message = signIn(email, password);
-    setError(message);
+    const res = await signUp({ name, agencyName, email, password });
     setBusy(false);
+    if (res.error) setError(res.error);
+    else setNeedsConfirm(res.needsEmailConfirmation);
+  }
+
+  async function handleGoogle() {
+    if (anyBusy) return;
+    setError(null);
+    setGoogleBusy(true);
+    const message = await signInWithGoogle();
+    // Si salió bien el navegador ya está yendo a Google: dejamos el estado de carga.
+    if (message) {
+      setError(message);
+      setGoogleBusy(false);
+    }
+  }
+
+  if (pendingLinkEmail !== null) {
+    return (
+      <Shell>
+        <PendingLink
+          email={pendingLinkEmail}
+          needsConfirm={needsConfirm}
+          onBack={() => {
+            dismissPendingLink();
+            setNeedsConfirm(false);
+            setPassword("");
+            setMode("login");
+          }}
+        />
+      </Shell>
+    );
   }
 
   return (
-    <div className="min-h-full flex" style={{ background: "#FDFCFF" }}>
-      {/* Panel de marca */}
-      <div
-        className="hidden lg:flex w-[46%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ background: "var(--gradient-brand-wide)" }}
-      >
+    <Shell>
+      <div className="lg:hidden flex items-center gap-3 mb-10">
         <div
-          className="absolute -right-16 -top-16 w-72 h-72 rounded-full opacity-20"
-          style={{ background: "white" }}
-        />
-        <div
-          className="absolute right-24 bottom-10 w-40 h-40 rounded-full opacity-10"
-          style={{ background: "white" }}
-        />
-
-        <div className="relative z-10 flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.2)" }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M3 12L12 3L21 12V21H15V15H9V21H3V12Z" fill="white" fillOpacity="0.9" />
-              <circle cx="16" cy="8" r="3" fill="white" fillOpacity="0.7" />
-            </svg>
-          </div>
-          <span className="text-white text-lg tracking-tight" style={{ fontWeight: 800 }}>
-            PropMatch
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{ background: "var(--gradient-brand)" }}
+        >
+          <LogoMark size={18} />
+        </div>
+        <div>
+          <span className="text-lg tracking-tight" style={{ color: "#3B0764", fontWeight: 800 }}>
+            Prop
+          </span>
+          <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
+            Match
           </span>
         </div>
-
-        <div className="relative z-10 pm-enter">
-          <h1 className="text-white text-4xl leading-tight tracking-tight" style={{ fontWeight: 800 }}>
-            El CRM que entiende
-            <br />a cada cliente.
-          </h1>
-          <p className="text-white text-base mt-4 max-w-md" style={{ opacity: 0.8 }}>
-            Organizá tu cartera, seguí cada operación y encontrá qué propiedad encaja con quién,
-            sin perder oportunidades por el camino.
-          </p>
-          <div className="flex items-center gap-2 mt-8">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(255,255,255,0.2)" }}
-            >
-              <MatchesSolidIcon size={18} />
-            </div>
-            <span className="text-white text-sm" style={{ opacity: 0.85, fontWeight: 500 }}>
-              Compatibilidad calculada sobre datos reales
-            </span>
-          </div>
-        </div>
-
-        <p className="relative z-10 text-white text-xs" style={{ opacity: 0.6 }}>
-          © {new Date().getFullYear()} PropMatch
-        </p>
       </div>
 
-      {/* Formulario */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="w-full max-w-sm pm-enter">
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: "var(--gradient-brand)" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M3 12L12 3L21 12V21H15V15H9V21H3V12Z" fill="white" fillOpacity="0.9" />
-                <circle cx="16" cy="8" r="3" fill="white" fillOpacity="0.7" />
-              </svg>
+      {linkError && (
+        <LinkErrorNotice
+          kind={linkError}
+          email={email}
+          onEmailChange={setEmail}
+          onDismiss={() => setLinkError(null)}
+        />
+      )}
+
+      <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+        {isSignup ? "Creá tu cuenta" : "Entrá a PropMatch"}
+      </h2>
+      <p className="text-sm mt-1.5" style={{ color: "#7C6A99" }}>
+        {isSignup
+          ? "Empezá a ordenar tu cartera en un minuto."
+          : "Qué bueno verte de nuevo."}
+      </p>
+
+      {/* Switch de pestañas */}
+      <div
+        role="tablist"
+        aria-label="Acceso"
+        onKeyDown={onTabKey}
+        className="relative grid grid-cols-2 p-1 mt-7 rounded-xl"
+        style={{ background: "#F5F3FF" }}
+      >
+        <span
+          aria-hidden="true"
+          className="absolute top-1 bottom-1 left-1 rounded-lg bg-white"
+          style={{
+            width: "calc(50% - 4px)",
+            transform: isSignup ? "translateX(100%)" : "none",
+            transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+            boxShadow: "0 1px 3px rgba(31,10,60,0.12), 0 0 0 1px #EDE9FE",
+          }}
+        />
+        {(["login", "signup"] as const).map((m) => (
+          <button
+            key={m}
+            ref={(el) => {
+              tabRefs.current[m] = el;
+            }}
+            type="button"
+            role="tab"
+            id={`${uid}-tab-${m}`}
+            aria-selected={mode === m}
+            aria-controls={`${uid}-panel`}
+            tabIndex={mode === m ? 0 : -1}
+            onClick={() => changeMode(m)}
+            className="relative z-10 py-2 text-sm rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+            style={{ color: mode === m ? "#1F0A3C" : "#7C6A99", fontWeight: 600 }}
+          >
+            {m === "login" ? "Ingresar" : "Crear cuenta"}
+          </button>
+        ))}
+      </div>
+
+      <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${mode}`} className="mt-6">
+        <button
+          type="button"
+          onClick={handleGoogle}
+          disabled={anyBusy}
+          className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl text-sm bg-white border transition-all hover:bg-[#F8F9FA] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
+          style={{ borderColor: "#DADCE0", color: "#3C4043", fontWeight: 500 }}
+        >
+          {googleBusy ? <Spinner dark /> : <GoogleLogo />}
+          Continuar con Google
+        </button>
+
+        <button
+          type="button"
+          onClick={enterDemo}
+          disabled={anyBusy}
+          className="mt-2.5 w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
+          style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700 }}
+        >
+          Entrar a la demo
+          <span className="block text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+            Sin cuenta, con datos de ejemplo
+          </span>
+        </button>
+
+        <div className="flex items-center gap-3 my-5" aria-hidden="true">
+          <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
+          <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+            o continuá con email
+          </span>
+          <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
+          {isSignup && (
+            <div className="pm-enter space-y-4">
+              <Field label="Nombre completo">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                  placeholder="Tu nombre y apellido"
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Nombre de la inmobiliaria">
+                <input
+                  value={agencyName}
+                  onChange={(e) => setAgencyName(e.target.value)}
+                  required
+                  autoComplete="organization"
+                  placeholder="Cómo se llama tu inmobiliaria"
+                  className={inputClass}
+                />
+              </Field>
             </div>
-            <div>
-              <span className="text-lg tracking-tight" style={{ color: "#3B0764", fontWeight: 800 }}>
-                Prop
-              </span>
-              <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
-                Match
-              </span>
-            </div>
-          </div>
+          )}
 
-          <h2 className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-            Entrá a PropMatch
-          </h2>
-          <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
-            {agency.name}
-          </p>
+          <Field label="Email">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="username"
+              placeholder="vos@inmobiliaria.com"
+              className={inputClass}
+            />
+          </Field>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <label className="block">
-              <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
-                Email
-              </span>
+          <Field label="Contraseña">
+            <div className="relative">
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-                placeholder="vos@propmatch.com"
-                className={inputClass}
-              />
-            </label>
-
-            <label className="block">
-              <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
-                Contraseña
-              </span>
-              <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="current-password"
-                placeholder="••••••••"
-                className={inputClass}
+                minLength={isSignup ? 8 : undefined}
+                autoComplete={isSignup ? "new-password" : "current-password"}
+                placeholder={isSignup ? "Mínimo 8 caracteres" : "Tu contraseña"}
+                className={inputClass + " pr-11"}
               />
-            </label>
-
-            {error && (
-              <p
-                className="pm-enter text-xs rounded-xl px-3 py-2.5"
-                style={{ background: "#FFF1F2", color: "#E11D48", border: "1px solid #FECDD3" }}
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                aria-pressed={showPassword}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+                style={{ color: "#7C6A99" }}
               >
-                {error}
-              </p>
-            )}
+                <EyeIcon off={showPassword} />
+              </button>
+            </div>
+            {isSignup && password.length > 0 && <StrengthMeter level={strength} />}
+            {!isSignup && <ForgotPassword email={email} />}
+          </Field>
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full py-3 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
-              style={{
-                background: "var(--gradient-brand)",
-                fontWeight: 600,
-                boxShadow: "var(--shadow-cta)",
-              }}
-            >
-              {busy ? "Un momento…" : "Ingresar"}
-            </button>
-          </form>
-
-          {/* Atajo mientras no hay backend: entrar como cualquier agente del equipo. */}
-          <div className="mt-8">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-              <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
-                Entrar como
+          {isSignup && (
+            <label className="pm-enter flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(e) => setAccepted(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded flex-shrink-0 cursor-pointer"
+                style={{ accentColor: "#7C3AED" }}
+              />
+              <span className="text-xs leading-relaxed" style={{ color: "#7C6A99" }}>
+                Acepto los términos de uso y la política de privacidad de PropMatch.
               </span>
-              <div className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-            </div>
+            </label>
+          )}
 
-            <div className="space-y-2">
-              {profiles.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setEmail(p.email ?? "");
-                    setPassword("demo1234");
-                    setError(null);
-                  }}
-                  className="w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all hover:border-violet-300 hover:bg-violet-50 text-left"
-                  style={{ borderColor: "#EDE9FE", background: "white" }}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarGradient(p.full_name)} flex items-center justify-center text-white flex-shrink-0`}
-                    style={{ fontSize: 10, fontWeight: 700 }}
-                  >
-                    {initials(p.full_name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                      {p.full_name}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: "#A78BFA" }}>
-                      {p.email}
-                    </p>
-                  </div>
-                  <span className="text-xs" style={{ color: "#C4B5FD" }}>
-                    {p.role === "owner" ? "Dueño" : "Agente"}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <p className="text-xs mt-4 leading-relaxed" style={{ color: "#C4B5FD" }}>
-              Todavía no hay backend: la contraseña no se valida contra nada. Es la pantalla y el
-              flujo, no la seguridad.
+          {error && (
+            <p
+              role="alert"
+              className="pm-enter text-xs rounded-xl px-3 py-2.5"
+              style={{ background: "#FFF1F2", color: "#E11D48", border: "1px solid #FECDD3" }}
+            >
+              {error}
             </p>
-          </div>
-        </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={anyBusy}
+            className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD6FE]"
+            style={{
+              background: "var(--gradient-brand)",
+              fontWeight: 600,
+              boxShadow: "var(--shadow-cta)",
+            }}
+          >
+            {busy && <Spinner />}
+            {busy ? "Un momento…" : isSignup ? "Crear cuenta" : "Ingresar"}
+          </button>
+        </form>
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-full flex" style={{ background: "#FDFCFF" }}>
+      <BrandPanel />
+      <div className="flex-1 flex items-center justify-center px-5 py-10 sm:px-8">
+        <div className="w-full max-w-[400px] pm-enter">{children}</div>
       </div>
     </div>
   );
 }
 
+/** Cuenta creada pero sin inmobiliaria: estado de espera, no un error. */
+function PendingLink({
+  email,
+  needsConfirm,
+  onBack,
+}: {
+  email: string;
+  needsConfirm: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <div className="text-center lg:text-left" role="status">
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto lg:mx-0"
+        style={{ background: "var(--gradient-brand)", boxShadow: "var(--shadow-cta)" }}
+      >
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 12.5l4.5 4.5L19 7.5" stroke="white" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <h2 className="text-[1.75rem] leading-tight tracking-tight mt-6" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+        Cuenta creada
+      </h2>
+      <p className="text-sm mt-2 leading-relaxed" style={{ color: "#7C6A99" }}>
+        Confirmá tu email y ya podés ingresar.
+      </p>
+
+      <ul className="mt-6 space-y-3 text-left">
+        {needsConfirm && (
+          <Step
+            title="Confirmá tu email"
+            text={
+              <>
+                Te mandamos un mensaje a <strong style={{ color: "#1F0A3C" }}>{email}</strong>. Abrilo y
+                tocá el enlace para activar la cuenta.
+              </>
+            }
+          />
+        )}
+        <Step
+          title="Ingresá"
+          text={
+            email ? (
+              <>
+                Volvé al inicio y entrá con <strong style={{ color: "#1F0A3C" }}>{email}</strong>.
+              </>
+            ) : (
+              "Volvé al inicio y entrá con tu cuenta."
+            )
+          }
+        />
+      </ul>
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="mt-8 w-full py-3 rounded-xl text-sm border bg-white transition-all hover:bg-[#F5F3FF] active:scale-[0.99] outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
+        style={{ borderColor: "#EDE9FE", color: "#3B0764", fontWeight: 600 }}
+      >
+        Volver al inicio
+      </button>
+    </div>
+  );
+}
+
+/** Manda el email de "restablecer contraseña"; al volver, `PasswordRecovery` pide la nueva. */
+function ForgotPassword({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error" | "need_email">("idle");
+
+  async function send() {
+    if (!email.trim()) {
+      setState("need_email");
+      return;
+    }
+    setState("sending");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    setState(error ? "error" : "sent");
+  }
+
+  return (
+    <div className="mt-1.5 text-xs" aria-live="polite">
+      {state === "sent" ? (
+        <p style={{ color: "#166534", fontWeight: 600 }}>
+          Si {email.trim()} tiene cuenta, te llegó un email para elegir una contraseña nueva. Abrilo una sola vez.
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={send}
+            disabled={state === "sending"}
+            className="underline disabled:opacity-60"
+            style={{ color: "#6D28D9", fontWeight: 600 }}
+          >
+            {state === "sending" ? "Enviando…" : "¿Olvidaste tu contraseña?"}
+          </button>
+          {state === "need_email" && <span style={{ color: "#E11D48" }}> Escribí tu email arriba primero.</span>}
+          {state === "error" && (
+            <span style={{ color: "#E11D48" }}> No se pudo enviar. Esperá un minuto y probá de nuevo.</span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+type LinkErrorKind = "expired" | "other";
+
+/**
+ * Al volver de un link de email (confirmación de cuenta) con error, Supabase
+ * deja `#error=...&error_code=otp_expired` en la URL. Se lee una vez y se
+ * limpia la URL para que no quede ahí.
+ */
+function readLinkErrorFromUrl(): LinkErrorKind | null {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+  const params = new URLSearchParams(hash);
+  if (!params.get("error")) return null;
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  return params.get("error_code") === "otp_expired" ? "expired" : "other";
+}
+
+function LinkErrorNotice({
+  kind,
+  email,
+  onEmailChange,
+  onDismiss,
+}: {
+  kind: LinkErrorKind;
+  email: string;
+  onEmailChange: (v: string) => void;
+  onDismiss: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function resend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || state === "sending") return;
+    setState("sending");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setState(error ? "error" : "sent");
+  }
+
+  return (
+    <div role="alert" className="mb-6 rounded-2xl p-4 border" style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}>
+      <p className="text-sm" style={{ color: "#92400E", fontWeight: 700 }}>
+        {kind === "expired" ? "El link del email venció o ya se usó" : "No pudimos validar el link del email"}
+      </p>
+      <p className="text-xs mt-1 leading-relaxed" style={{ color: "#92400E" }}>
+        Pasa si el link es viejo o si se abrió dos veces (algunos correos lo abren solos para revisarlo). Pedí uno
+        nuevo y abrilo una sola vez. Si tu cuenta ya está confirmada, ingresá directamente.
+      </p>
+      {state === "sent" ? (
+        <p className="text-xs mt-3" style={{ color: "#166534", fontWeight: 700 }}>
+          Listo: te mandamos un email nuevo a {email.trim()}. Revisá también spam.
+        </p>
+      ) : (
+        <form onSubmit={resend} className="mt-3 flex flex-col sm:flex-row gap-2">
+          <label className="sr-only" htmlFor="resend-email">
+            Email de la cuenta
+          </label>
+          <input
+            id="resend-email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => onEmailChange(e.target.value)}
+            placeholder="tu@email.com"
+            className="flex-1 min-h-11 px-3 rounded-xl text-sm border bg-white outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE]"
+            style={{ borderColor: "#FDE68A" }}
+          />
+          <button
+            type="submit"
+            disabled={state === "sending"}
+            className="min-h-11 px-4 rounded-xl text-sm text-white disabled:opacity-60"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+          >
+            {state === "sending" ? "Enviando…" : "Reenviar email"}
+          </button>
+        </form>
+      )}
+      {state === "error" && (
+        <p className="text-xs mt-2" style={{ color: "#E11D48" }}>
+          No se pudo reenviar. Esperá un minuto y probá de nuevo (hay un límite de envíos).
+        </p>
+      )}
+      <button type="button" onClick={onDismiss} className="mt-2 text-xs underline" style={{ color: "#92400E" }}>
+        Cerrar
+      </button>
+    </div>
+  );
+}
+
+function Step({ title, text }: { title: string; text: React.ReactNode }) {
+  return (
+    <li className="flex gap-3 rounded-xl p-3.5" style={{ background: "#F5F3FF" }}>
+      <span
+        className="mt-1 w-2 h-2 rounded-full flex-shrink-0"
+        style={{ background: "var(--gradient-brand)" }}
+        aria-hidden="true"
+      />
+      <div>
+        <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>{title}</p>
+        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#7C6A99" }}>{text}</p>
+      </div>
+    </li>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+/** 0 = vacía, 1 = débil, 2 = media, 3 = fuerte. Orientativo, no una política. */
+function passwordStrength(pw: string): 0 | 1 | 2 | 3 {
+  if (!pw) return 0;
+  if (pw.length < 8) return 1;
+  let extras = 0;
+  if (pw.length >= 12) extras++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) extras++;
+  if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) extras++;
+  return extras >= 2 ? 3 : 2;
+}
+
+function StrengthMeter({ level }: { level: 0 | 1 | 2 | 3 }) {
+  const labels = ["", "Débil", "Aceptable", "Fuerte"];
+  const colors = ["", "#E11D48", "#D97706", "#16A34A"];
+  return (
+    <div className="mt-2" aria-live="polite">
+      <div className="flex gap-1.5" aria-hidden="true">
+        {[1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="flex-1 h-1 rounded-full transition-colors duration-300"
+            style={{ background: i <= level ? colors[level] : "#EDE9FE" }}
+          />
+        ))}
+      </div>
+      <p className="text-[11px] mt-1" style={{ color: colors[level], fontWeight: 600 }}>
+        Seguridad: {labels[level]}
+      </p>
+    </div>
+  );
+}
+
+function Spinner({ dark = false }: { dark?: boolean }) {
+  return (
+    <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke={dark ? "#DADCE0" : "rgba(255,255,255,0.35)"} strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke={dark ? "#7C3AED" : "white"} strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <path d="M4 4l16 16" />}
+    </svg>
+  );
+}
+
+/** Logo "G" de Google con sus colores de marca, según su guía de botones. */
+function GoogleLogo() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
-  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] " +
-  "focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] " +
+  "hover:border-[#DDD6FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";

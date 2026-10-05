@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { isSample, sampleCsvCell } from "@/lib/samples";
 import { useNavigate } from "react-router-dom";
 import {
   CartesianGrid,
@@ -205,6 +206,10 @@ export default function ReportesPage() {
     const rows: (string | number | null)[][] = [
       ["Reporte PropMatch", periodLabel],
       ["Generado", new Date().toLocaleString("es-AR")],
+      // Los ejemplos cuentan en las cifras de pantalla: el CSV lo avisa y marca cada fila.
+      ...(properties.some(isSample) || opportunities.some(isSample)
+        ? [["Atención", "Incluye datos de ejemplo (columna Ejemplo). Se ocultan en Configuración › Datos de ejemplo."]]
+        : []),
       [],
       ["Indicador", "Valor"],
       ["Leads nuevos", kpis.leads.length],
@@ -216,11 +221,11 @@ export default function ReportesPage() {
       ["Embudo", "Cantidad"],
       ...funnel.map((f) => [f.label, f.value]),
       [],
-      ["Propiedad", "Matches", "Oportunidades", "Visitas"],
-      ...propertyPerf.map((r) => [r.property.title, r.matchCount, r.opps, r.visits]),
+      ["Propiedad", "Matches", "Oportunidades", "Visitas", "Ejemplo"],
+      ...propertyPerf.map((r) => [r.property.title, r.matchCount, r.opps, r.visits, sampleCsvCell(r.property)]),
       [],
-      ["Agente", "Oportunidades", "Cerradas", "Conversión (%)"],
-      ...team.map((r) => [r.agent.full_name, r.opps, r.conv, r.rate]),
+      ["Agente", "Oportunidades", "Cerradas", "Conversión (%)", "Ejemplo"],
+      ...team.map((r) => [r.agent.full_name, r.opps, r.conv, r.rate, sampleCsvCell(r.agent)]),
       [],
       ["Fecha", "Leads", "Oportunidades", "Cierres"],
       ...series.map((pt) => [pt.date, pt.leads, pt.ops, pt.conv]),
@@ -437,7 +442,7 @@ export default function ReportesPage() {
                     <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                       Evolución de la actividad
                     </h2>
-                    <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                    <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                       Últimos {days} días
                     </p>
                   </div>
@@ -462,14 +467,14 @@ export default function ReportesPage() {
                     <CartesianGrid strokeDasharray="4 4" stroke="#F3F0FF" vertical={false} />
                     <XAxis
                       dataKey="date"
-                      tick={{ fill: "#C4B5FD", fontSize: 10 }}
+                      tick={{ fill: "#7C6A99", fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
                       interval="preserveStartEnd"
                       minTickGap={24}
                     />
                     <YAxis
-                      tick={{ fill: "#C4B5FD", fontSize: 10 }}
+                      tick={{ fill: "#7C6A99", fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
                       allowDecimals={false}
@@ -581,7 +586,7 @@ export default function ReportesPage() {
                   <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                     Rendimiento del matching
                   </h2>
-                  <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                  <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                     De la compatibilidad detectada a la operación cerrada
                   </p>
                 </div>
@@ -632,7 +637,7 @@ export default function ReportesPage() {
                   className="mt-6 pt-4 border-t flex items-center justify-between"
                   style={{ borderColor: "#F3F0FF" }}
                 >
-                  <span className="text-xs" style={{ color: "#A78BFA" }}>
+                  <span className="text-xs" style={{ color: "#7458C4" }}>
                     Conversión total del funnel
                   </span>
                   <span className="text-gradient-brand-h" style={{ fontWeight: 800 }}>
@@ -659,7 +664,7 @@ export default function ReportesPage() {
                             <th
                               key={h}
                               className="text-left px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap"
-                              style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}
+                              style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
                             >
                               {h}
                             </th>
@@ -685,7 +690,7 @@ export default function ReportesPage() {
                                 >
                                   {row.property.title}
                                 </p>
-                                <p className="text-xs" style={{ color: "#C4B5FD" }}>
+                                <p className="text-xs" style={{ color: "#7C6A99" }}>
                                   {PROPERTY_TYPE_LABEL[row.property.type]}
                                 </p>
                               </td>
@@ -799,7 +804,7 @@ export default function ReportesPage() {
                             <th
                               key={h}
                               className="text-left px-6 py-3 text-xs uppercase tracking-wide"
-                              style={{ color: "#A78BFA", fontWeight: 600, letterSpacing: "0.06em" }}
+                              style={{ color: "#7458C4", fontWeight: 600, letterSpacing: "0.06em" }}
                             >
                               {h}
                             </th>
@@ -821,7 +826,7 @@ export default function ReportesPage() {
                                 style={
                                   idx === 0
                                     ? { background: "var(--gradient-brand)", color: "white", fontWeight: 800 }
-                                    : { background: "#F5F3FF", color: "#A78BFA", fontWeight: 700 }
+                                    : { background: "#F5F3FF", color: "#7458C4", fontWeight: 700 }
                                 }
                               >
                                 {idx + 1}
@@ -839,7 +844,7 @@ export default function ReportesPage() {
                                   <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                                     {row.agent.full_name}
                                   </p>
-                                  <p className="text-xs" style={{ color: "#A78BFA" }}>
+                                  <p className="text-xs" style={{ color: "#7458C4" }}>
                                     {row.agent.role === "owner" ? "Dueño" : "Agente inmobiliario"}
                                   </p>
                                 </div>
@@ -867,7 +872,7 @@ export default function ReportesPage() {
                               </span>
                               <span
                                 className="text-xs ml-2 px-2 py-0.5 rounded-full"
-                                style={{ background: "#F0FDF4", color: "#16A34A", fontWeight: 600 }}
+                                style={{ background: "#F0FDF4", color: "#15803D", fontWeight: 600 }}
                               >
                                 {row.rate}%
                               </span>
@@ -932,7 +937,7 @@ function ReportKpi({
             className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full whitespace-nowrap"
             style={
               trend.up
-                ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700 }
+                ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700 }
                 : { background: "#FFF1F2", color: "#E11D48", fontWeight: 700 }
             }
           >
@@ -959,7 +964,7 @@ function ReportKpi({
         <p className="text-sm mt-1.5" style={{ color: "#374151", fontWeight: 600 }}>
           {label}
         </p>
-        <p className="text-xs mt-0.5" style={{ color: "#C4B5FD" }}>
+        <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
           {sub}
         </p>
       </div>
@@ -1014,7 +1019,7 @@ function ConversionRing({ pct }: { pct: number }) {
         <span className="text-gradient-brand" style={{ fontSize: 32, fontWeight: 800, lineHeight: 1 }}>
           {pct}%
         </span>
-        <span style={{ color: "#A78BFA", fontWeight: 600, fontSize: 11, marginTop: 2 }}>
+        <span style={{ color: "#7458C4", fontWeight: 600, fontSize: 11, marginTop: 2 }}>
           conversión
         </span>
       </div>
@@ -1037,7 +1042,7 @@ function ChartTooltip({
       className="rounded-xl px-4 py-3"
       style={{ background: "white", border: "1px solid #EDE9FE", boxShadow: "var(--shadow-pop)" }}
     >
-      <p className="text-xs mb-2" style={{ color: "#A78BFA", fontWeight: 600 }}>
+      <p className="text-xs mb-2" style={{ color: "#7458C4", fontWeight: 600 }}>
         {label}
       </p>
       {payload.map((e) => (

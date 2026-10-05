@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -112,7 +113,7 @@ export default function VerMatchPage() {
                   {state.label}
                 </Badge>
                 <p className="text-2xl tracking-tight mt-2" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-                  {matchQuality(match.score)}
+                  {matchQuality(match.score)} <SampleBadge record={match} size="sm" className="bg-white" />
                 </p>
                 <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
                   {contact.full_name} y {property.title} coinciden en {match.reasons.length}{" "}
@@ -139,7 +140,7 @@ export default function VerMatchPage() {
                   className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:active:scale-100 whitespace-nowrap"
                   style={
                     hasOpportunity
-                      ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                      ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                       : { background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }
                   }
                 >
@@ -148,10 +149,10 @@ export default function VerMatchPage() {
                 {fullContact && fullProperty && (
                   <button
                     onClick={() => setWhatsapp(true)}
-                    className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
+                    className="px-5 py-2.5 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
                     style={{ background: "#25D366", fontWeight: 600 }}
                   >
-                    <WhatsAppIcon size={14} color="white" />
+                    <WhatsAppIcon size={14} color="#063B2A" />
                     Enviar por WhatsApp
                   </button>
                 )}
@@ -189,7 +190,7 @@ export default function VerMatchPage() {
                     border: `1px solid ${c.match ? "#F3F0FF" : "#FDE68A"}`,
                   }}
                 >
-                  <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                  <span className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
                     {c.label}
                   </span>
                   <span className="text-xs truncate" style={{ color: "#374151" }}>
@@ -206,7 +207,7 @@ export default function VerMatchPage() {
                     ) : (
                       <span
                         className="w-5 h-5 rounded-full flex items-center justify-center"
-                        style={{ background: "#FEF3C7", color: "#D97706", fontSize: 11, fontWeight: 700 }}
+                        style={{ background: "#FEF3C7", color: "#B45309", fontSize: 11, fontWeight: 700 }}
                       >
                         !
                       </span>
@@ -263,7 +264,7 @@ export default function VerMatchPage() {
                   <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                     {contact.full_name}
                   </p>
-                  <p className="text-xs" style={{ color: "#A78BFA" }}>
+                  <p className="text-xs" style={{ color: "#7458C4" }}>
                     {requirement.label ?? "Búsqueda activa"}
                   </p>
                 </div>
@@ -310,7 +311,7 @@ export default function VerMatchPage() {
                   </p>
                   <div className="flex items-center gap-1 mt-0.5">
                     <MapPinIcon size={10} />
-                    <span className="text-xs" style={{ color: "#A78BFA" }}>
+                    <span className="text-xs" style={{ color: "#7458C4" }}>
                       {property.zone}
                     </span>
                   </div>
@@ -333,7 +334,7 @@ export default function VerMatchPage() {
                     <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                       {spec.value ?? "—"}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: "#A78BFA", fontSize: 10 }}>
+                    <p className="text-xs mt-0.5" style={{ color: "#7458C4", fontSize: 10 }}>
                       {spec.label}
                     </p>
                   </div>
@@ -371,7 +372,7 @@ export default function VerMatchPage() {
                         {a.detail}
                       </p>
                     )}
-                    <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                    <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                       {relativeTime(a.created_at)}
                     </p>
                   </div>

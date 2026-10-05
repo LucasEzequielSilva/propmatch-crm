@@ -144,7 +144,7 @@ export function FullPageLoader() {
             <circle cx="16" cy="8" r="3" fill="white" fillOpacity="0.7" />
           </svg>
         </div>
-        <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+        <p className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
           Cargando PropMatch…
         </p>
       </div>

@@ -140,16 +140,16 @@ type BadgeStyle = { bg: string; text: string; border: string };
 
 export const CONTACT_STATUS_STYLE: Record<string, BadgeStyle> = {
   nuevo: { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
-  activo: { bg: "#F0FDF4", text: "#16A34A", border: "#BBF7D0" },
-  en_seguimiento: { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  activo: { bg: "#F0FDF4", text: "#15803D", border: "#BBF7D0" },
+  en_seguimiento: { bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" },
   visita_programada: { bg: "#EFF6FF", text: "#2563EB", border: "#BFDBFE" },
   cerrado: { bg: "#F0FDF4", text: "#047857", border: "#D1FAE5" },
   perdido: { bg: "#FFF1F2", text: "#E11D48", border: "#FECDD3" },
 };
 
 export const PROPERTY_STATUS_STYLE: Record<string, BadgeStyle> = {
-  disponible: { bg: "#F0FDF4", text: "#16A34A", border: "#BBF7D0" },
-  reservada: { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
+  disponible: { bg: "#F0FDF4", text: "#15803D", border: "#BBF7D0" },
+  reservada: { bg: "#FFFBEB", text: "#B45309", border: "#FDE68A" },
   vendida: { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
   alquilada: { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
   pausada: { bg: "#F9FAFB", text: "#6B7280", border: "#E5E7EB" },
@@ -161,9 +161,9 @@ export const PROPERTY_STATUS_STYLE: Record<string, BadgeStyle> = {
  * VerMatch.tsx del prototipo.
  */
 export function matchState(score: number): BadgeStyle & { label: string } {
-  if (score >= 90) return { label: "Match excelente", text: "#16A34A", bg: "#F0FDF4", border: "#BBF7D0" };
+  if (score >= 90) return { label: "Match excelente", text: "#15803D", bg: "#F0FDF4", border: "#BBF7D0" };
   if (score >= 70) return { label: "Buen match", text: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" };
-  if (score >= 50) return { label: "Match parcial", text: "#D97706", bg: "#FFFBEB", border: "#FDE68A" };
+  if (score >= 50) return { label: "Match parcial", text: "#B45309", bg: "#FFFBEB", border: "#FDE68A" };
   return { label: "Match bajo", text: "#DC2626", bg: "#FFF1F2", border: "#FECDD3" };
 }
 

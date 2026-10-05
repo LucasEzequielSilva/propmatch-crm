@@ -145,7 +145,7 @@ export default function ImportarPage() {
               {k === "contactos" ? "Contactos" : "Propiedades"}
             </button>
           ))}
-          <div className="ml-auto flex items-center gap-2 text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+          <div className="ml-auto flex items-center gap-2 text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
             {(["archivo", "revisar", "listo"] as Step[]).map((s, i) => (
               <span key={s} className="flex items-center gap-2">
                 {i > 0 && <span style={{ color: "#DDD6FE" }}>→</span>}
@@ -246,7 +246,7 @@ export default function ImportarPage() {
                   <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                     Columnas de {fileName}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                  <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                     {sheet.rows.length} filas · corregí lo que no esté bien
                   </p>
                 </div>
@@ -262,7 +262,7 @@ export default function ImportarPage() {
                             {f.required && <span style={{ color: "#E11D48" }}> *</span>}
                           </span>
                           {sample && (
-                            <span className="truncate ml-3 max-w-[160px]" style={{ color: "#A78BFA", fontWeight: 500 }}>
+                            <span className="truncate ml-3 max-w-[160px]" style={{ color: "#7458C4", fontWeight: 500 }}>
                               ej: {sample}
                             </span>
                           )}
@@ -270,7 +270,7 @@ export default function ImportarPage() {
                         <select
                           value={col}
                           onChange={(e) => setMapping((m) => ({ ...m, [f.key]: Number(e.target.value) }))}
-                          className="w-full px-3 py-2 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] focus:border-[#A78BFA]"
+                          className="w-full px-3 py-2 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] focus:border-[#7C3AED] focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                           style={{ borderColor: f.required && col < 0 ? "#FECDD3" : col >= 0 ? "#C4B5FD" : "#EDE9FE" }}
                         >
                           <option value={-1}>— No importar —</option>
@@ -281,7 +281,7 @@ export default function ImportarPage() {
                           ))}
                         </select>
                         {f.hint && col < 0 && (
-                          <span className="block text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                          <span className="block text-xs mt-1" style={{ color: "#7C6A99" }}>
                             {f.hint}
                           </span>
                         )}
@@ -294,9 +294,9 @@ export default function ImportarPage() {
               {/* Vista previa */}
               <Card>
                 <div className="px-5 py-4 border-b flex flex-wrap items-center gap-3" style={{ borderColor: "#F3F0FF" }}>
-                  <Stat value={importable.length} label="se importan" color="#16A34A" />
+                  <Stat value={importable.length} label="se importan" color="#15803D" />
                   <Stat value={withErrors} label="con errores (se omiten)" color="#E11D48" />
-                  <Stat value={duplicates} label="posibles repetidos" color="#D97706" />
+                  <Stat value={duplicates} label="posibles repetidos" color="#B45309" />
                   <label className="ml-auto flex items-center gap-2 text-xs cursor-pointer" style={{ color: "#4C3A6B", fontWeight: 600 }}>
                     <input
                       type="checkbox"
@@ -310,7 +310,7 @@ export default function ImportarPage() {
                 <div className="max-h-[520px] overflow-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0" style={{ background: "#FDFCFF" }}>
-                      <tr className="text-left text-xs" style={{ color: "#A78BFA" }}>
+                      <tr className="text-left text-xs" style={{ color: "#7458C4" }}>
                         <th className="px-4 py-2.5 font-semibold">Fila</th>
                         <th className="px-4 py-2.5 font-semibold">{kind === "contactos" ? "Contacto" : "Propiedad"}</th>
                         <th className="px-4 py-2.5 font-semibold">Estado</th>
@@ -323,7 +323,7 @@ export default function ImportarPage() {
                     </tbody>
                   </table>
                   {drafts.length > 300 && (
-                    <p className="px-4 py-3 text-xs" style={{ color: "#A78BFA" }}>
+                    <p className="px-4 py-3 text-xs" style={{ color: "#7458C4" }}>
                       Se muestran las primeras 300 filas de {drafts.length}.
                     </p>
                   )}
@@ -340,7 +340,7 @@ export default function ImportarPage() {
                 <select
                   value={agentId}
                   onChange={(e) => setAgentId(e.target.value)}
-                  className="px-3 py-2 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE]"
+                  className="px-3 py-2 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
                 >
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -466,7 +466,7 @@ function DraftRow({ draft, kind, skipDuplicates }: { draft: Draft<unknown>; kind
 
   return (
     <tr className="border-t" style={{ borderColor: "#F5F3FF" }}>
-      <td className="px-4 py-2.5 text-xs align-top" style={{ color: "#A78BFA" }}>
+      <td className="px-4 py-2.5 text-xs align-top" style={{ color: "#7458C4" }}>
         {draft.row}
       </td>
       <td className="px-4 py-2.5 align-top">

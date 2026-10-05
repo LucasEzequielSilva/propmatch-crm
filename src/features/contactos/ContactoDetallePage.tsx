@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { isSample } from "@/lib/samples";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -32,6 +34,7 @@ import {
 import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
 import { lastTouch, touchLabel } from "@/lib/followups";
 import { useFollowUps } from "@/data/useFollowUps";
+import { ChatPanel } from "./ChatPanel";
 
 /**
  * Ficha del contacto: todo lo que el agente necesita ver antes de llamarlo.
@@ -52,10 +55,38 @@ export default function ContactoDetallePage() {
     activities,
     properties,
     createOpportunityFromMatch,
+    respondOffer,
+    appOffers,
+    respondSwipe,
+    currentUserId,
   } = useStore();
 
   const [editing, setEditing] = useState(false);
   const [whatsapp, setWhatsapp] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [respondError, setRespondError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  async function handleRespondOffer(activityId: string, appOfferId: string, action: "accept" | "reject") {
+    setRespondingId(activityId);
+    setRespondError(null);
+    const error = await respondOffer(appOfferId, action);
+    const sample = isSample(appOffers.find((o) => o.app_offer_id === appOfferId));
+    if (error) setRespondError(error);
+    else setToast(`${action === "accept" ? "Oferta aceptada." : "Oferta rechazada."}${sample ? " Oferta de ejemplo: no se envía a la app." : ""}`);
+    setRespondingId(null);
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  async function handleRespondSwipe(activityId: string, action: "accepted" | "rejected") {
+    setRespondingId(activityId);
+    setRespondError(null);
+    const error = await respondSwipe(activityId, action);
+    if (error) setRespondError(error);
+    else setToast(action === "accepted" ? "Interés aceptado." : "Interés descartado.");
+    setRespondingId(null);
+    setTimeout(() => setToast(null), 3500);
+  }
   const allFollowUps = useFollowUps(false);
 
   const contact = contactById(contactId);
@@ -73,6 +104,12 @@ export default function ContactoDetallePage() {
   const contactOpps = useMemo(
     () => (contact ? opportunities.filter((o) => o.contact_id === contact.id) : []),
     [opportunities, contact],
+  );
+
+  /** Oportunidades con match real (de la app): ahí hay un chat de verdad para mostrar. */
+  const contactChats = useMemo(
+    () => contactOpps.filter((o): o is typeof o & { match_id: string } => Boolean(o.match_id)),
+    [contactOpps],
   );
 
   const timeline = useMemo(
@@ -173,6 +210,7 @@ export default function ContactoDetallePage() {
                 <h2 className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
                   {contact.full_name}
                 </h2>
+                <SampleBadge record={contact} size="sm" />
                 <Badge bg={statusStyle.bg} text={statusStyle.text} border={statusStyle.border}>
                   {CONTACT_STATUS_LABEL[contact.status]}
                 </Badge>
@@ -353,7 +391,7 @@ export default function ContactoDetallePage() {
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <MapPinIcon size={10} />
-                            <span className="text-xs" style={{ color: "#A78BFA" }}>
+                            <span className="text-xs" style={{ color: "#7458C4" }}>
                               {property.zone}
                             </span>
                           </div>
@@ -382,7 +420,7 @@ export default function ContactoDetallePage() {
                             className="text-xs px-3 py-1.5 rounded-lg text-white transition-all hover:opacity-90"
                             style={
                               hasOpp
-                                ? { background: "#F0FDF4", color: "#16A34A", fontWeight: 700, border: "1px solid #BBF7D0" }
+                                ? { background: "#F0FDF4", color: "#15803D", fontWeight: 700, border: "1px solid #BBF7D0" }
                                 : { background: "var(--gradient-brand)", fontWeight: 600 }
                             }
                           >
@@ -418,7 +456,7 @@ export default function ContactoDetallePage() {
                           <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                             {property?.title ?? "Sin propiedad"}
                           </p>
-                          <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+                          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                             Actualizada {relativeTime(opp.updated_at).toLowerCase()}
                           </p>
                         </div>
@@ -479,7 +517,7 @@ export default function ContactoDetallePage() {
               <Card padded>
                 <p
                   className="text-xs uppercase mb-2"
-                  style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
+                  style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" }}
                 >
                   Notas
                 </p>
@@ -488,6 +526,16 @@ export default function ContactoDetallePage() {
                 </p>
               </Card>
             )}
+
+            {currentUserId &&
+              contactChats.map((o) => (
+                <ChatPanel
+                  key={o.id}
+                  matchId={o.match_id}
+                  propertyTitle={propertyById(o.property_id)?.title ?? "Propiedad"}
+                  currentUserId={currentUserId}
+                />
+              ))}
 
             {upcoming.length > 0 && (
               <Card>
@@ -509,7 +557,7 @@ export default function ContactoDetallePage() {
                         <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                           {ev.title}
                         </p>
-                        <p className="text-xs mt-0.5" style={{ color: "#A78BFA", fontSize: 10 }}>
+                        <p className="text-xs mt-0.5" style={{ color: "#7458C4", fontSize: 10 }}>
                           {new Date(ev.starts_at).toLocaleDateString("es-AR", {
                             weekday: "short",
                             day: "numeric",
@@ -553,9 +601,84 @@ export default function ContactoDetallePage() {
                             {a.detail}
                           </p>
                         )}
-                        <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                        <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                           {relativeTime(a.created_at)}
                         </p>
+                        {a.app_swipe_id && (
+                          <div className="mt-2">
+                            {a.swipe_status === "accepted" ? (
+                              <span className="text-xs px-2.5 py-1 rounded-full inline-block" style={{ background: "#F0FDF4", color: "#15803D", fontWeight: 600 }}>
+                                Aceptaste este interés
+                              </span>
+                            ) : a.swipe_status === "rejected" ? (
+                              <span className="text-xs px-2.5 py-1 rounded-full inline-block" style={{ background: "#FFF1F2", color: "#BE123C", fontWeight: 600 }}>
+                                Descartaste este interés
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  disabled={respondingId === a.id}
+                                  onClick={() => handleRespondSwipe(a.id, "accepted")}
+                                  className="text-xs px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
+                                  style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                                >
+                                  {respondingId === a.id ? "..." : "Aceptar interés"}
+                                </button>
+                                <button
+                                  disabled={respondingId === a.id}
+                                  onClick={() => handleRespondSwipe(a.id, "rejected")}
+                                  className="text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50"
+                                  style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600 }}
+                                >
+                                  Descartar
+                                </button>
+                              </div>
+                            )}
+                            {respondError && respondingId === null && (
+                              <p className="text-xs mt-1.5" style={{ color: "#E11D48" }}>
+                                {respondError}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {a.app_offer_id && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <SampleBadge record={a} />
+                            {a.offer_status === "accepted" ? (
+                              <span className="text-xs px-2.5 py-1 rounded-full inline-block" style={{ background: "#F0FDF4", color: "#15803D", fontWeight: 600 }}>
+                                Aceptaste esta oferta
+                              </span>
+                            ) : a.offer_status === "rejected" ? (
+                              <span className="text-xs px-2.5 py-1 rounded-full inline-block" style={{ background: "#FFF1F2", color: "#BE123C", fontWeight: 600 }}>
+                                Rechazaste esta oferta
+                              </span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  disabled={respondingId === a.id}
+                                  onClick={() => handleRespondOffer(a.id, a.app_offer_id!, "accept")}
+                                  className="text-xs px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
+                                  style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                                >
+                                  {respondingId === a.id ? "..." : "Aceptar"}
+                                </button>
+                                <button
+                                  disabled={respondingId === a.id}
+                                  onClick={() => handleRespondOffer(a.id, a.app_offer_id!, "reject")}
+                                  className="text-xs px-3 py-1.5 rounded-lg border disabled:opacity-50"
+                                  style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600 }}
+                                >
+                                  Rechazar
+                                </button>
+                              </div>
+                            )}
+                            {respondError && respondingId === null && (
+                              <p className="text-xs mt-1.5" style={{ color: "#E11D48" }}>
+                                {respondError}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -600,6 +723,17 @@ export default function ContactoDetallePage() {
           />
         );
       })()}
+      {toast && (
+        <div
+          className="pm-toast fixed bottom-6 right-6 z-50 rounded-2xl px-5 py-4 max-w-sm"
+          style={{ background: "white", border: "1px solid #BBF7D0", boxShadow: "var(--shadow-pop)" }}
+          role="status"
+        >
+          <p className="text-sm" style={{ color: "#15803D", fontWeight: 700 }}>
+            {toast}
+          </p>
+        </div>
+      )}
     </>
   );
 }
@@ -630,7 +764,7 @@ function iconFor(type: string): string {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs mb-1" style={{ color: "#A78BFA", fontWeight: 600 }}>
+      <p className="text-xs mb-1" style={{ color: "#7458C4", fontWeight: 600 }}>
         {label}
       </p>
       <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>

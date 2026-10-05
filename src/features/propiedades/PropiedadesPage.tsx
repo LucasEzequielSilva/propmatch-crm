@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -190,7 +191,7 @@ export default function PropiedadesPage() {
 
           <div className="flex-1" />
 
-          <span className="text-sm whitespace-nowrap" style={{ color: "#A78BFA" }}>
+          <span className="text-sm whitespace-nowrap" style={{ color: "#7458C4" }}>
             <span style={{ color: "#1F0A3C", fontWeight: 600 }}>{filtered.length}</span> propiedades
           </span>
 
@@ -439,12 +440,12 @@ function PropertyCard({
         </div>
 
         <h3 className="text-sm leading-snug mb-1" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-          {p.title}
+          {p.title} <SampleBadge record={p} />
         </h3>
 
         <div className="flex items-center gap-1 mb-3">
           <MapPinIcon />
-          <span className="text-xs" style={{ color: "#A78BFA" }}>
+          <span className="text-xs" style={{ color: "#7458C4" }}>
             {[p.zone, p.province].filter(Boolean).join(", ")}
           </span>
         </div>
@@ -500,7 +501,7 @@ function PropertyCard({
               </div>
             </>
           ) : (
-            <span className="text-xs" style={{ color: "#C4B5FD" }}>
+            <span className="text-xs" style={{ color: "#7C6A99" }}>
               Sin interesados compatibles todavía
             </span>
           )}
@@ -544,7 +545,7 @@ function PropertyList({
               <th
                 key={h || `col-${i}`}
                 className="text-left px-5 py-3.5 text-xs uppercase tracking-wide whitespace-nowrap"
-                style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}
+                style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
               >
                 {h}
               </th>
@@ -575,11 +576,11 @@ function PropertyList({
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                        {p.title}
+                        {p.title} <SampleBadge record={p} />
                       </p>
                       <div className="flex items-center gap-1 mt-0.5">
                         <MapPinIcon size={10} />
-                        <span className="text-xs" style={{ color: "#A78BFA" }}>
+                        <span className="text-xs" style={{ color: "#7458C4" }}>
                           {p.zone}
                         </span>
                       </div>
@@ -629,7 +630,7 @@ function PropertyList({
                       <span className="text-sm text-gradient-brand-h" style={{ fontWeight: 700 }}>
                         {stats.count}
                       </span>
-                      <span className="text-xs" style={{ color: "#C4B5FD" }}>
+                      <span className="text-xs" style={{ color: "#7C6A99" }}>
                         personas
                       </span>
                     </div>

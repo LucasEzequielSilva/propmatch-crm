@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card } from "@/components/ui/Card";
@@ -8,6 +9,7 @@ import { OpportunitiesIcon } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
 import { money } from "@/lib/format";
 import { docProgress, nextStep, stepProgress } from "@/lib/deals";
+import { dealNumberLabel } from "@/lib/dealRoom";
 import type { Deal, DealStatus } from "@/types/db";
 import { NewDealModal } from "./NewDealModal";
 
@@ -44,7 +46,7 @@ export default function OperacionesPage() {
     return deals.filter((d) => {
       if (filter !== "todas" && d.status !== filter) return false;
       if (!q) return true;
-      const hay = [propertyById(d.property_id)?.title, contactById(d.client_contact_id)?.full_name, d.client.name, d.owner.name]
+      const hay = [dealNumberLabel(d.number), propertyById(d.property_id)?.title, contactById(d.client_contact_id)?.full_name, d.client.name, d.owner.name]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -128,8 +130,8 @@ function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase" style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}>
-            {deal.kind === "venta" ? "Venta" : "Alquiler"}
+          <p className="text-xs uppercase" style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}>
+            {dealNumberLabel(deal.number)} · {deal.kind === "venta" ? "Venta" : "Alquiler"} <SampleBadge record={deal} />
           </p>
           <p className="text-sm mt-0.5 truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
             {property?.title ?? "Sin propiedad"}
@@ -149,7 +151,7 @@ function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
       <p className="text-base mt-3" style={{ color: "#1F0A3C", fontWeight: 800 }}>
         {money(deal.price, deal.currency)}
         {deal.kind === "alquiler" && (
-          <span className="text-xs" style={{ color: "#A78BFA", fontWeight: 500 }}>
+          <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
             {" "}
             / mes
           </span>

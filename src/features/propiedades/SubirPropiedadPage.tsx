@@ -1,30 +1,26 @@
-import { useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { AppHeader } from "@/components/layout/AppHeader";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
-import {
-  CheckIcon,
-  HomeIcon,
-  MapPinIcon,
-  MatchesSolidIcon,
-  PlusIcon,
-  StarIcon,
-} from "@/components/ui/icons";
-import { useStore, type NewPropertyInput } from "@/data/store";
+import { CheckIcon } from "@/components/ui/icons";
+import { isLinkedAgencyId, useStore } from "@/data/store";
 import { FEATURE_CHIPS, ZONES } from "@/data/seed";
-import { computeMatch, MATCH_THRESHOLD } from "@/lib/matching";
-import { PROPERTY_STATUS_LABEL, PROPERTY_TYPE_LABEL, money } from "@/lib/format";
+import { PROPERTY_STATUS_LABEL, PROPERTY_TYPE_LABEL, relativeTime } from "@/lib/format";
+import { isShortMapsLink, parseCoordinates } from "@/lib/geo";
+import { DESCRIPTION_MIN, TITLE_MAX, TITLE_MIN, diagnose } from "@/lib/listingDiagnostics";
+import { AUTHORIZATION_LABEL, AUTHORIZATION_TONE_STYLE, authorizationState, dateInputFromNow } from "@/lib/authorization";
 import type {
-  ClientProfile,
-  CurrencyCode,
+  AuthorizationType,
   OperationType,
-  Property,
+  PropertyLayout,
+  PropertyOrientation,
   PropertyStatus,
   PropertyType,
 } from "@/types/db";
-import { compressImage } from "@/lib/images";
-import { AUTHORIZATION_LABEL, AUTHORIZATION_TONE_STYLE, authorizationState, dateInputFromNow } from "@/lib/authorization";
-import type { AuthorizationType } from "@/types/db";
+import { coordsOf, initialForm, roomsValue, toDraftProperty, toInput, type FormState } from "./subir/form";
+import { clearDraft, draftKey, loadDraft, saveDraft, type StoredDraft } from "./subir/draft";
+import { Chip, CounterHint, Field, FormSection, MoneyField, Stepper, Switch, inputClass, selectClass } from "./subir/ui";
+import { PhotoGallery } from "./subir/PhotoGallery";
+import { BuyersPanel, ChannelsPanel, QualityPanel, useCompatibleBuyers } from "./subir/SidePanels";
 
 const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
 const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
@@ -33,330 +29,539 @@ const OPERATIONS: { value: OperationType; label: string }[] = [
   { value: "alquiler", label: "Alquiler" },
   { value: "alquiler_temporal", label: "Temporal" },
 ];
-const CLIENT_PROFILES: { value: ClientProfile; label: string }[] = [
-  { value: "inversor", label: "Inversor" },
-  { value: "primera_vivienda", label: "Primera vivienda" },
-  { value: "familia", label: "Familia" },
-  { value: "estudiante", label: "Estudiante" },
-  { value: "profesional", label: "Profesional" },
+const SUBTYPES: Record<PropertyType, string[]> = {
+  casa: ["Casa", "Chalet", "Casa quinta", "Dúplex", "Prefabricada"],
+  departamento: ["Monoambiente", "Loft", "Dúplex", "Semipiso", "Piso", "Penthouse"],
+  ph: ["PH al frente", "PH interno", "Dúplex"],
+  terreno: ["Lote", "Lote en barrio cerrado", "Fracción", "Quinta"],
+  local: ["Local a la calle", "Local en galería"],
+  oficina: ["Oficina", "Consultorio", "Edificio de oficinas"],
+};
+const LAYOUTS: { value: PropertyLayout; label: string }[] = [
+  { value: "frente", label: "Frente" },
+  { value: "contrafrente", label: "Contrafrente" },
+  { value: "lateral", label: "Lateral" },
+  { value: "interno", label: "Interno" },
 ];
+const ORIENTATIONS: { value: PropertyOrientation; label: string }[] = [
+  { value: "N", label: "Norte" },
+  { value: "NE", label: "Noreste" },
+  { value: "NO", label: "Noroeste" },
+  { value: "S", label: "Sur" },
+  { value: "SE", label: "Sudeste" },
+  { value: "SO", label: "Sudoeste" },
+  { value: "E", label: "Este" },
+  { value: "O", label: "Oeste" },
+];
+const SECTIONS = [
+  { id: "galeria", label: "Galería" },
+  { id: "informacion", label: "Información comercial" },
+  { id: "precios", label: "Precios" },
+  { id: "superficies", label: "Superficies y ambientes" },
+  { id: "ubicacion", label: "Ubicación" },
+  { id: "amenities", label: "Amenities" },
+  { id: "propietario", label: "Propietario" },
+] as const;
+type SectionId = (typeof SECTIONS)[number]["id"];
 
-const MAX_PHOTO_MB = 10;
+/** Debounce del autoguardado del borrador. */
+const AUTOSAVE_MS = 800;
 
 /**
  * Alta y edición de una propiedad.
  *
  * Es el mismo formulario para las dos cosas: con `:propertyId` en la ruta
- * arranca precargado y guarda sobre la propiedad existente. Duplicar la
- * pantalla habría significado mantener dos veces los seis bloques y la
- * validación.
+ * arranca precargado y guarda sobre la propiedad existente.
+ *
+ * Mientras se completa, el formulario se autoguarda como borrador en este
+ * navegador (ver subir/draft.ts). El borrador nunca entra al store ni se
+ * sincroniza con la app: solo "Guardar" crea o actualiza la propiedad.
  */
 export default function SubirPropiedadPage() {
   const navigate = useNavigate();
   const { propertyId } = useParams();
-  const {
-    addProperty,
-    savePropertyEdit,
-    propertyById,
-    photos: allPhotos,
-    profiles,
-    profile,
-    requirements,
-    contacts,
-    addContact,
-  } = useStore();
+  const [searchParams] = useSearchParams();
+  const { addProperty, savePropertyEdit, propertyById, photos: allPhotos, profiles, profile, contacts, addContact, agency } =
+    useStore();
 
   const editing = propertyById(propertyId);
-  const num = (v: number | null | undefined) => (v === null || v === undefined ? "" : String(v));
+  // Viene del Multipublicador: se muestran los pasos 1/2 y "Guardar" pasa a "Solo guardar".
+  const publishAfter = !editing && searchParams.get("publicar") === "1";
+  const key = draftKey(editing?.id);
 
-  // Bloque 1 — información principal
-  const [type, setType] = useState<PropertyType>(editing?.type ?? "casa");
-  const [operation, setOperation] = useState<OperationType>(editing?.operation ?? "venta");
-  const [title, setTitle] = useState(editing?.title ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
+  const [form, setForm] = useState<FormState>(() =>
+    initialForm(editing, editing ? (allPhotos[editing.id] ?? []) : [], profile.id),
+  );
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Bloque 2 — ubicación
-  const [street, setStreet] = useState(editing?.street ?? "");
-  const [streetNumber, setStreetNumber] = useState(editing?.street_number ?? "");
-  // El campo edita la ZONA, que es lo que consume el motor de matching. Se
-  // precarga con la zona guardada (la localidad puede ser más amplia: la
-  // propiedad está en "La Plata" pero su zona es "La Plata Centro").
-  const [locality, setLocality] = useState(editing?.zone ?? editing?.locality ?? "City Bell");
-  const [province, setProvince] = useState(editing?.province ?? "Buenos Aires");
-
-  // Bloque 3 — características
-  const [price, setPrice] = useState(num(editing?.price));
-  const [currency, setCurrency] = useState<CurrencyCode>(editing?.currency ?? "USD");
-  const [surfaceTotal, setSurfaceTotal] = useState(num(editing?.surface_total));
-  const [surfaceCovered, setSurfaceCovered] = useState(num(editing?.surface_covered));
-  const [bedrooms, setBedrooms] = useState(editing?.bedrooms ?? 3);
-  const [bathrooms, setBathrooms] = useState(editing?.bathrooms ?? 2);
-  const [garages, setGarages] = useState(editing?.garages ?? 1);
-  const [age, setAge] = useState(num(editing?.age_years));
-
-  // Bloque 4 — fotos
-  const [photos, setPhotos] = useState<string[]>(editing ? (allPhotos[editing.id] ?? []) : []);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  // Bloque 5 — comercial
-  const [expenses, setExpenses] = useState(num(editing?.expenses));
-  const [taxes, setTaxes] = useState(num(editing?.taxes));
-  const [commission, setCommission] = useState(editing ? num(editing.commission_pct) : "3");
-  const [status, setStatus] = useState<PropertyStatus>(editing?.status ?? "disponible");
-  const [agentId, setAgentId] = useState(editing?.owner_agent_id ?? profile.id);
-
-  // Bloque 5b — propietario y autorización
-  const [ownerId, setOwnerId] = useState(editing?.owner_contact_id ?? "");
-  const [authType, setAuthType] = useState<AuthorizationType | "">(editing?.authorization_type ?? "");
-  const [authExpires, setAuthExpires] = useState(editing?.authorization_expires_at ?? "");
+  const [mapsLink, setMapsLink] = useState("");
+  const [mapsMsg, setMapsMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   /** `null` mientras no se está cargando un propietario nuevo. */
   const [newOwner, setNewOwner] = useState<{ name: string; phone: string } | null>(null);
 
-  // Bloque 6 — preferencias de match
-  const [clientProfiles, setClientProfiles] = useState<Set<ClientProfile>>(new Set(["familia"]));
-  const [features, setFeatures] = useState<Set<string>>(
-    new Set(editing?.features ?? ["Jardín", "Cochera"]),
-  );
-
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [showExit, setShowExit] = useState(false);
+  const [toast, setToast] = useState<{ kind: "ok" | "error"; title?: string; text: string } | null>(null);
+  const [confirm, setConfirm] = useState<null | { kind: "exit" | "discard"; target: string }>(null);
+  const [active, setActive] = useState<SectionId>("galeria");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * "Cambios sin guardar" comparando contra el estado inicial. En alta eso es
-   * el formulario vacío; en edición, la propiedad tal como estaba.
-   */
-  const snapshot = JSON.stringify([
-    type, operation, title, description, street, streetNumber, locality, province,
-    price, currency, surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, age,
-    photos, expenses, taxes, commission, status, agentId, [...features].sort(),
-    ownerId, authType, authExpires,
-  ]);
+  /** "Cambios sin guardar" comparando contra el estado inicial. */
+  const snapshot = JSON.stringify(form);
   const initialSnapshot = useRef(snapshot);
   const touched = snapshot !== initialSnapshot.current;
 
-  /** Cancelar vuelve a la ficha si se estaba editando, o al listado si es alta. */
-  const cancelTarget = editing ? `/propiedades/${editing.id}` : "/propiedades";
+  /* ── Borrador ──────────────────────────────────────────────────────── */
+
+  /** Borrador anterior que se ofrece recuperar al abrir. Mientras se ofrece, no se pisa. */
+  const [draftOffer, setDraftOffer] = useState<StoredDraft | null>(() => {
+    const d = loadDraft(key);
+    return d && JSON.stringify(d.form) !== initialSnapshot.current ? d : null;
+  });
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (draftOffer || !touched) return;
+    const t = setTimeout(() => {
+      const saved = saveDraft(key, form);
+      if (saved) setSavedAt(saved.savedAt);
+    }, AUTOSAVE_MS);
+    return () => clearTimeout(t);
+  }, [form, touched, draftOffer, key]);
+
+  // "Guardado hace X" se refresca solo.
+  useEffect(() => {
+    if (!savedAt) return;
+    const i = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(i);
+  }, [savedAt]);
+
+  function recoverDraft() {
+    if (!draftOffer) return;
+    setForm(draftOffer.form);
+    setSavedAt(draftOffer.savedAt);
+    if (draftOffer.photosDropped) {
+      setToast({
+        kind: "error",
+        title: "Borrador recuperado sin algunas fotos",
+        text: "Las fotos nuevas no entraban en el navegador. Volvé a subirlas.",
+      });
+    }
+    setDraftOffer(null);
+  }
+
+  function dropDraftOffer() {
+    clearDraft(key);
+    setDraftOffer(null);
+  }
+
+  /** Guarda sin validar y sin tocar el store: no crea la propiedad ni sincroniza nada. */
+  function saveDraftNow() {
+    const saved = saveDraft(key, form);
+    if (!saved) {
+      setToast({
+        kind: "error",
+        title: "No se pudo guardar el borrador",
+        text: "El navegador no tiene lugar. Guardá la propiedad o liberá espacio.",
+      });
+      return;
+    }
+    setDraftOffer(null);
+    setSavedAt(saved.savedAt);
+    setToast({
+      kind: "ok",
+      title: "Borrador guardado",
+      text: saved.photosDropped
+        ? "Quedó en este navegador, sin las fotos nuevas (no entraban). No se publicó en ningún canal."
+        : "Quedó en este navegador. No se publicó en ningún canal ni en la app.",
+    });
+  }
+
+  /* ── Derivados en vivo ─────────────────────────────────────────────── */
+
+  const draftProperty = useMemo(() => toDraftProperty(form, editing), [form, editing]);
+  const checks = useMemo(() => diagnose(draftProperty, form.photos.length), [draftProperty, form.photos.length]);
+  const buyers = useCompatibleBuyers(form.price ? draftProperty : null);
+  const ok = (id: string) => checks.find((c) => c.id === id)?.ok ?? false;
+  const done: Record<SectionId, boolean> = {
+    galeria: ok("photos"),
+    informacion: ok("title") && ok("description"),
+    precios: ok("price"),
+    superficies: ok("size"),
+    ubicacion: !!form.street.trim() && ok("coords"),
+    amenities: form.features.length > 0,
+    propietario: !!form.ownerId && ok("authorization"),
+  };
+  const coords = coordsOf(form);
+  const titleLen = form.title.trim().length;
+  const descLen = form.description.trim().length;
 
   /**
    * Si la propiedad tiene una zona que no está en la lista fija, se agrega:
    * un <select> cuyo value no existe entre sus opciones muestra la primera y
    * al guardar reescribiría la zona sin que nadie lo pida.
    */
-  const zoneOptions = ZONES.includes(locality) ? ZONES : [locality, ...ZONES];
+  const zoneOptions = ZONES.includes(form.locality) ? ZONES : [form.locality, ...ZONES];
+  /** Lo mismo con amenities que vinieron de la app o de una importación: se muestran para poder sacarlos. */
+  const featureOptions = [...FEATURE_CHIPS, ...form.features.filter((f) => !FEATURE_CHIPS.includes(f))];
 
-  /**
-   * Potencial de match en vivo.
-   *
-   * En el prototipo este bloque decía "Alto · podría coincidir con 18 contactos"
-   * como texto fijo. Acá corre el mismo motor que usa la pantalla de Matches
-   * contra los requerimientos reales, mientras se completa el formulario.
-   */
-  const potential = useMemo(() => {
-    const priceNum = Number(price) || null;
-    if (!priceNum) return null;
+  /* ── Subnav: sección activa ────────────────────────────────────────── */
 
-    const draft: Property = {
-      id: "draft",
-      agency_id: "",
-      owner_agent_id: agentId,
-      owner_contact_id: ownerId || null,
-      authorization_type: authType || null,
-      authorization_expires_at: authExpires || null,
-      title,
-      description,
-      type,
-      operation,
-      status: "disponible",
-      street,
-      street_number: streetNumber,
-      locality,
-      province,
-      zone: locality,
-      lat: null,
-      lng: null,
-      price: priceNum,
-      currency,
-      expenses: null,
-      taxes: null,
-      commission_pct: null,
-      surface_total: Number(surfaceTotal) || null,
-      surface_covered: Number(surfaceCovered) || null,
-      rooms: bedrooms + 1,
-      bedrooms,
-      bathrooms,
-      garages,
-      age_years: null,
-      features: [...features],
-      is_featured: false,
-      published_to_marketplace: false,
-      published_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const visible = new Set<string>();
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.add(e.target.id);
+          else visible.delete(e.target.id);
+        }
+        const first = SECTIONS.find((s) => visible.has(s.id));
+        if (first) setActive(first.id);
+      },
+      // Franja de lectura: debajo del subnav y en la mitad superior.
+      { root, rootMargin: "-72px 0px -55% 0px", threshold: 0 },
+    );
+    for (const s of SECTIONS) {
+      const el = document.getElementById(s.id);
+      if (el) obs.observe(el);
+    }
+    return () => obs.disconnect();
+  }, []);
 
-    const hits = requirements
-      .filter((r) => r.is_active && r.operation === operation)
-      .map((r) => computeMatch(r, draft).score)
-      .filter((s) => s >= MATCH_THRESHOLD);
+  function jumpTo(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  }
 
-    return {
-      count: hits.length,
-      best: hits.length ? Math.max(...hits) : 0,
-      level: hits.length >= 6 ? "Alto" : hits.length >= 3 ? "Medio" : hits.length ? "Bajo" : "Sin coincidencias",
-    };
-  }, [
-    price, currency, type, operation, locality, province, street, streetNumber,
-    surfaceTotal, surfaceCovered, bedrooms, bathrooms, garages, features,
-    requirements, title, description, agentId,
-  ]);
+  /* ── Ubicación ─────────────────────────────────────────────────────── */
+
+  function applyMapsLink(text: string) {
+    setMapsLink(text);
+    if (!text.trim()) return setMapsMsg(null);
+    const found = parseCoordinates(text);
+    if (found) {
+      setForm((f) => ({ ...f, lat: String(found.lat), lng: String(found.lng) }));
+      setMapsMsg({ kind: "ok", text: "Listo: tomamos las coordenadas del link." });
+    } else if (isShortMapsLink(text)) {
+      setMapsMsg({
+        kind: "error",
+        text: "Los links cortos (maps.app.goo.gl) no traen coordenadas. Abrilo en el navegador y copiá la dirección larga de la barra.",
+      });
+    } else {
+      setMapsMsg({ kind: "error", text: "No encontramos coordenadas en ese texto." });
+    }
+  }
+
+  /* ── Guardar ───────────────────────────────────────────────────────── */
 
   function validate(): boolean {
     const e: Record<string, string> = {};
-    if (!title.trim()) e.title = "El título es obligatorio";
-    if (!price.trim()) e.price = "El precio es obligatorio";
-    else if (Number.isNaN(Number(price))) e.price = "El precio debe ser un número";
-    if (!street.trim()) e.street = "La dirección es obligatoria";
-    if (authType && !authExpires) e.authExpires = "Poné hasta cuándo vale la autorización";
+    if (!form.title.trim()) e.title = "El título es obligatorio";
+    if (!form.price.trim()) e.price = "El precio es obligatorio";
+    else if (Number.isNaN(Number(form.price))) e.price = "El precio debe ser un número";
+    if (!form.street.trim()) e.street = "La dirección es obligatoria";
+    if ((form.lat.trim() || form.lng.trim()) && !coords)
+      e.coords = "Revisá las coordenadas: latitud entre -90 y 90, longitud entre -180 y 180";
+    if (form.authType && !form.authExpires) e.authExpires = "Poné hasta cuándo vale la autorización";
     setErrors(e);
-    return Object.keys(e).length === 0;
+    const firstBad = Object.keys(e)[0];
+    if (firstBad) {
+      const section: Record<string, SectionId> = {
+        title: "informacion",
+        price: "precios",
+        street: "ubicacion",
+        coords: "ubicacion",
+        authExpires: "propietario",
+      };
+      jumpTo(section[firstBad] ?? "informacion");
+    }
+    return !firstBad;
   }
 
-  function handleSave() {
+  /** "save" = comportamiento de siempre; "publish" = después sigue al Multipublicador. */
+  function handleSave(mode: "save" | "publish") {
     if (!validate()) {
       setToast({ kind: "error", text: "Revisá los campos marcados e intentá nuevamente." });
       return;
     }
-
-    const input: NewPropertyInput = {
-      title: title.trim(),
-      description: description.trim() || null,
-      type,
-      operation,
-      status,
-      street: street.trim() || null,
-      street_number: streetNumber.trim() || null,
-      locality,
-      province,
-      price: Number(price),
-      currency,
-      expenses: expenses ? Number(expenses) : null,
-      taxes: taxes ? Number(taxes) : null,
-      commission_pct: commission ? Number(commission) : null,
-      surface_total: surfaceTotal ? Number(surfaceTotal) : null,
-      surface_covered: surfaceCovered ? Number(surfaceCovered) : null,
-      bedrooms,
-      bathrooms,
-      garages,
-      age_years: age ? Number(age) : null,
-      features: [...features],
-      owner_agent_id: agentId,
-      owner_contact_id: ownerId || null,
-      authorization_type: authType || null,
-      authorization_expires_at: authType ? authExpires || null : null,
-      photos,
-    };
+    const input = toInput(form);
 
     if (editing) {
       savePropertyEdit(editing.id, input);
+      clearDraft(key);
       initialSnapshot.current = snapshot;
-      setToast({ kind: "ok", text: "Los cambios fueron guardados." });
-      setTimeout(() => navigate(`/propiedades/${editing.id}`), 900);
-    } else {
-      const created = addProperty(input);
-      const count = potential?.count ?? 0;
-      if (count > 0) {
-        setToast({
-          kind: "ok",
-          text: `Propiedad agregada. Coincide con ${count} ${count === 1 ? "cliente" : "clientes"}: avisales por WhatsApp.`,
-        });
-        setTimeout(() => navigate(`/propiedades/${created.id}?compartir=1`), 1100);
+      setSavedAt(null);
+      if (mode === "publish") {
+        setToast({ kind: "ok", text: "Cambios guardados. Ahora elegí dónde publicarla." });
+        setTimeout(() => navigate(`/publicador/${editing.id}`), 900);
       } else {
-        setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
-        setTimeout(() => navigate("/propiedades"), 900);
+        setToast({ kind: "ok", text: "Los cambios fueron guardados." });
+        setTimeout(() => navigate(`/propiedades/${editing.id}`), 900);
       }
+      return;
+    }
+
+    const created = addProperty(input);
+    clearDraft(key);
+    initialSnapshot.current = snapshot;
+    setSavedAt(null);
+    const count = buyers?.count ?? 0;
+    if (mode === "publish") {
+      setToast({ kind: "ok", text: "Propiedad guardada. Ahora elegí dónde publicarla." });
+      setTimeout(() => navigate(`/publicador/${created.id}`), 900);
+    } else if (count > 0) {
+      setToast({
+        kind: "ok",
+        text: `Propiedad agregada. Coincide con ${count} ${count === 1 ? "cliente" : "clientes"}: avisales por WhatsApp.`,
+      });
+      setTimeout(() => navigate(`/propiedades/${created.id}?compartir=1`), 1100);
+    } else {
+      setToast({ kind: "ok", text: "La propiedad fue agregada correctamente." });
+      setTimeout(() => navigate("/propiedades"), 900);
     }
   }
 
-  async function addFiles(files: FileList | null) {
-    if (!files) return;
-    const accepted: string[] = [];
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) continue;
-      if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
-        setToast({ kind: "error", text: `"${file.name}" supera los ${MAX_PHOTO_MB} MB.` });
-        continue;
-      }
-      try {
-        accepted.push(await compressImage(file));
-      } catch {
-        setToast({ kind: "error", text: `No pudimos leer "${file.name}".` });
-      }
-    }
-    if (accepted.length) setPhotos((prev) => [...prev, ...accepted]);
-  }
+  /** Cancelar vuelve a la ficha si se estaba editando, o al listado si es alta. */
+  const cancelTarget = editing ? `/propiedades/${editing.id}` : "/propiedades";
+  const leave = (target: string) => (touched ? setConfirm({ kind: "exit", target }) : navigate(target));
+
+  // Badge con el dato real de la autorización cargada, no un adorno fijo.
+  const isExclusive = form.authType === "exclusiva";
+  const canToggleStatus = form.status === "disponible" || form.status === "pausada";
+
+  /* ── Render ────────────────────────────────────────────────────────── */
 
   return (
     <>
-      <AppHeader
-        title={editing ? "Editar propiedad" : "Subir propiedad"}
-        breadcrumb={["Propiedades", editing ? editing.title : "Nueva propiedad"]}
-        subtitle={
-          editing
-            ? "Los matches se recalculan solos al guardar."
-            : "Agregá una nueva propiedad a tu cartera."
-        }
-        compact
-      >
-        <button
-          onClick={() => (touched ? setShowExit(true) : navigate(cancelTarget))}
-          className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
-          style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleSave}
-          className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
-          style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
-        >
-          {editing ? "Guardar cambios" : "Guardar propiedad"}
-        </button>
-      </AppHeader>
+      <header className="flex-shrink-0 border-b px-4 md:px-8 py-3 md:py-4" style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}>
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3 xl:gap-6">
+          <div className="min-w-0 flex-1">
+            <nav aria-label="Migas" className="text-xs mb-1" style={{ color: "#7458C4", fontWeight: 500 }}>
+              <button type="button" onClick={() => leave("/propiedades")} className="hover:underline">
+                Propiedades
+              </button>
+              <span aria-hidden="true" style={{ color: "#DDD6FE" }}>
+                {" "}
+                /{" "}
+              </span>
+              <span aria-current="page" style={{ color: "#7C3AED", fontWeight: 600 }}>
+                {editing ? editing.title : "Nueva propiedad"}
+              </span>
+            </nav>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="text-xl md:text-2xl tracking-tight truncate max-w-full" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+                {editing ? "Editar propiedad" : "Subir propiedad"}
+              </h1>
+              {isExclusive && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full text-white" style={{ background: "var(--gradient-brand)", fontWeight: 700 }}>
+                  Exclusiva
+                </span>
+              )}
+              <span className="text-xs" style={{ color: "#7458C4" }}>
+                {savedAt
+                  ? `Borrador guardado · ${relativeTime(savedAt).toLowerCase()}`
+                  : touched
+                    ? "Cambios sin guardar"
+                    : editing
+                      ? "Sin cambios"
+                      : "Se guarda un borrador mientras completás"}
+              </span>
+            </div>
+          </div>
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-28">
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
-          <div className="space-y-6 min-w-0">
-            {/* Bloque 1 */}
-            <Section title="Información de la propiedad" icon={<HomeIcon size={16} color="#7C3AED" />}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Tipo de propiedad">
-                  <select value={type} onChange={(e) => setType(e.target.value as PropertyType)} className={selectClass}>
-                    {PROP_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {PROPERTY_TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+          <div className="flex flex-wrap items-center gap-2">
+            {canToggleStatus ? (
+              <div className="pr-1">
+                <Switch
+                  checked={form.status === "disponible"}
+                  onChange={(v) => set("status", v ? "disponible" : "pausada")}
+                  label={form.status === "disponible" ? "Disponible" : "Pausada"}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => jumpTo("informacion")}
+                className="text-xs px-3 min-h-11 rounded-xl border"
+                style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
+              >
+                Estado: {PROPERTY_STATUS_LABEL[form.status]}
+              </button>
+            )}
+            <HeaderButton
+              variant="ghost"
+              onClick={() =>
+                touched || draftOffer || savedAt ? setConfirm({ kind: "discard", target: cancelTarget }) : navigate(cancelTarget)
+              }
+            >
+              Descartar
+            </HeaderButton>
+            <HeaderButton variant="outline" onClick={saveDraftNow}>
+              Guardar borrador
+            </HeaderButton>
+            <HeaderButton variant="outline" onClick={() => handleSave("save")}>
+              {publishAfter ? "Solo guardar" : editing ? "Guardar cambios" : "Guardar"}
+            </HeaderButton>
+            <HeaderButton variant="primary" onClick={() => handleSave("publish")}>
+              Guardar y publicar en canales →
+            </HeaderButton>
+          </div>
+        </div>
+      </header>
 
-                <Field label="Operación">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {/* Subnav */}
+        <nav
+          aria-label="Secciones del formulario"
+          className="sticky top-0 z-10 border-b px-4 md:px-8"
+          style={{ background: "rgba(253,252,255,0.96)", borderColor: "#EDE9FE", backdropFilter: "blur(6px)" }}
+        >
+          <ol className="flex gap-1 overflow-x-auto py-2">
+            {SECTIONS.map((s, i) => {
+              const isActive = active === s.id;
+              return (
+                <li key={s.id} className="flex-shrink-0">
+                  <a
+                    href={`#${s.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      jumpTo(s.id);
+                    }}
+                    aria-current={isActive ? "location" : undefined}
+                    className="flex items-center gap-1.5 px-3 min-h-11 rounded-xl text-sm whitespace-nowrap transition-all hover:bg-violet-50"
+                    style={
+                      isActive
+                        ? { background: "var(--gradient-nav-active)", color: "#7C3AED", fontWeight: 700 }
+                        : { color: "#7C6A99", fontWeight: 500 }
+                    }
+                  >
+                    {done[s.id] ? (
+                      <span className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: "#16A34A" }} aria-hidden="true">
+                        <CheckIcon size={9} color="white" />
+                      </span>
+                    ) : (
+                      <span className="text-xs" aria-hidden="true">
+                        {i + 1}.
+                      </span>
+                    )}
+                    {s.label}
+                    {done[s.id] && <span className="sr-only"> (completa)</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+
+        <div className="px-4 md:px-8 pb-16">
+          {publishAfter && (
+            <ol
+              aria-label="Pasos para publicar"
+              className="mt-6 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 rounded-2xl border px-4 py-3 text-sm"
+              style={{ background: "#F5F3FF", borderColor: "#EDE9FE" }}
+            >
+              <li aria-current="step" className="flex items-center gap-2" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs text-white" style={{ background: "#7C3AED" }}>
+                  1
+                </span>
+                Paso 1 de 2 · Cargá la propiedad
+              </li>
+              <li className="flex items-center gap-2" style={{ color: "#6B5A8E", fontWeight: 600 }}>
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs border" style={{ borderColor: "#C4B5FD", color: "#6B5A8E" }}>
+                  2
+                </span>
+                Paso 2 · Elegí dónde publicar
+              </li>
+            </ol>
+          )}
+
+          {draftOffer && (
+            <div
+              role="region"
+              aria-label="Borrador sin guardar"
+              className="mt-6 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
+              style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}
+            >
+              <p className="text-sm flex-1" style={{ color: "#78350F" }}>
+                <strong>Tenés un borrador sin guardar</strong> ({relativeTime(draftOffer.savedAt).toLowerCase()})
+                {draftOffer.form.title.trim() ? `: «${draftOffer.form.title.trim()}»` : ""}. ¿Lo recuperamos?
+              </p>
+              <div className="flex gap-2">
+                <button type="button" onClick={dropDraftOffer} className="px-4 min-h-11 rounded-xl text-sm hover:bg-amber-100" style={{ color: "#92400E", fontWeight: 600 }}>
+                  Descartarlo
+                </button>
+                <button
+                  type="button"
+                  onClick={recoverDraft}
+                  className="px-4 min-h-11 rounded-xl text-sm text-white"
+                  style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                >
+                  Recuperar borrador
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-12 items-start">
+            <div className="space-y-6 min-w-0 lg:col-span-8">
+              {/* 1 · Galería */}
+              <FormSection id="galeria" number={1} title="Galería" subtitle="La primera foto es la portada en todos los canales." done={done.galeria}>
+                <PhotoGallery
+                  photos={form.photos}
+                  onChange={(next) => setForm((f) => ({ ...f, photos: typeof next === "function" ? next(f.photos) : next }))}
+                  onError={(text) => setToast({ kind: "error", title: "Revisá las fotos", text })}
+                />
+              </FormSection>
+
+              {/* 2 · Información comercial */}
+              <FormSection id="informacion" number={2} title="Información comercial" done={done.informacion}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Tipo de propiedad">
+                    <select value={form.type} onChange={(e) => set("type", e.target.value as PropertyType)} className={selectClass}>
+                      {PROP_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {PROPERTY_TYPE_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Subtipo (opcional)">
+                    <input
+                      value={form.subtype}
+                      onChange={(e) => set("subtype", e.target.value)}
+                      list="pm-subtypes"
+                      placeholder={SUBTYPES[form.type][0]}
+                      className={inputClass(false)}
+                    />
+                    <datalist id="pm-subtypes">
+                      {SUBTYPES[form.type].map((s) => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </Field>
+                </div>
+
+                <div role="radiogroup" aria-labelledby="spp-operation-label">
+                  <span id="spp-operation-label" className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                    Operación
+                  </span>
                   <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: "#F5F3FF" }}>
                     {OPERATIONS.map((op) => (
                       <button
                         key={op.value}
                         type="button"
-                        onClick={() => setOperation(op.value)}
-                        className="flex-1 px-3 py-1.5 rounded-lg text-sm transition-all"
+                        role="radio"
+                        aria-checked={form.operation === op.value}
+                        onClick={() => set("operation", op.value)}
+                        className="flex-1 px-3 min-h-11 rounded-lg text-sm transition-all"
                         style={
-                          operation === op.value
-                            ? {
-                                background: "var(--gradient-brand)",
-                                color: "white",
-                                fontWeight: 600,
-                                boxShadow: "0 2px 8px rgba(124,58,237,0.25)",
-                              }
+                          form.operation === op.value
+                            ? { background: "var(--gradient-brand)", color: "white", fontWeight: 600, boxShadow: "0 2px 8px rgba(124,58,237,0.25)" }
                             : { color: "#7C6A99", fontWeight: 500 }
                         }
                       >
@@ -364,673 +569,550 @@ export default function SubirPropiedadPage() {
                       </button>
                     ))}
                   </div>
-                </Field>
-              </div>
-
-              <Field label="Título de la propiedad" error={errors.title}>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Casa moderna con jardín en City Bell"
-                  className={inputClass(!!errors.title)}
-                />
-              </Field>
-
-              <Field label="Descripción">
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  placeholder="Describí las principales características de la propiedad…"
-                  className={`${inputClass(false)} resize-none`}
-                />
-              </Field>
-            </Section>
-
-            {/* Bloque 2 */}
-            <Section title="Ubicación" icon={<MapPinIcon size={16} color="#7C3AED" />}>
-              <div className="grid gap-4 sm:grid-cols-4">
-                <div className="sm:col-span-3">
-                  <Field label="Dirección" error={errors.street}>
-                    <input
-                      value={street}
-                      onChange={(e) => setStreet(e.target.value)}
-                      placeholder="Calle 13"
-                      className={inputClass(!!errors.street)}
-                    />
-                  </Field>
                 </div>
-                <Field label="Número">
-                  <input
-                    value={streetNumber}
-                    onChange={(e) => setStreetNumber(e.target.value)}
-                    placeholder="450"
-                    className={inputClass(false)}
-                  />
-                </Field>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Zona">
-                  <select value={locality} onChange={(e) => setLocality(e.target.value)} className={selectClass}>
-                    {zoneOptions.map((z) => (
-                      <option key={z} value={z}>
-                        {z}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Provincia">
-                  <input
-                    value={province}
-                    onChange={(e) => setProvince(e.target.value)}
-                    className={inputClass(false)}
-                  />
-                </Field>
-              </div>
-
-              {/* Mapa: placeholder visual, igual que en el prototipo */}
-              <div
-                className="rounded-xl overflow-hidden relative h-40 flex items-center justify-center"
-                style={{
-                  background:
-                    "repeating-linear-gradient(45deg, #F9F7FF, #F9F7FF 12px, #F5F3FF 12px, #F5F3FF 24px)",
-                  border: "1px solid #EDE9FE",
-                }}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{ background: "var(--gradient-brand)", boxShadow: "0 4px 14px rgba(124,58,237,0.35)" }}
-                  >
-                    <MapPinIcon size={18} color="white" />
-                  </div>
-                  <span
-                    className="text-xs px-3 py-1 rounded-full"
-                    style={{ background: "white", color: "#7C3AED", fontWeight: 600, border: "1px solid #EDE9FE" }}
-                  >
-                    {locality}, {province}
-                  </span>
-                </div>
-              </div>
-            </Section>
-
-            {/* Bloque 3 */}
-            <Section title="Características" icon={<HomeIcon size={16} color="#7C3AED" />}>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="sm:col-span-2">
-                  <Field label="Precio" error={errors.price}>
-                    <input
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ""))}
-                      inputMode="numeric"
-                      placeholder="185000"
-                      className={inputClass(!!errors.price)}
-                    />
-                  </Field>
-                </div>
-                <Field label="Moneda">
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-                    className={selectClass}
-                  >
-                    <option value="USD">USD</option>
-                    <option value="ARS">ARS</option>
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Superficie total (m²)">
-                  <input
-                    value={surfaceTotal}
-                    onChange={(e) => setSurfaceTotal(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="220"
-                    className={inputClass(false)}
-                  />
-                </Field>
-                <Field label="Superficie cubierta (m²)">
-                  <input
-                    value={surfaceCovered}
-                    onChange={(e) => setSurfaceCovered(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="180"
-                    className={inputClass(false)}
-                  />
-                </Field>
-                <Field label="Antigüedad (años)">
-                  <input
-                    value={age}
-                    onChange={(e) => setAge(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="0"
-                    className={inputClass(false)}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Stepper label="Dormitorios" value={bedrooms} onChange={setBedrooms} />
-                <Stepper label="Baños" value={bathrooms} onChange={setBathrooms} />
-                <Stepper label="Cocheras" value={garages} onChange={setGarages} />
-              </div>
-            </Section>
-
-            {/* Bloque 4 */}
-            <Section title="Fotos de la propiedad" icon={<StarIcon size={16} color="#7C3AED" />}>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOver(false);
-                  addFiles(e.dataTransfer.files);
-                }}
-                onClick={() => fileInput.current?.click()}
-                className="rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center cursor-pointer transition-all"
-                style={{
-                  borderColor: dragOver ? "#7C3AED" : "#DDD6FE",
-                  background: dragOver ? "#F5F3FF" : "#FDFCFF",
-                }}
-              >
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  multiple
-                  hidden
-                  onChange={(e) => addFiles(e.target.files)}
-                />
-                <div
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
-                  style={{ background: "var(--gradient-soft)", border: "1px solid #EDE9FE" }}
+                <Field
+                  label="Título"
+                  error={errors.title}
+                  hint={
+                    <CounterHint ok={titleLen >= TITLE_MIN && titleLen <= TITLE_MAX}>
+                      {titleLen}/{TITLE_MAX} ·{" "}
+                      {titleLen < TITLE_MIN
+                        ? `faltan ${TITLE_MIN - titleLen} para el mínimo de ${TITLE_MIN}`
+                        : titleLen > TITLE_MAX
+                          ? `sobran ${titleLen - TITLE_MAX} sobre el máximo de ${TITLE_MAX}`
+                          : "dentro de lo recomendado"}
+                    </CounterHint>
+                  }
                 >
-                  <StarIcon size={20} color="#7C3AED" />
-                </div>
-                <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                  Arrastrá las fotos acá
-                </p>
-                <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
-                  o <span style={{ color: "#7C3AED", fontWeight: 600 }}>seleccionar archivos</span>
-                </p>
-                <p className="text-xs mt-2" style={{ color: "#C4B5FD" }}>
-                  JPG, PNG o WEBP · Máximo {MAX_PHOTO_MB} MB
-                </p>
-              </div>
-
-              {photos.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-                  {photos.map((url, idx) => (
-                    <div
-                      key={url}
-                      className="relative rounded-xl overflow-hidden group"
-                      style={{ aspectRatio: "3/2", background: "#F5F3FF" }}
-                    >
-                      <img src={url} alt="" className="w-full h-full object-cover" />
-                      {idx === 0 && (
-                        <span
-                          className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full"
-                          style={{
-                            background: "var(--gradient-brand)",
-                            color: "white",
-                            fontWeight: 700,
-                            fontSize: 10,
-                          }}
-                        >
-                          Portada
-                        </span>
-                      )}
-                      <div className="absolute inset-x-2 bottom-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {idx !== 0 && (
-                          <button
-                            onClick={() =>
-                              setPhotos((prev) => [prev[idx], ...prev.filter((_, i) => i !== idx)])
-                            }
-                            className="flex-1 py-1 rounded-lg text-xs backdrop-blur-sm"
-                            style={{ background: "rgba(255,255,255,0.9)", color: "#7C3AED", fontWeight: 600 }}
-                          >
-                            Portada
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
-                          className="flex-1 py-1 rounded-lg text-xs backdrop-blur-sm"
-                          style={{ background: "rgba(255,255,255,0.9)", color: "#E11D48", fontWeight: 600 }}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Section>
-
-            {/* Bloque 5 */}
-            <Section title="Información comercial" icon={<HomeIcon size={16} color="#7C3AED" />}>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Expensas">
                   <input
-                    value={expenses}
-                    onChange={(e) => setExpenses(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="45000"
-                    className={inputClass(false)}
+                    value={form.title}
+                    onChange={(e) => set("title", e.target.value)}
+                    placeholder="Casa moderna con jardín en City Bell"
+                    className={inputClass(!!errors.title)}
                   />
                 </Field>
-                <Field label="Impuestos">
-                  <input
-                    value={taxes}
-                    onChange={(e) => setTaxes(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder="12000"
-                    className={inputClass(false)}
+
+                <Field
+                  label="Descripción"
+                  hint={
+                    <CounterHint ok={descLen >= DESCRIPTION_MIN}>
+                      {descLen} caracteres ·{" "}
+                      {descLen < DESCRIPTION_MIN
+                        ? `faltan ${DESCRIPTION_MIN - descLen} para el mínimo de ${DESCRIPTION_MIN}`
+                        : "dentro de lo recomendado"}
+                    </CounterHint>
+                  }
+                >
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => set("description", e.target.value)}
+                    rows={6}
+                    placeholder="Describí ambientes, luz, estado, entorno y lo que la hace distinta…"
+                    className={`${inputClass(false)} resize-y`}
                   />
                 </Field>
-                <Field label="Comisión (%)">
-                  <input
-                    value={commission}
-                    onChange={(e) => setCommission(e.target.value.replace(/[^\d.]/g, ""))}
-                    inputMode="decimal"
-                    className={inputClass(false)}
-                  />
-                </Field>
-              </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Estado de la propiedad">
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as PropertyStatus)}
-                    className={selectClass}
-                  >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {PROPERTY_STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Agente responsable">
-                  <select value={agentId} onChange={(e) => setAgentId(e.target.value)} className={selectClass}>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </Section>
-
-            {/* Bloque 5b */}
-            <Section
-              title="Propietario y autorización"
-              subtitle="Nunca se muestra en la ficha que recibe el cliente"
-              icon={<StarIcon size={16} color="#7C3AED" />}
-            >
-              {newOwner ? (
-                <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Nombre del propietario">
-                      <input
-                        autoFocus
-                        value={newOwner.name}
-                        onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
-                        placeholder="Graciela Benítez"
-                        className={inputClass(false)}
-                      />
-                    </Field>
-                    <Field label="Teléfono">
-                      <input
-                        value={newOwner.phone}
-                        onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
-                        placeholder="+54 221 520 1144"
-                        className={inputClass(false)}
-                      />
-                    </Field>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewOwner(null)}
-                      className="px-4 py-2 rounded-xl text-xs"
-                      style={{ color: "#7C6A99", fontWeight: 600 }}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!newOwner.name.trim()}
-                      onClick={() => {
-                        const c = addContact({
-                          full_name: newOwner.name.trim(),
-                          phone: newOwner.phone.trim() || null,
-                          email: null,
-                          kind: "propietario",
-                          status: "activo",
-                          profile_type: null,
-                          notes: null,
-                          owner_id: agentId,
-                          requirement: null,
-                        });
-                        setOwnerId(c.id);
-                        setNewOwner(null);
-                      }}
-                      className="px-4 py-2 rounded-xl text-xs text-white disabled:opacity-50"
-                      style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
-                    >
-                      Agregar propietario
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <Field label="Propietario">
-                  <div className="flex gap-2">
-                    <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={selectClass}>
-                      <option value="">Sin propietario cargado</option>
-                      <optgroup label="Propietarios">
-                        {contacts
-                          .filter((c) => c.kind === "propietario")
-                          .sort((a, b) => a.full_name.localeCompare(b.full_name))
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.full_name}
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="Otros contactos">
-                        {contacts
-                          .filter((c) => c.kind !== "propietario")
-                          .sort((a, b) => a.full_name.localeCompare(b.full_name))
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.full_name}
-                            </option>
-                          ))}
-                      </optgroup>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Estado de la propiedad">
+                    <select value={form.status} onChange={(e) => set("status", e.target.value as PropertyStatus)} className={selectClass}>
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {PROPERTY_STATUS_LABEL[s]}
+                        </option>
+                      ))}
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => setNewOwner({ name: "", phone: "" })}
-                      className="px-3.5 rounded-xl text-xs border whitespace-nowrap transition-all hover:bg-violet-50"
-                      style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
-                    >
-                      + Nuevo
-                    </button>
-                  </div>
-                </Field>
-              )}
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Autorización">
-                  <select
-                    value={authType}
-                    onChange={(e) => {
-                      const value = e.target.value as AuthorizationType | "";
-                      setAuthType(value);
-                      // Lo más común: 90 días. Se propone solo si no había fecha.
-                      if (value && !authExpires) setAuthExpires(dateInputFromNow(90));
-                    }}
-                    className={selectClass}
-                  >
-                    <option value="">Sin autorización firmada</option>
-                    {(Object.keys(AUTHORIZATION_LABEL) as AuthorizationType[]).map((t) => (
-                      <option key={t} value={t}>
-                        {AUTHORIZATION_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Vence el" error={errors.authExpires}>
-                  <input
-                    type="date"
-                    value={authType ? authExpires : ""}
-                    disabled={!authType}
-                    onChange={(e) => setAuthExpires(e.target.value)}
-                    className={inputClass(!!errors.authExpires) + " disabled:opacity-50"}
-                  />
-                </Field>
-              </div>
-              {authType && authExpires && (() => {
-                const st = authorizationState(authType, authExpires);
-                const style = AUTHORIZATION_TONE_STYLE[st.tone];
-                return (
-                  <p
-                    className="text-xs px-3 py-2 rounded-lg inline-block"
-                    style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}`, fontWeight: 600 }}
-                  >
-                    {st.label}
-                  </p>
-                );
-              })()}
-            </Section>
-          </div>
-
-          {/* Columna derecha: preferencias de match */}
-          <div className="space-y-6 lg:sticky lg:top-0">
-            <Section
-              title="Preferencias para Match"
-              icon={<MatchesSolidIcon size={16} color="#7C3AED" />}
-              subtitle="Definí qué tipo de cliente podría encajar mejor con esta propiedad."
-            >
-              <Field label="Tipo de cliente">
-                <div className="flex flex-wrap gap-2">
-                  {CLIENT_PROFILES.map((cp) => {
-                    const active = clientProfiles.has(cp.value);
-                    return (
-                      <Chip
-                        key={cp.value}
-                        label={cp.label}
-                        active={active}
-                        onClick={() =>
-                          setClientProfiles((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(cp.value)) next.delete(cp.value);
-                            else next.add(cp.value);
-                            return next;
-                          })
-                        }
-                      />
-                    );
-                  })}
+                  </Field>
+                  <Field label="Agente responsable">
+                    <select value={form.agentId} onChange={(e) => set("agentId", e.target.value)} className={selectClass}>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
                 </div>
-              </Field>
+              </FormSection>
 
-              <Field label="Características de la propiedad">
+              {/* 3 · Precios */}
+              <FormSection id="precios" number={3} title="Precios" done={done.precios}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <MoneyField
+                    label={form.operation === "venta" ? "Precio de venta" : "Precio mensual"}
+                    value={form.price}
+                    onValue={(v) => set("price", v)}
+                    currency={form.currency}
+                    onCurrency={(c) => set("currency", c)}
+                    placeholder="185000"
+                    error={errors.price}
+                    hint={
+                      form.currency === "ARS" ? (
+                        <span style={{ color: "#B45309", fontWeight: 600 }}>Solo los precios en USD se publican en la app PropMatch.</span>
+                      ) : undefined
+                    }
+                  />
+                  <MoneyField
+                    label="Expensas"
+                    value={form.expenses}
+                    onValue={(v) => set("expenses", v)}
+                    currency={form.expensesCurrency}
+                    onCurrency={(c) => set("expensesCurrency", c)}
+                    placeholder="45000"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <NumberField label="Impuestos" value={form.taxes} onChange={(v) => set("taxes", v)} placeholder="12000" />
+                  <Field label="Comisión (%)">
+                    <input
+                      value={form.commission}
+                      onChange={(e) => set("commission", e.target.value.replace(/[^\d.]/g, ""))}
+                      inputMode="decimal"
+                      className={inputClass(false)}
+                    />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap gap-x-8 gap-y-1">
+                  <Switch checked={form.creditEligible} onChange={(v) => set("creditEligible", v)} label="Apta crédito" />
+                  <Switch checked={form.acceptsSwap} onChange={(v) => set("acceptsSwap", v)} label="Acepta permuta" />
+                </div>
+
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px dashed #C4B5FD" }}>
+                  <p className="text-xs uppercase" style={{ color: "#5B21B6", fontWeight: 700, letterSpacing: "0.08em" }}>
+                    Confidencial · solo para el equipo
+                  </p>
+                  <MoneyField
+                    label="Precio mínimo de reserva"
+                    value={form.reservePrice}
+                    onValue={(v) => set("reservePrice", v)}
+                    currency={form.reserveCurrency}
+                    onCurrency={(c) => set("reserveCurrency", c)}
+                    placeholder="Lo mínimo que acepta el propietario"
+                  />
+                  <p className="text-xs" style={{ color: "#7C6A99" }}>
+                    No sale del CRM: no aparece en la ficha que recibe el cliente, ni en los CSV, ni en el informe al propietario, ni en la app.
+                  </p>
+                </div>
+              </FormSection>
+
+              {/* 4 · Superficies y ambientes */}
+              <FormSection id="superficies" number={4} title="Superficies y ambientes" done={done.superficies}>
+                <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+                  <NumberField label="Total (m²)" value={form.surfaceTotal} onChange={(v) => set("surfaceTotal", v)} placeholder="220" />
+                  <NumberField label="Cubierta (m²)" value={form.surfaceCovered} onChange={(v) => set("surfaceCovered", v)} placeholder="180" />
+                  <NumberField label="Semicubierta (m²)" value={form.surfaceSemicovered} onChange={(v) => set("surfaceSemicovered", v)} placeholder="15" />
+                  <NumberField label="Descubierta (m²)" value={form.surfaceUncovered} onChange={(v) => set("surfaceUncovered", v)} placeholder="25" />
+                </div>
+                <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
+                  <Field label="Ambientes" hint={!form.rooms ? <span style={{ color: "#7458C4" }}>Sugerido: dormitorios + 1</span> : undefined}>
+                    <input
+                      value={form.rooms}
+                      onChange={(e) => set("rooms", e.target.value.replace(/[^\d]/g, ""))}
+                      inputMode="numeric"
+                      placeholder={`${form.bedrooms + 1}`}
+                      className={inputClass(false)}
+                    />
+                  </Field>
+                  <Stepper label="Dormitorios" value={form.bedrooms} onChange={(v) => set("bedrooms", v)} />
+                  <Stepper label="Baños" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} />
+                  <Stepper label="Toilettes" value={form.toilettes} onChange={(v) => set("toilettes", v)} />
+                  <Stepper label="Cocheras" value={form.garages} onChange={(v) => set("garages", v)} />
+                  <NumberField label="Antigüedad (años)" value={form.age} onChange={(v) => set("age", v)} placeholder="0 = a estrenar" />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Disposición">
+                    <select value={form.layout} onChange={(e) => set("layout", e.target.value as PropertyLayout | "")} className={selectClass}>
+                      <option value="">Sin especificar</option>
+                      {LAYOUTS.map((l) => (
+                        <option key={l.value} value={l.value}>
+                          {l.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Orientación">
+                    <select
+                      value={form.orientation}
+                      onChange={(e) => set("orientation", e.target.value as PropertyOrientation | "")}
+                      className={selectClass}
+                    >
+                      <option value="">Sin especificar</option>
+                      {ORIENTATIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </FormSection>
+
+              {/* 5 · Ubicación */}
+              <FormSection id="ubicacion" number={5} title="Ubicación" done={done.ubicacion}>
+                <div className="grid gap-4 grid-cols-2 sm:grid-cols-6">
+                  <div className="col-span-2 sm:col-span-3">
+                    <Field label="Dirección" error={errors.street}>
+                      <input value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="Calle 13" className={inputClass(!!errors.street)} />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="Número">
+                      <input value={form.streetNumber} onChange={(e) => set("streetNumber", e.target.value)} placeholder="450" className={inputClass(false)} />
+                    </Field>
+                  </div>
+                  <Field label="Piso">
+                    <input value={form.floor} onChange={(e) => set("floor", e.target.value)} placeholder="PB" className={inputClass(false)} />
+                  </Field>
+                  <Field label="Unidad">
+                    <input value={form.unit} onChange={(e) => set("unit", e.target.value)} placeholder="B" className={inputClass(false)} />
+                  </Field>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Zona">
+                    <select value={form.locality} onChange={(e) => set("locality", e.target.value)} className={selectClass}>
+                      {zoneOptions.map((z) => (
+                        <option key={z} value={z}>
+                          {z}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Provincia">
+                    <input value={form.province} onChange={(e) => set("province", e.target.value)} className={inputClass(false)} />
+                  </Field>
+                </div>
+
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
+                  <Field label="Pegá un link de Google Maps (opcional)">
+                    <input
+                      value={mapsLink}
+                      onChange={(e) => applyMapsLink(e.target.value)}
+                      placeholder="https://www.google.com/maps/place/…/@-34.87,-58.04,17z"
+                      className={inputClass(false)}
+                    />
+                  </Field>
+                  {mapsMsg && (
+                    <p className="text-xs" role="status" style={{ color: mapsMsg.kind === "ok" ? "#15803D" : "#B45309", fontWeight: 600 }}>
+                      {mapsMsg.text}
+                    </p>
+                  )}
+                  <div className="grid gap-4 grid-cols-2">
+                    <Field label="Latitud" error={errors.coords}>
+                      <input
+                        value={form.lat}
+                        onChange={(e) => set("lat", e.target.value.replace(/[^\d.-]/g, ""))}
+                        inputMode="decimal"
+                        placeholder="-34.8712"
+                        className={inputClass(!!errors.coords)}
+                      />
+                    </Field>
+                    <Field label="Longitud">
+                      <input
+                        value={form.lng}
+                        onChange={(e) => set("lng", e.target.value.replace(/[^\d.-]/g, ""))}
+                        inputMode="decimal"
+                        placeholder="-58.0456"
+                        className={inputClass(!!errors.coords)}
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-xs" style={{ color: "#7458C4" }}>
+                    Quedan guardadas en el CRM. Todavía no se mandan a la app.
+                    {coords && (
+                      <>
+                        {" "}
+                        <a
+                          href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#7C3AED", fontWeight: 600 }}
+                        >
+                          Ver en Google Maps ↗
+                        </a>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </FormSection>
+
+              {/* 6 · Amenities */}
+              <FormSection id="amenities" number={6} title="Amenities" subtitle="Se comparan con lo que busca cada contacto." done={done.amenities}>
                 <div className="flex flex-wrap gap-2">
-                  {FEATURE_CHIPS.map((f) => (
+                  {featureOptions.map((f) => (
                     <Chip
                       key={f}
                       label={f}
-                      active={features.has(f)}
+                      active={form.features.includes(f)}
                       onClick={() =>
-                        setFeatures((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(f)) next.delete(f);
-                          else next.add(f);
-                          return next;
-                        })
+                        setForm((prev) => ({
+                          ...prev,
+                          features: prev.features.includes(f) ? prev.features.filter((x) => x !== f) : [...prev.features, f],
+                        }))
                       }
                     />
                   ))}
                 </div>
-              </Field>
+              </FormSection>
 
-              {/* Potencial de match en vivo */}
-              <div
-                className="rounded-xl p-4"
-                style={{ background: "var(--gradient-soft)", border: "1px solid #EDE9FE" }}
+              {/* 7 · Propietario y autorización */}
+              <FormSection
+                id="propietario"
+                number={7}
+                title="Propietario y autorización"
+                subtitle="Nunca se muestra en la ficha que recibe el cliente."
+                done={done.propietario}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: "var(--gradient-brand)" }}
-                  >
-                    <MatchesSolidIcon size={14} />
+                {newOwner ? (
+                  <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Nombre del propietario">
+                        <input
+                          autoFocus
+                          value={newOwner.name}
+                          onChange={(e) => setNewOwner({ ...newOwner, name: e.target.value })}
+                          placeholder="Graciela Benítez"
+                          className={inputClass(false)}
+                        />
+                      </Field>
+                      <Field label="Teléfono">
+                        <input
+                          value={newOwner.phone}
+                          onChange={(e) => setNewOwner({ ...newOwner, phone: e.target.value })}
+                          placeholder="+54 221 520 1144"
+                          className={inputClass(false)}
+                        />
+                      </Field>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => setNewOwner(null)} className="px-4 min-h-11 rounded-xl text-xs" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!newOwner.name.trim()}
+                        onClick={() => {
+                          const c = addContact({
+                            full_name: newOwner.name.trim(),
+                            phone: newOwner.phone.trim() || null,
+                            email: null,
+                            kind: "propietario",
+                            status: "activo",
+                            profile_type: null,
+                            notes: null,
+                            owner_id: form.agentId,
+                            requirement: null,
+                          });
+                          set("ownerId", c.id);
+                          setNewOwner(null);
+                        }}
+                        className="px-4 min-h-11 rounded-xl text-xs text-white disabled:opacity-50"
+                        style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                      >
+                        Agregar propietario
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <p
-                      className="text-xs uppercase"
-                      style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
-                    >
-                      Potencial de match
-                    </p>
-                    <p className="text-sm text-gradient-brand-h" style={{ fontWeight: 800 }}>
-                      {potential?.level ?? "Cargá el precio"}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-xs" style={{ color: "#7C6A99" }}>
-                  {potential === null
-                    ? "Completá el precio para calcular con quién podría encajar."
-                    : potential.count === 0
-                      ? "Todavía ningún contacto de tu cartera encaja con estos datos."
-                      : `Coincide con ${potential.count} ${potential.count === 1 ? "contacto" : "contactos"} de tu cartera. Mejor compatibilidad: ${potential.best}%.`}
-                </p>
-                {potential && potential.count > 0 && (
-                  <button
-                    onClick={() => navigate("/matches")}
-                    className="w-full mt-3 py-2 rounded-lg text-xs text-white transition-all hover:opacity-90"
-                    style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
-                  >
-                    Ver matches
-                  </button>
+                ) : (
+                  <Field label="Propietario">
+                    <div className="flex gap-2">
+                      <select value={form.ownerId} onChange={(e) => set("ownerId", e.target.value)} className={selectClass}>
+                        <option value="">Sin propietario cargado</option>
+                        <optgroup label="Propietarios">
+                          {contacts
+                            .filter((c) => c.kind === "propietario")
+                            .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.full_name}
+                              </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Otros contactos">
+                          {contacts
+                            .filter((c) => c.kind !== "propietario")
+                            .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.full_name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setNewOwner({ name: "", phone: "" })}
+                        className="px-3.5 min-h-11 rounded-xl text-xs border whitespace-nowrap transition-all hover:bg-violet-50"
+                        style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+                      >
+                        + Nuevo
+                      </button>
+                    </div>
+                  </Field>
                 )}
-              </div>
-            </Section>
 
-            {/* Resumen */}
-            <Card padded>
-              <p
-                className="text-xs uppercase mb-3"
-                style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.1em" }}
-              >
-                Resumen
-              </p>
-              <div className="space-y-2">
-                <SummaryRow label="Tipo" value={PROPERTY_TYPE_LABEL[type]} />
-                <SummaryRow label="Operación" value={OPERATIONS.find((o) => o.value === operation)!.label} />
-                <SummaryRow label="Precio" value={price ? money(Number(price), currency) : "—"} />
-                <SummaryRow label="Ubicación" value={locality} />
-                <SummaryRow label="Ambientes" value={`${bedrooms + 1}`} />
-                <SummaryRow label="Fotos" value={`${photos.length}`} />
-              </div>
-            </Card>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Autorización">
+                    <select
+                      value={form.authType}
+                      onChange={(e) => {
+                        const value = e.target.value as AuthorizationType | "";
+                        // Lo más común: 90 días. Se propone solo si no había fecha.
+                        setForm((f) => ({
+                          ...f,
+                          authType: value,
+                          authExpires: value && !f.authExpires ? dateInputFromNow(90) : f.authExpires,
+                        }));
+                      }}
+                      className={selectClass}
+                    >
+                      <option value="">Sin autorización firmada</option>
+                      {(Object.keys(AUTHORIZATION_LABEL) as AuthorizationType[]).map((t) => (
+                        <option key={t} value={t}>
+                          {AUTHORIZATION_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Vence el" error={errors.authExpires}>
+                    <input
+                      type="date"
+                      value={form.authType ? form.authExpires : ""}
+                      disabled={!form.authType}
+                      onChange={(e) => set("authExpires", e.target.value)}
+                      className={inputClass(!!errors.authExpires)}
+                    />
+                  </Field>
+                </div>
+                {form.authType &&
+                  form.authExpires &&
+                  (() => {
+                    const st = authorizationState(form.authType, form.authExpires);
+                    const style = AUTHORIZATION_TONE_STYLE[st.tone];
+                    return (
+                      <p
+                        className="text-xs px-3 py-2 rounded-lg inline-block"
+                        style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}`, fontWeight: 600 }}
+                      >
+                        {st.label}
+                      </p>
+                    );
+                  })()}
+              </FormSection>
+            </div>
+
+            {/* Columna derecha (en celular queda abajo) */}
+            <aside className="space-y-6 lg:col-span-4 lg:sticky lg:top-20" aria-label="Estado de la ficha">
+              <QualityPanel checks={checks} onJump={jumpTo} />
+              <ChannelsPanel
+                saved={editing}
+                currency={form.currency}
+                status={form.status}
+                photoCount={form.photos.length}
+                appLinked={isLinkedAgencyId(agency.id)}
+              />
+              <BuyersPanel result={buyers} onSeeAll={() => leave("/matches")} />
+              <Card padded>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSave("publish")}
+                    className="w-full min-h-11 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                    style={{ background: "var(--gradient-brand)", fontWeight: 700, boxShadow: "var(--shadow-cta)" }}
+                  >
+                    Guardar y publicar en canales →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSave("save")}
+                    className="w-full min-h-11 rounded-xl text-sm border transition-all hover:bg-violet-50"
+                    style={{ borderColor: "#DDD6FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+                  >
+                    {publishAfter ? "Solo guardar" : editing ? "Guardar cambios" : "Guardar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveDraftNow}
+                    className="w-full min-h-11 rounded-xl text-sm transition-all hover:bg-violet-50"
+                    style={{ color: "#7C6A99", fontWeight: 600 }}
+                  >
+                    Guardar borrador
+                  </button>
+                </div>
+                <p className="text-xs mt-3" style={{ color: "#7458C4" }}>
+                  El borrador queda solo en este navegador. Ambientes: {roomsValue(form)} · Fotos: {form.photos.length}
+                </p>
+              </Card>
+            </aside>
           </div>
-        </div>
-      </div>
-
-      {/* Footer fijo */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between gap-4 px-4 md:px-8 py-4 border-t"
-        style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
-      >
-        <span className="text-xs" style={{ color: "#A78BFA" }}>
-          {touched
-            ? "Cambios sin guardar"
-            : editing
-              ? "Sin cambios"
-              : "Completá los campos obligatorios"}
-        </span>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => (touched ? setShowExit(true) : navigate(cancelTarget))}
-            className="px-5 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
-            style={{ borderColor: "#EDE9FE", color: "#7C6A99", fontWeight: 600, background: "white" }}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
-            style={{ background: "var(--gradient-brand)", fontWeight: 600, boxShadow: "var(--shadow-cta)" }}
-          >
-            {editing ? "Guardar cambios" : "Guardar propiedad"}
-          </button>
         </div>
       </div>
 
       {/* Toast */}
       {toast && (
         <div
-          className="pm-toast fixed bottom-6 right-6 z-50 rounded-2xl px-5 py-4 flex items-start gap-3 max-w-sm"
-          style={{
-            background: "white",
-            border: `1px solid ${toast.kind === "ok" ? "#BBF7D0" : "#FECDD3"}`,
-            boxShadow: "var(--shadow-pop)",
-          }}
+          className="pm-toast fixed bottom-24 lg:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 rounded-2xl px-5 py-4 flex items-start gap-3 sm:max-w-sm"
+          style={{ background: "white", border: `1px solid ${toast.kind === "ok" ? "#BBF7D0" : "#FECDD3"}`, boxShadow: "var(--shadow-pop)" }}
           role="status"
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{ background: toast.kind === "ok" ? "#F0FDF4" : "#FFF1F2" }}
-          >
-            {toast.kind === "ok" ? (
-              <CheckIcon size={14} color="#16A34A" />
-            ) : (
-              <span style={{ color: "#E11D48", fontWeight: 700 }}>!</span>
-            )}
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: toast.kind === "ok" ? "#F0FDF4" : "#FFF1F2" }}>
+            {toast.kind === "ok" ? <CheckIcon size={14} color="#16A34A" /> : <span style={{ color: "#E11D48", fontWeight: 700 }}>!</span>}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-              {toast.kind === "ok"
-                ? editing
-                  ? "Cambios guardados"
-                  : "Propiedad guardada"
-                : "No pudimos guardar la propiedad"}
+              {toast.title ?? (toast.kind === "ok" ? (editing ? "Cambios guardados" : "Propiedad guardada") : "No pudimos guardar la propiedad")}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
               {toast.text}
             </p>
           </div>
-          <button
-            onClick={() => setToast(null)}
-            aria-label="Cerrar"
-            style={{ color: "#C4B5FD", lineHeight: 1 }}
-          >
+          <button onClick={() => setToast(null)} aria-label="Cerrar aviso" className="w-8 h-8 -mr-2 -mt-1 rounded-lg" style={{ color: "#7C6A99", lineHeight: 1 }}>
             ×
           </button>
         </div>
       )}
 
-      {/* Confirmación de salida */}
-      {showExit && (
+      {/* Confirmaciones */}
+      {confirm && (
         <div
           className="pm-backdrop fixed inset-0 z-50 flex items-center justify-center p-6"
           style={{ background: "rgba(31,10,60,0.35)" }}
-          onClick={() => setShowExit(false)}
+          onClick={() => setConfirm(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="spp-confirm-title"
             className="pm-modal rounded-2xl p-6 max-w-sm w-full"
             style={{ background: "white", boxShadow: "var(--shadow-pop)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              ¿Salir sin guardar?
+            <p id="spp-confirm-title" className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+              {confirm.kind === "discard" ? "¿Descartar los cambios?" : "¿Salir sin guardar?"}
             </p>
             <p className="text-sm mt-1.5" style={{ color: "#7C6A99" }}>
-              Los cambios realizados todavía no fueron guardados.
+              {confirm.kind === "discard"
+                ? "Se borran los cambios y el borrador de este navegador. La propiedad guardada no se toca."
+                : "Los cambios quedan como borrador en este navegador: la próxima vez que abras el formulario te ofrecemos recuperarlos."}
             </p>
-            <div className="flex items-center gap-3 mt-5">
+            <div className="flex flex-col sm:flex-row gap-3 mt-5">
               <button
-                onClick={() => setShowExit(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm border transition-all hover:border-violet-300"
+                autoFocus
+                onClick={() => setConfirm(null)}
+                className="flex-1 min-h-11 rounded-xl text-sm border transition-all hover:border-violet-300"
                 style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600 }}
               >
                 Seguir editando
               </button>
               <button
-                onClick={() => navigate(cancelTarget)}
-                className="flex-1 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90"
-                style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
+                onClick={() => {
+                  if (confirm.kind === "discard") clearDraft(key);
+                  else saveDraft(key, form);
+                  navigate(confirm.target);
+                }}
+                className="flex-1 min-h-11 rounded-xl text-sm text-white transition-all hover:opacity-90"
+                style={{ background: confirm.kind === "discard" ? "#E11D48" : "var(--gradient-brand)", fontWeight: 600 }}
               >
-                Salir sin guardar
+                {confirm.kind === "discard" ? "Descartar" : "Salir"}
               </button>
             </div>
           </div>
@@ -1040,161 +1122,55 @@ export default function SubirPropiedadPage() {
   );
 }
 
-/* ── Piezas del formulario ───────────────────────────────────────────────── */
+/* ── Piezas locales ──────────────────────────────────────────────────────── */
 
-const inputClass = (hasError: boolean) =>
-  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
-
-const selectClass =
-  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
-
-function Section({
-  title,
-  subtitle,
-  icon,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <div className="px-5 py-4 border-b flex items-center gap-3" style={{ borderColor: "#F3F0FF" }}>
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: "#F5F3FF" }}
-        >
-          {icon}
-        </div>
-        <div>
-          <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-            {title}
-          </p>
-          {subtitle && (
-            <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
-              {subtitle}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="p-5 space-y-4">{children}</div>
-    </Card>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
-        {label}
-      </span>
-      {children}
-      {error && (
-        <span className="block text-xs mt-1.5" style={{ color: "#E11D48", fontWeight: 500 }}>
-          {error}
-        </span>
-      )}
-    </label>
-  );
-}
-
-function Stepper({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div>
-      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
-        {label}
-      </span>
-      <div
-        className="flex items-center justify-between px-2 py-1.5 rounded-xl border"
-        style={{ borderColor: "#EDE9FE", background: "white" }}
-      >
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, value - 1))}
-          aria-label={`Restar ${label}`}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
-          style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 700 }}
-        >
-          −
-        </button>
-        <span className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-          {value}
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          aria-label={`Sumar ${label}`}
-          className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
-          style={{ background: "#F5F3FF" }}
-        >
-          <PlusIcon size={12} color="#7C3AED" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Chip({
-  label,
-  active,
+function HeaderButton({
+  variant,
   onClick,
+  children,
 }: {
-  label: string;
-  active: boolean;
+  variant: "primary" | "outline" | "ghost";
   onClick: () => void;
+  children: React.ReactNode;
 }) {
+  const style =
+    variant === "primary"
+      ? { background: "var(--gradient-brand)", color: "white", fontWeight: 700, boxShadow: "var(--shadow-cta)" }
+      : variant === "outline"
+        ? { background: "white", color: "#7C3AED", fontWeight: 600, border: "1px solid #DDD6FE" }
+        : { color: "#7C6A99", fontWeight: 600 };
   return (
     <button
       type="button"
       onClick={onClick}
-      className="text-xs px-3 py-1.5 rounded-full transition-all border"
-      style={
-        active
-          ? {
-              background: "var(--gradient-brand)",
-              color: "white",
-              borderColor: "transparent",
-              fontWeight: 600,
-            }
-          : { background: "white", color: "#7C6A99", borderColor: "#EDE9FE", fontWeight: 500 }
-      }
+      className="px-4 min-h-11 rounded-xl text-sm whitespace-nowrap transition-all hover:opacity-90 hover:bg-violet-50 active:scale-[0.98]"
+      style={style}
     >
-      {active && "✓ "}
-      {label}
+      {children}
     </button>
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function NumberField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs" style={{ color: "#A78BFA" }}>
-        {label}
-      </span>
-      <span className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-        {value}
-      </span>
-    </div>
+    <Field label={label}>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
+        inputMode="numeric"
+        placeholder={placeholder}
+        className={inputClass(false)}
+      />
+    </Field>
   );
 }

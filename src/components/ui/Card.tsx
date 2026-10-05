@@ -69,7 +69,7 @@ export function SectionHeader({
           {title}
         </h2>
         {subtitle && (
-          <p className="text-xs mt-0.5" style={{ color: "#A78BFA" }}>
+          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
             {subtitle}
           </p>
         )}

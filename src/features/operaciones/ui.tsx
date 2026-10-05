@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 
 export const inputClass =
-  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  "border-[#EDE9FE] focus:border-[#A78BFA]";
+  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-surface " +
+  "text-ink placeholder:text-ink-soft focus:ring-4 focus:ring-lilac " +
+  "border-lilac focus:border-brand-purple";
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+      <span className="block text-xs mb-1.5 text-ink-soft font-semibold">
         {label}
       </span>
       {children}
@@ -18,7 +18,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="text-xs uppercase mb-3" style={{ color: "#7C3AED", fontWeight: 700, letterSpacing: "0.1em" }}>
+    <p className="text-xs uppercase mb-3 text-brand-purple font-bold tracking-[0.1em]">
       {children}
     </p>
   );

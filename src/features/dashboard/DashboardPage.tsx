@@ -1,3 +1,4 @@
+import { isSample } from "@/lib/samples";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -46,7 +47,10 @@ export default function DashboardPage() {
     contactById,
     propertyById,
     coverPhoto,
+    appOffers,
   } = useStore();
+
+  const pendingOffers = appOffers.filter((o) => o.status === "pending");
 
   const [query, setQuery] = useState("");
   const firstName = profile.full_name.split(" ")[0];
@@ -95,6 +99,30 @@ export default function DashboardPage() {
       />
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
+        {pendingOffers.length > 0 && (
+          <div
+            onClick={() => navigate("/ofertas")}
+            className="mt-6 md:mt-8 rounded-2xl p-4 flex items-center gap-3 cursor-pointer transition-all hover:opacity-95"
+            style={{ background: "linear-gradient(135deg, #FFF7ED, #FDE8F5)", border: "1px solid #FDE68A" }}
+          >
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              <OpportunitiesIcon size={16} color="white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                {pendingOffers.length} {pendingOffers.length === 1 ? "oferta pendiente" : "ofertas pendientes"}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+                {pendingOffers.every(isSample)
+                  ? "Ofertas de ejemplo, para que veas cómo llegan — click para revisarlas."
+                  : "Gente real hizo una oferta por tus propiedades — click para revisarlas."}
+              </p>
+            </div>
+          </div>
+        )}
         {searchResults ? (
           <SearchResults
             results={searchResults}
@@ -149,7 +177,7 @@ export default function DashboardPage() {
                 iconBg="#FAF5FF"
                 badge="Activo"
                 badgeBg="#F0FDF4"
-                badgeText="#16A34A"
+                badgeText="#15803D"
                 bar="linear-gradient(90deg, #A855F7, #EC4899)"
                 barWidth={90}
               />
@@ -186,7 +214,7 @@ export default function DashboardPage() {
                               <th
                                 key={h}
                                 className="text-left px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap"
-                                style={{ color: "#A78BFA", letterSpacing: "0.06em", fontWeight: 600 }}
+                                style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
                               >
                                 {h}
                               </th>
@@ -228,7 +256,7 @@ export default function DashboardPage() {
                                   <p className="text-sm" style={{ color: "#374151", fontWeight: 500 }}>
                                     {property?.title ?? "—"}
                                   </p>
-                                  <p className="text-xs" style={{ color: "#C4B5FD" }}>
+                                  <p className="text-xs" style={{ color: "#7C6A99" }}>
                                     {property?.zone ?? ""}
                                   </p>
                                 </td>
@@ -243,7 +271,7 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-5 py-3.5 whitespace-nowrap">
-                                  <span className="text-xs" style={{ color: "#A78BFA" }}>
+                                  <span className="text-xs" style={{ color: "#7458C4" }}>
                                     {relativeTime(opp.updated_at)}
                                   </span>
                                 </td>
@@ -292,7 +320,7 @@ export default function DashboardPage() {
                               {a.detail}
                             </p>
                           )}
-                          <p className="text-xs mt-1" style={{ color: "#C4B5FD" }}>
+                          <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
                             {relativeTime(a.created_at)}
                           </p>
                         </div>
@@ -387,7 +415,7 @@ export default function DashboardPage() {
                               <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                                 {contact.full_name}
                               </p>
-                              <p className="text-xs" style={{ color: "#A78BFA" }}>
+                              <p className="text-xs" style={{ color: "#7458C4" }}>
                                 Busca su propiedad ideal
                               </p>
                             </div>
@@ -513,7 +541,7 @@ function SearchResults({
                         <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                           {p.title}
                         </p>
-                        <p className="text-xs" style={{ color: "#A78BFA" }}>
+                        <p className="text-xs" style={{ color: "#7458C4" }}>
                           {p.zone}
                         </p>
                       </div>
@@ -547,7 +575,7 @@ function SearchResults({
                       <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                         {c.full_name}
                       </p>
-                      <p className="text-xs truncate" style={{ color: "#A78BFA" }}>
+                      <p className="text-xs truncate" style={{ color: "#7458C4" }}>
                         {c.email}
                       </p>
                     </div>

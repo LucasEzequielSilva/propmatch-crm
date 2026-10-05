@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useStore, type NewEventInput } from "@/data/store";
 import { AgendaIcon, EventTypeIcon } from "@/components/ui/icons";
-import type { CalendarEvent, EventType } from "@/types/db";
+import type { CalendarEvent, EventType, VisitStatus } from "@/types/db";
+import { STATUS_META, STATUS_ORDER } from "./agendaModel";
 
 /**
  * Alta y edición de un evento de agenda.
@@ -17,6 +18,7 @@ const TYPES: { value: EventType; label: string; color: string }[] = [
   { value: "llamada", label: "Llamada", color: "#3B82F6" },
   { value: "reunion", label: "Reunión", color: "#EC4899" },
   { value: "seguimiento", label: "Seguimiento", color: "#F59E0B" },
+  { value: "publicacion", label: "Publicación", color: "#DB2777" },
 ];
 
 const DURATIONS = [30, 45, 60, 90, 120];
@@ -51,11 +53,14 @@ const toTimeInput = (d: Date) =>
 export function EventFormModal({
   day,
   event,
+  defaults,
   onClose,
   onSaved,
 }: {
   /** Día preseleccionado: al agendar desde una celda del calendario. */
   day?: Date;
+  /** Valores iniciales al crear (segunda visita, primer hueco libre). */
+  defaults?: { start?: Date; type?: EventType; contactId?: string | null; propertyId?: string | null; ownerId?: string | null };
   /** Si viene, el modal edita este evento en lugar de crear uno. */
   event?: CalendarEvent;
   onClose: () => void;
@@ -65,6 +70,9 @@ export function EventFormModal({
   const isEdit = !!event;
 
   const initial = useMemo(() => {
+    if (!event && defaults?.start) {
+      return { date: toDateInput(defaults.start), time: toTimeInput(defaults.start), duration: 60 };
+    }
     if (!event) return { ...defaultStart(day), duration: 60 };
     const start = new Date(event.starts_at);
     return {
@@ -72,18 +80,19 @@ export function EventFormModal({
       time: toTimeInput(start),
       duration: Math.max(15, Math.round((new Date(event.ends_at).getTime() - start.getTime()) / 60_000)),
     };
-  }, [day, event]);
+  }, [day, event, defaults]);
 
-  const [type, setType] = useState<EventType>(event?.type ?? "visita");
+  const [type, setType] = useState<EventType>(event?.type ?? defaults?.type ?? "visita");
   const [title, setTitle] = useState(event?.title ?? "");
   // Al editar, el título ya es del agente: no se pisa con la sugerencia.
   const [titleTouched, setTitleTouched] = useState(isEdit);
-  const [contactId, setContactId] = useState(event?.contact_id ?? "");
-  const [propertyId, setPropertyId] = useState(event?.property_id ?? "");
+  const [contactId, setContactId] = useState(event?.contact_id ?? defaults?.contactId ?? "");
+  const [propertyId, setPropertyId] = useState(event?.property_id ?? defaults?.propertyId ?? "");
   const [date, setDate] = useState(initial.date);
   const [time, setTime] = useState(initial.time);
   const [duration, setDuration] = useState(initial.duration);
-  const [ownerId, setOwnerId] = useState(event?.owner_id ?? profile.id);
+  const [ownerId, setOwnerId] = useState(event?.owner_id ?? defaults?.ownerId ?? profile.id);
+  const [status, setStatus] = useState<VisitStatus>(event?.status ?? "por_confirmar");
   const [notes, setNotes] = useState(event?.notes ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -143,6 +152,7 @@ export function EventFormModal({
       ends_at: ends.toISOString(),
       notes: notes.trim() || null,
       owner_id: ownerId,
+      ...(type === "visita" ? { status } : {}),
     };
 
     if (event) updateEvent(event.id, input);
@@ -190,7 +200,7 @@ export function EventFormModal({
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50 flex-shrink-0"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -300,6 +310,21 @@ export function EventFormModal({
                   ))}
                 </select>
               </Field>
+              {type === "visita" && (
+                <Field label="Estado de la visita">
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as VisitStatus)}
+                    className={selectClass}
+                  >
+                    {STATUS_ORDER.map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_META[s].label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label="Título">
                 <input
                   value={titleTouched ? title : suggested}
@@ -392,12 +417,12 @@ export function EventFormModal({
 
 const inputClass = (hasError: boolean) =>
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] focus:ring-4 focus:ring-[#EDE9FE] " +
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#7C3AED]");
 
 const selectClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";
 
 const selectClassError =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +

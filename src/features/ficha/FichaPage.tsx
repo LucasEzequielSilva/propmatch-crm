@@ -26,7 +26,7 @@ export default function FichaPage() {
   }, [listing]);
 
   if (listing === "loading") {
-    return <div className="min-h-full flex items-center justify-center text-sm" style={{ color: "#A78BFA" }}>Cargando ficha…</div>;
+    return <div className="min-h-full flex items-center justify-center text-sm" style={{ color: "#7458C4" }}>Cargando ficha…</div>;
   }
 
   if (!listing) {
@@ -140,7 +140,7 @@ export default function FichaPage() {
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {facts.map((f) => (
                 <div key={f.label} className="rounded-xl border px-3.5 py-3" style={{ borderColor: "#EDE9FE", background: "white" }}>
-                  <p className="text-xs" style={{ color: "#A78BFA", fontWeight: 600 }}>
+                  <p className="text-xs" style={{ color: "#7458C4", fontWeight: 600 }}>
                     {f.label}
                   </p>
                   <p className="text-base mt-0.5" style={{ color: "#1F0A3C", fontWeight: 700 }}>
@@ -194,10 +194,10 @@ export default function FichaPage() {
                 href={whatsappLink(contactPhone, message)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hidden sm:inline-flex print:hidden mt-4 items-center gap-2 px-5 py-3 rounded-xl text-white"
+                className="hidden sm:inline-flex print:hidden mt-4 items-center gap-2 px-5 py-3 rounded-xl text-[#063B2A]"
                 style={{ background: "#25D366", fontWeight: 700 }}
               >
-                <WhatsAppIcon size={18} color="white" />
+                <WhatsAppIcon size={18} color="#063B2A" />
                 Consultar por WhatsApp
               </a>
             )}
@@ -212,10 +212,10 @@ export default function FichaPage() {
             href={whatsappLink(contactPhone, message)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-white"
+            className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-[#063B2A]"
             style={{ background: "#25D366", fontWeight: 700, boxShadow: "0 8px 24px rgba(37,211,102,0.35)" }}
           >
-            <WhatsAppIcon size={18} color="white" />
+            <WhatsAppIcon size={18} color="#063B2A" />
             Consultar por WhatsApp
           </a>
         </div>

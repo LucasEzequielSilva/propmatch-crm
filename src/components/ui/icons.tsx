@@ -408,7 +408,19 @@ export function EventTypeIcon({ type, color, size = 14 }: { type: string; color:
         <path d="M17 14C19.761 14 22 16.239 22 19V21" stroke={color} strokeWidth="2" strokeLinecap="round" />
       </svg>
     );
+  if (type === "publicacion") return <InstagramIcon size={size} color={color} />;
   return <ClockIcon size={size} color={color} />;
+}
+
+/** Cámara genérica (cuadrado redondeado + lente). No es el logo de Instagram. */
+export function InstagramIcon({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="4" stroke={color} strokeWidth="1.8" />
+      <circle cx="17.2" cy="6.8" r="1.1" fill={color} />
+    </svg>
+  );
 }
 
 /** Logo de WhatsApp (glifo simplificado, un solo color). */
@@ -430,6 +442,19 @@ export function OperacionesIcon({ size = 20, color = "currentColor", className }
       <path d="M7 3h7l5 5v12a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M14 3v5h5" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M9 14l2 2 4-4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function InboxIcon({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <path
+        d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

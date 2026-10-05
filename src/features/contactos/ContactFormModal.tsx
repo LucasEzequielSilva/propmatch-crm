@@ -235,7 +235,7 @@ export function ContactFormModal({
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50 flex-shrink-0"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
@@ -331,7 +331,7 @@ export function ContactFormModal({
           <div>
             <SectionLabel>
               Qué busca
-              <span className="ml-2 text-xs" style={{ color: "#A78BFA", fontWeight: 500 }}>
+              <span className="ml-2 text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
                 — sin esto no se le calculan matches
               </span>
             </SectionLabel>
@@ -490,7 +490,7 @@ export function ContactFormModal({
               <div className="min-w-0">
                 <p
                   className="text-xs uppercase"
-                  style={{ color: "#A78BFA", fontWeight: 700, letterSpacing: "0.08em" }}
+                  style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}
                 >
                   Propiedades compatibles
                 </p>
@@ -523,7 +523,7 @@ export function ContactFormModal({
           className="px-6 py-4 border-t flex items-center justify-between gap-4 flex-shrink-0"
           style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}
         >
-          <span className="text-xs" style={{ color: hasRequirement ? "#16A34A" : "#D97706" }}>
+          <span className="text-xs" style={{ color: hasRequirement ? "#15803D" : "#B45309" }}>
             {hasRequirement ? (
               <span className="flex items-center gap-1.5">
                 <CheckIcon size={11} color="#16A34A" />
@@ -564,12 +564,12 @@ const toNumber = (v: string): number | null => {
 
 const inputClass = (hasError: boolean) =>
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#C4B5FD] focus:ring-4 focus:ring-[#EDE9FE] " +
-  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#A78BFA]");
+  "text-[#1F0A3C] placeholder:text-[#7C6A99] focus:ring-4 focus:ring-[#EDE9FE] " +
+  (hasError ? "border-[#FECDD3] focus:border-[#FB7185]" : "border-[#EDE9FE] focus:border-[#7C3AED]");
 
 const selectClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (

@@ -7,6 +7,8 @@ import { OPERATION_LABEL, money } from "@/lib/format";
 import type { Contact, Property } from "@/types/db";
 import { ownerReport } from "@/lib/ownerReport";
 import { authorizationState } from "@/lib/authorization";
+import { isSample, isSamplePhone } from "@/lib/samples";
+import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 
 /**
  * Mensaje de WhatsApp a un contacto.
@@ -89,7 +91,9 @@ export function WhatsAppModal({
   const [text, setText] = useState("");
   const [edited, setEdited] = useState(false);
 
-  const number = normalizeWhatsappNumber(contact.phone);
+  // Contacto de ejemplo: su teléfono es inventado y whatsappLink no lo usa (WhatsApp abre sin destinatario).
+  const sampleContact = isSample(contact) || isSamplePhone(contact.phone);
+  const number = sampleContact ? null : normalizeWhatsappNumber(contact.phone);
   const name = firstName(contact.full_name);
   const me = firstName(profile.full_name);
 
@@ -119,6 +123,9 @@ export function WhatsAppModal({
           r.inProgress ? `🤝 ${r.inProgress} en conversación` : null,
           r.visitsDone || r.visitsUpcoming
             ? `🏠 ${r.visitsDone} ${r.visitsDone === 1 ? "visita hecha" : "visitas hechas"}${r.visitsUpcoming ? ` y ${r.visitsUpcoming} ${r.visitsUpcoming === 1 ? "agendada" : "agendadas"}` : ""}`
+            : null,
+          r.veryInterested
+            ? `⭐ ${r.veryInterested} ${r.veryInterested === 1 ? "quedó muy interesado" : "quedaron muy interesados"}`
             : null,
           auth.tone === "expired" || auth.tone === "warning"
             ? `\n📝 La autorización ${auth.tone === "expired" ? "ya venció" : `vence en ${auth.daysLeft} días`}: ¿coordinamos para renovarla?`
@@ -210,23 +217,33 @@ export function WhatsAppModal({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-lg tracking-tight truncate" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              WhatsApp a {contact.full_name}
+              WhatsApp a {contact.full_name} <SampleBadge record={contact} show={sampleContact} />
             </p>
-            <p className="text-xs mt-0.5" style={{ color: number ? "#7C6A99" : "#E11D48" }}>
-              {number ? `+${number}` : "Sin teléfono válido: vas a elegir el chat a mano"}
+            <p className="text-xs mt-0.5" style={{ color: number || sampleContact ? "#7C6A99" : "#E11D48" }}>
+              {sampleContact
+                ? "Teléfono de ejemplo: no se usa"
+                : number
+                  ? `+${number}`
+                  : "Sin teléfono válido: vas a elegir el chat a mano"}
             </p>
           </div>
           <button
             onClick={onClose}
             aria-label="Cerrar"
             className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-violet-50"
-            style={{ color: "#A78BFA", fontSize: 20, lineHeight: 1 }}
+            style={{ color: "#7458C4", fontSize: 20, lineHeight: 1 }}
           >
             ×
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {sampleContact && (
+            <SampleNotice>
+              Es un contacto de ejemplo: su teléfono es inventado. WhatsApp se va a abrir sin destinatario para que
+              pruebes el mensaje sin escribirle a nadie real.
+            </SampleNotice>
+          )}
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <button
@@ -261,7 +278,7 @@ export function WhatsAppModal({
                   setPropertyId(e.target.value);
                   setEdited(false);
                 }}
-                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
               >
                 {owned.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -283,7 +300,7 @@ export function WhatsAppModal({
                   setPropertyId(e.target.value);
                   setEdited(false);
                 }}
-                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]"
+                className="w-full px-4 py-2.5 rounded-xl text-sm border outline-none bg-white text-[#1F0A3C] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]"
               >
                 {options.map(({ property: p, score }) => (
                   <option key={p.id} value={p.id}>
@@ -329,10 +346,10 @@ export function WhatsAppModal({
           <button
             onClick={send}
             disabled={!text.trim() || waitingLink}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
             style={{ background: WA_GREEN, fontWeight: 700 }}
           >
-            <WhatsAppIcon size={15} color="white" />
+            <WhatsAppIcon size={15} color="#063B2A" />
             {waitingLink ? "Armando ficha…" : "Abrir WhatsApp"}
           </button>
         </div>
@@ -357,14 +374,14 @@ export function WhatsAppButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex items-center justify-center gap-2 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95 ${
-        compact ? "w-9 h-9" : "px-4 py-2"
+      className={`flex items-center justify-center gap-2 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 ${
+        compact ? "w-11 h-11 sm:w-9 sm:h-9" : "px-4 py-2"
       }`}
       style={{ background: WA_GREEN, fontWeight: 600 }}
       aria-label={compact ? label : undefined}
       title={compact ? label : undefined}
     >
-      <WhatsAppIcon size={compact ? 16 : 14} color="white" />
+      <WhatsAppIcon size={compact ? 16 : 14} color="#063B2A" />
       {!compact && label}
     </button>
   );

@@ -3,6 +3,7 @@ import type {
   Activity,
   ActivityType,
   Agency,
+  AppOffer,
   CalendarEvent,
   ClientProfile,
   Contact,
@@ -11,6 +12,7 @@ import type {
   ContactStatus,
   CurrencyCode,
   Deal,
+  DealEventType,
   EventType,
   Match,
   OperationType,
@@ -20,23 +22,42 @@ import type {
   Property,
   PropertyType,
   Task,
+  VisitChecklist,
+  VisitFeedback,
+  VisitStatus,
+  PropertyCrmDetails,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
 import { isDeadPhotoUrl } from "@/lib/images";
+import { isDemoActive, setDemoFlag } from "@/lib/demo";
+import { applyDealPatch, dealRoomDefaults, migrateDeals, nextDealNumber } from "@/lib/dealRoom";
+import { supabase } from "@/lib/supabase";
 import {
-  CURRENT_USER_ID,
-  seedActivities,
-  seedAgency,
-  seedContacts,
-  seedEvents,
-  seedOpportunities,
-  seedPhotos,
-  seedProfiles,
-  seedProperties,
-  seedRequirements,
-  seedTasks,
-} from "./seed";
+  canPublishToApp,
+  fetchAgencyProperties,
+  pushStatusToApp,
+  roomsOf,
+  uploadPropertyPhotos,
+  upsertAppProperty,
+  TYPE_FROM_APP,
+  OPERATION_FROM_APP,
+  STATUS_FROM_APP,
+  type AppPropertyContext,
+  type AppPropertyRow,
+} from "@/lib/propertySync";
+import {
+  fetchAgencyMatches,
+  fetchAgencyOffers,
+  fetchAgencySwipes,
+  fetchAgencyVisits,
+  fetchUsersByIds,
+  respondToOffer,
+  respondToSwipe,
+} from "@/lib/leadSync";
+import { CURRENT_USER_ID, seedAgency } from "./seed";
+import { adoptSamples, markLegacySamples, restoreSamples, sampleSlices, SAMPLES_VERSION, stripSamples } from "./samples";
+import { isSample } from "@/lib/samples";
 
 /**
  * Store del frontend.
@@ -49,9 +70,12 @@ import {
  */
 
 const STORAGE_KEY = "propmatch.store.v1";
+/** Datos de la demo (cuenta `u-1`, sin Supabase), separados de los reales. */
+const DEMO_STORAGE_KEY = "propmatch.store.demo.v1";
+const DEMO_USER_ID = "u-1";
 const SESSION_KEY = "propmatch.session.v1";
 
-interface StoreData {
+export interface StoreData {
   /** Editables desde Configuración, por eso viven con el resto de los datos. */
   agency: Agency;
   profiles: Profile[];
@@ -68,34 +92,55 @@ interface StoreData {
   reviewedMatches: string[];
   /** Seguimientos pospuestos: contacto -> hasta cuándo (ISO). */
   followUpSnoozes: Record<string, string>;
+  /** uuids de matches/visitas/ofertas reales (de la app) ya convertidos en contacto/oportunidad/actividad. Evita duplicar en cada sincronización. */
+  syncedAppEventIds: string[];
+  /** Ofertas reales de la app — fuente de verdad para el Dashboard, la pantalla de Ofertas y la ficha de propiedad. */
+  appOffers: AppOffer[];
+  /** Feedback post-visita de visitas reales de la app (uuid de `visits`). Solo local: la app no se entera. */
+  appVisitFeedback: Record<string, VisitFeedback>;
+  /** Checklist de coordinación de visitas reales de la app (uuid de `visits`). Solo local. */
+  appVisitChecklist: Record<string, VisitChecklist>;
+  /**
+   * El usuario eligió "Usar mis datos reales": los ejemplos no se vuelven a
+   * agregar al abrir sesión. Sin definir = ejemplos visibles (ver data/samples.ts).
+   */
+  samplesHidden?: boolean;
+  /** Versión de la semilla ya ofrecida a este navegador (`SAMPLES_VERSION`). */
+  samplesVersion?: number;
 }
 
 function seedData(): StoreData {
+  // Toda la semilla va marcada como ejemplo (`is_sample`): nunca sale del navegador.
+  const samples = sampleSlices();
   return {
     agency: seedAgency,
-    profiles: seedProfiles,
-    contacts: seedContacts,
-    requirements: seedRequirements,
-    properties: seedProperties,
-    photos: seedPhotos,
-    opportunities: seedOpportunities,
-    activities: seedActivities,
-    events: seedEvents,
-    tasks: seedTasks,
-    deals: [],
+    ...samples,
     reviewedMatches: [],
     followUpSnoozes: {},
+    syncedAppEventIds: [],
+    appVisitFeedback: {},
+    appVisitChecklist: {},
+    samplesHidden: false,
+    samplesVersion: SAMPLES_VERSION,
   };
 }
 
-function loadData(): StoreData {
+function loadData(key: string = STORAGE_KEY): StoreData {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return seedData();
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
-    const merged = { ...seedData(), ...parsed };
-    merged.deals = merged.deals ?? [];
+    // markLegacySamples: lo de la semilla guardado antes de existir `is_sample` queda marcado.
+    const merged = markLegacySamples({ ...seedData(), ...parsed });
+    // La versión de los ejemplos sale SOLO de lo guardado: sin ella, adoptSamples
+    // sabe que es un guardado viejo (purgado o con la semilla anterior) y lo migra.
+    merged.samplesVersion = parsed.samplesVersion;
+    merged.samplesHidden = parsed.samplesHidden;
+    // Deal room: pasos/documentos de boolean a {done, at, by, note}, número PM-0001 e historial.
+    merged.deals = migrateDeals(merged.deals ?? [], (id) => merged.opportunities.find((o) => o.id === id)?.owner_id ?? null);
+    merged.syncedAppEventIds = merged.syncedAppEventIds ?? [];
+    merged.appOffers = merged.appOffers ?? [];
     // Campos que se sumaron después: los registros guardados no los tienen.
     merged.properties = merged.properties.map((p) => ({
       ...p,
@@ -142,7 +187,7 @@ export interface NewContactInput {
   requirement: RequirementInput | null;
 }
 
-export interface NewPropertyInput {
+export interface NewPropertyInput extends PropertyCrmDetails {
   title: string;
   description: string | null;
   type: Property["type"];
@@ -159,6 +204,17 @@ export interface NewPropertyInput {
   commission_pct: number | null;
   surface_total: number | null;
   surface_covered: number | null;
+  /**
+   * Ambientes. Opcional para no romper el importador: sin definir se deriva
+   * de dormitorios + 1 (estar), que era la única regla antes de poder editarlo.
+   */
+  rooms?: number | null;
+  /**
+   * Coordenadas del pin. Solo viven en el CRM (ver buildAppPayload). Sin
+   * definir = el formulario no las tocó: al editar se conservan las que había.
+   */
+  lat?: number | null;
+  lng?: number | null;
   bedrooms: number;
   bathrooms: number;
   garages: number;
@@ -171,6 +227,22 @@ export interface NewPropertyInput {
   photos: string[];
 }
 
+const CRM_DETAIL_KEYS = [
+  "subtype", "toilettes", "surface_semicovered", "surface_uncovered", "layout", "orientation",
+  "floor", "unit", "expenses_currency", "credit_eligible", "accepts_swap",
+  "reserve_min_price", "reserve_min_currency",
+] as const satisfies readonly (keyof PropertyCrmDetails)[];
+
+/**
+ * Copia solo los datos "de CRM" que vinieron definidos. Al editar, lo que no
+ * vino se conserva tal como estaba en la propiedad.
+ */
+function pickCrmDetails(input: PropertyCrmDetails): PropertyCrmDetails {
+  const out: Record<string, unknown> = {};
+  for (const key of CRM_DETAIL_KEYS) if (input[key] !== undefined) out[key] = input[key];
+  return out as PropertyCrmDetails;
+}
+
 export interface NewEventInput {
   type: EventType;
   title: string;
@@ -181,6 +253,8 @@ export interface NewEventInput {
   ends_at: string;
   notes: string | null;
   owner_id: string | null;
+  /** Solo visitas. Sin definir = "por_confirmar". */
+  status?: VisitStatus;
 }
 
 export interface LogActivityInput {
@@ -211,7 +285,12 @@ export interface NewOpportunityInput {
   owner_id: string | null;
 }
 
-export type NewDealInput = Omit<Deal, "id" | "agency_id" | "created_at" | "updated_at">;
+export type NewDealInput = Omit<Deal, "id" | "agency_id" | "created_at" | "updated_at" | DealRoomKeys> &
+  Partial<Pick<Deal, DealRoomKeys>>;
+/** Lo que una acción deja en el historial de la operación. */
+export type DealEventInput = { type: DealEventType; title: string; detail?: string | null };
+/** Campos del deal room que completa el store si la pantalla no los manda. */
+type DealRoomKeys = keyof ReturnType<typeof dealRoomDefaults>;
 
 interface StoreValue extends StoreData {
   agency: Agency;
@@ -221,7 +300,20 @@ interface StoreValue extends StoreData {
   /** `null` mientras nadie inició sesión. */
   currentUserId: string | null;
   /** Devuelve el error a mostrar, o `null` si la sesión se abrió. */
-  signIn: (email: string, password: string) => string | null;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (input: {
+    name: string;
+    agencyName: string;
+    email: string;
+    password: string;
+  }) => Promise<{ error: string | null; needsEmailConfirmation: boolean }>;
+  /** Redirige a Google; devuelve un error amable si no se pudo iniciar. */
+  signInWithGoogle: () => Promise<string | null>;
+  /** Email de una cuenta creada que aún no tiene inmobiliaria (o `null`). */
+  pendingLinkEmail: string | null;
+  dismissPendingLink: () => void;
+  /** Entra a la demo con datos de ejemplo, sin cuenta ni Supabase. */
+  enterDemo: () => void;
   signOut: () => void;
   /** Derivado: se recalcula solo cuando cambian propiedades o requerimientos. */
   matches: Match[];
@@ -257,12 +349,20 @@ interface StoreValue extends StoreData {
   addEvent: (input: NewEventInput) => CalendarEvent;
   updateEvent: (id: string, input: NewEventInput) => void;
   removeEvent: (id: string) => void;
+  /** Cambios puntuales de un evento (estado, feedback, checklist). */
+  patchEvent: (id: string, patch: Partial<CalendarEvent>) => void;
+  /** Guarda el feedback de una visita real de la app (solo local). */
+  saveAppVisitFeedback: (visitId: string, feedback: VisitFeedback) => void;
+  /** Tilda un ítem del checklist de una visita real de la app (solo local). */
+  patchAppVisitChecklist: (visitId: string, patch: VisitChecklist) => void;
   updateAgency: (input: AgencyInput) => void;
   /** Alta masiva desde un Excel. Devuelve los ids creados, para poder deshacer. */
   importContacts: (inputs: NewContactInput[]) => string[];
   importProperties: (inputs: NewPropertyInput[]) => string[];
   /** Deshace una importación: borra lo creado y todo lo que cuelga de eso. */
   undoImport: (ids: { contacts?: string[]; properties?: string[] }) => void;
+  /** `true` mientras se resuelve si ya había una sesión real de Supabase abierta. */
+  sessionLoading: boolean;
   /** Saca a un contacto de "para contactar hoy" por unos días. */
   snoozeFollowUp: (contactId: string, days: number) => void;
   /** Deja constancia en el historial (por ejemplo, un WhatsApp enviado). */
@@ -273,32 +373,52 @@ interface StoreValue extends StoreData {
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
   markMatchReviewed: (id: string) => void;
+  /** Acepta/rechaza una oferta real de la app (uuid de `offers` en Supabase). Devuelve el error a mostrar, o `null` si salió bien. */
+  respondOffer: (appOfferId: string, action: "accept" | "reject") => Promise<string | null>;
+  /** Acepta/rechaza un "me interesa" real de la app (actividad con `app_swipe_id`). Devuelve el error a mostrar, o `null` si salió bien. */
+  respondSwipe: (activityId: string, action: "accepted" | "rejected") => Promise<string | null>;
   addDeal: (input: NewDealInput) => Deal;
-  updateDeal: (id: string, patch: Partial<Deal>) => void;
+  /** `event` = qué dejar en el historial de la operación (además del cambio de etapa, que se registra solo). */
+  updateDeal: (id: string, patch: Partial<Deal>, event?: DealEventInput) => void;
   removeDeal: (id: string) => void;
   reset: () => void;
   /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
   persistFailed: boolean;
+  /** Sesión de demo (sin cuenta): los ejemplos no se pueden ocultar. */
+  isDemo: boolean;
+  /** "Usar mis datos reales": quita los datos de ejemplo y guarda la preferencia (`samplesHidden`). */
+  hideSamples: () => void;
+  /** "Mostrar ejemplos otra vez": vuelve a agregar la semilla sin duplicar. */
+  showSamples: () => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
+/** `agency.id` de una cuenta sin inmobiliaria: no existe en Supabase, así que nada lo consulta allá. */
+export const UNLINKED_AGENCY_PREFIX = "local-";
+export const isLinkedAgencyId = (id: string) => !id.startsWith(UNLINKED_AGENCY_PREFIX) && id !== "ag-1";
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [data, setData] = useState<StoreData>(loadData);
+  // La demo guarda en su propia clave: así sus datos de ejemplo nunca se
+  // mezclan con los de una cuenta real en el mismo navegador.
+  const [storageKey, setStorageKey] = useState(() => (isDemoActive() ? DEMO_STORAGE_KEY : STORAGE_KEY));
+  const storageKeyRef = useRef(storageKey);
+  storageKeyRef.current = storageKey;
+  const [data, setData] = useState<StoreData>(() => loadData(storageKey));
   /** `true` si el último guardado falló (cuota llena, storage bloqueado). */
   const [persistFailed, setPersistFailed] = useState(false);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(storageKey, JSON.stringify(data));
       setPersistFailed(false);
     } catch {
       // La app sigue andando, pero lo nuevo se pierde al recargar: hay que avisar.
       setPersistFailed(true);
     }
-  }, [data]);
+  }, [data, storageKey]);
 
   /**
    * Los matches no se guardan: se derivan. Es lo que en la base hace el
@@ -311,42 +431,482 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * Sesión.
-   *
-   * OJO: esto NO es autenticación. No hay backend ni contraseñas guardadas:
-   * la pantalla de login existe para que el flujo de la app esté completo y
-   * para saber qué agente está usando el CRM. Cualquiera que abra la app puede
-   * entrar con el mail de cualquier agente. Cuando haya backend, esto se
-   * reemplaza por auth de verdad.
+   * Sesión: auth real de Supabase (mismo proyecto que la app), con el agente
+   * atado a `agency_members`. Sin membresía la cuenta entra igual, con una
+   * agencia local que no sincroniza con la app hasta que la vinculen.
    */
-  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(SESSION_KEY);
-    } catch {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  /** Cuenta creada que todavía tiene que confirmar el email: el login muestra los pasos que faltan. */
+  const [pendingLinkEmail, setPendingLinkEmail] = useState<string | null>(null);
+  const [agencyContext, setAgencyContext] = useState<AppPropertyContext | null>(null);
+  const agencyContextRef = useRef<AppPropertyContext | null>(null);
+  agencyContextRef.current = agencyContext;
+
+  /** Busca la agencia del usuario y arma su Profile local si hace falta. */
+  const applySession = useCallback(async (userId: string, email: string | null) => {
+    // Al entrar con una cuenta real se vuelve a los datos reales del navegador.
+    setDemoFlag(false);
+    if (storageKeyRef.current !== STORAGE_KEY) {
+      setStorageKey(STORAGE_KEY);
+      setData(loadData(STORAGE_KEY));
+    }
+
+    const { data: membership } = await supabase
+      .from("agency_members")
+      .select("role, agencies(id, name, owner_user_id)")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const agency = membership?.agencies as unknown as
+      | { id: string; name: string; owner_user_id: string | null }
+      | null;
+
+    if (membership && agency?.owner_user_id) {
+      setAgencyContext({
+        agencyId: agency.id,
+        agencyOwnerUserId: agency.owner_user_id,
+        managedByUserId: userId,
+      });
+
+      // Con una cuenta real, `agency` pasa a ser la agencia verdadera (su uuid es
+      // el que esperan Supabase y todo lo que filtra por `agency.id`) y se quitan
+      // los datos de ejemplo.
+      setData((d) => {
+        // Ejemplos visibles por defecto (marcados, nunca se sincronizan), salvo que eligió "Usar mis datos reales".
+        const clean = adoptSamples(d, userId);
+        return { ...clean, agency: { ...clean.agency, id: agency.id, name: agency.name } };
+      });
+    } else {
+      // Cuenta sin inmobiliaria: entra igual y trabaja en modo local (sin
+      // sincronizar con la app) hasta que alguien la vincule. La agencia local
+      // toma el nombre que cargó al registrarse.
+      const { data: userData } = await supabase.auth.getUser();
+      const agencyName = (userData.user?.user_metadata?.agency_name as string | undefined)?.trim();
+      setAgencyContext(null);
+      setData((d) => {
+        const clean = adoptSamples(d, userId);
+        return {
+          ...clean,
+          agency: { ...clean.agency, id: `${UNLINKED_AGENCY_PREFIX}${userId}`, name: agencyName || clean.agency.name },
+        };
+      });
+    }
+
+    setData((d) => {
+      if (d.profiles.some((p) => p.id === userId)) return d;
+      const name = email?.split("@")[0] ?? "Agente";
+      const newProfile: Profile = {
+        id: userId,
+        agency_id: d.agency.id,
+        full_name: name,
+        email,
+        phone: null,
+        avatar_url: null,
+        initials: initials(name),
+        // Sin inmobiliaria, la cuenta es dueña de su agencia local.
+        role: !membership || membership.role === "admin" ? "owner" : "agente",
+        is_active: true,
+        created_at: new Date().toISOString(),
+      };
+      return { ...d, profiles: [...d.profiles, newProfile] };
+    });
+
+    setCurrentUserId(userId);
+    return null;
+  }, []);
+
+  /**
+   * Demo para mostrar el CRM sin cuenta: datos de ejemplo (`seed.ts`) en su
+   * propia clave del navegador y sin tocar Supabase (sin `agencyContext`).
+   */
+  const enterDemo = useCallback(() => {
+    setDemoFlag(true);
+    if (storageKeyRef.current !== DEMO_STORAGE_KEY) {
+      setStorageKey(DEMO_STORAGE_KEY);
+      setData(adoptSamples(loadData(DEMO_STORAGE_KEY), DEMO_USER_ID, { alwaysVisible: true }));
+    } else {
+      // En la demo los ejemplos siempre están (también tras un refresh).
+      setData((d) => adoptSamples(d, DEMO_USER_ID, { alwaysVisible: true }));
+    }
+    setPendingLinkEmail(null);
+    setAgencyContext(null);
+    setCurrentUserId(DEMO_USER_ID);
+  }, []);
+
+  // Restaura la sesión de Supabase si ya había una (refresh de la página).
+  useEffect(() => {
+    (async () => {
+      try {
+        localStorage.removeItem(SESSION_KEY); // limpieza del login viejo, sin backend
+        if (isDemoActive()) {
+          enterDemo();
+          return;
+        }
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+        if (user) await applySession(user.id, user.email ?? null);
+      } finally {
+        setSessionLoading(false);
+      }
+    })();
+  }, [applySession, enterDemo]);
+
+  // Trae las propiedades de agencia que ya existen en Supabase y todavía no
+  // están en este navegador (ej. las creó otro agente desde otra máquina).
+  useEffect(() => {
+    if (!agencyContext) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const rows = await fetchAgencyProperties(agencyContext.agencyId);
+        if (cancelled) return;
+
+        setData((d) => {
+          const known = new Set(d.properties.map((p) => p.app_property_id).filter(Boolean));
+          const toAdd = rows.filter((row) => !known.has(row.id));
+          if (toAdd.length === 0) return d;
+
+          const toProperty = (row: AppPropertyRow): Property => ({
+            id: uid("p"),
+            agency_id: d.agency.id,
+            owner_agent_id: row.managed_by_user_id,
+            owner_contact_id: row.owner_contact_id,
+            authorization_type: null,
+            authorization_expires_at: null,
+            title: row.title,
+            description: row.description,
+            type: TYPE_FROM_APP[row.type] ?? "casa",
+            operation: OPERATION_FROM_APP[row.operation_type] ?? "alquiler",
+            status: STATUS_FROM_APP[row.status] ?? "pausada",
+            street: row.address,
+            street_number: null,
+            locality: row.barrio,
+            province: null,
+            zone: row.barrio,
+            lat: null,
+            lng: null,
+            price: row.price_usd_sale ?? row.price_usd_month,
+            currency: "USD",
+            expenses: null,
+            taxes: null,
+            commission_pct: null,
+            surface_total: null,
+            surface_covered: null,
+            rooms: row.rooms,
+            bedrooms: row.rooms ? Math.max(0, row.rooms - 1) : 0,
+            bathrooms: null,
+            garages: null,
+            age_years: null,
+            features: row.amenities ?? [],
+            is_featured: false,
+            published_to_marketplace: false,
+            published_at: row.created_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            app_property_id: row.id,
+            sync_status: "synced",
+          });
+
+          const newProperties = toAdd.map(toProperty);
+          const newPhotos = Object.fromEntries(
+            toAdd.map((row, i) => [newProperties[i].id, row.photos ?? []]),
+          );
+
+          return {
+            ...d,
+            properties: [...newProperties, ...d.properties],
+            photos: { ...d.photos, ...newPhotos },
+          };
+        });
+      } catch (err) {
+        console.error("No se pudieron traer las propiedades de la agencia", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agencyContext]);
+
+  /**
+   * Leads reales: cuando alguien de la app le da like, matchea, propone una
+   * visita o hace una oferta sobre una propiedad de la agencia, se crea (una
+   * sola vez, dedup por `syncedAppEventIds`) un contacto + una oportunidad en
+   * "nuevos" — el mismo lugar donde cae un match interno del CRM. Un like no
+   * necesita esperar a que el propietario lo acepte en la app para contar
+   * como lead: ya es la señal real de interés. Visitas y ofertas sobre un
+   * contacto que ya tiene oportunidad quedan como actividad, no duplican la
+   * tarjeta del pipeline. Poll cada 30s mientras haya sesión.
+   */
+  useEffect(() => {
+    if (!agencyContext) return;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const [swipes, matches, visits, offers] = await Promise.all([
+          fetchAgencySwipes(agencyContext.agencyId),
+          fetchAgencyMatches(agencyContext.agencyId),
+          fetchAgencyVisits(agencyContext.agencyId),
+          fetchAgencyOffers(agencyContext.agencyId),
+        ]);
+        if (cancelled) return;
+
+        const seen = new Set(syncedIdsRef.current);
+        const events = [
+          ...swipes.map((row) => ({ kind: "swipe" as const, row })),
+          ...matches.map((row) => ({ kind: "match" as const, row })),
+          ...visits.map((row) => ({ kind: "visit" as const, row })),
+          ...offers.map((row) => ({ kind: "offer" as const, row })),
+        ].filter((e) => !seen.has(e.row.id));
+
+        if (events.length === 0) return;
+
+        const userIds = [...new Set(events.map((e) => e.row.demandante_id))];
+        const users = await fetchUsersByIds(userIds);
+        if (cancelled) return;
+        const userById = new Map(users.map((u) => [u.id, u]));
+
+        setData((d) => {
+          let contacts = d.contacts;
+          let opportunities = d.opportunities;
+          let activities = d.activities;
+          let appOffers = d.appOffers;
+          const processedIds: string[] = [];
+          const nowIso = new Date().toISOString();
+
+          const findOrCreateContact = (userId: string): Contact => {
+            const existing = contacts.find((c) => c.app_user_id === userId);
+            if (existing) return existing;
+            const u = userById.get(userId);
+            const contact: Contact = {
+              id: uid("c"),
+              agency_id: d.agency.id,
+              owner_id: actorRef.current,
+              full_name: u?.name || "Interesado desde la app",
+              email: null,
+              phone: null,
+              kind: "comprador",
+              status: "nuevo",
+              source: "consumer_app",
+              profile_type: null,
+              notes: null,
+              app_user_id: userId,
+              created_at: nowIso,
+              updated_at: nowIso,
+            };
+            contacts = [contact, ...contacts];
+            return contact;
+          };
+
+          for (const event of events) {
+            const property = propertiesRef.current.find((p) => p.app_property_id === event.row.property_id);
+            if (!property) continue; // todavía no llegó por la sincronización de propiedades: se reintenta en el próximo poll
+
+            const contact = findOrCreateContact(event.row.demandante_id);
+            processedIds.push(event.row.id);
+            const existingOpp = opportunities.find(
+              (o) => o.contact_id === contact.id && o.property_id === property.id,
+            );
+
+            if (event.kind === "swipe" || event.kind === "match") {
+              let oppId = existingOpp?.id;
+              if (!existingOpp) {
+                const opp: Opportunity = {
+                  id: uid("o"),
+                  agency_id: d.agency.id,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  match_id: event.kind === "match" ? event.row.id : null,
+                  owner_id: actorRef.current,
+                  stage: "nuevos",
+                  value: property.price,
+                  currency: property.currency,
+                  is_priority: false,
+                  priority_note: null,
+                  stage_since: event.row.created_at,
+                  closed_at: null,
+                  created_at: event.row.created_at,
+                  updated_at: event.row.created_at,
+                };
+                opportunities = [opp, ...opportunities];
+                oppId = opp.id;
+              }
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: event.kind === "match" ? "match_creado" : "nota",
+                  title: event.kind === "match" ? "Match confirmado desde la app" : "Le interesó tu propiedad en la app",
+                  detail: `${contact.full_name} — ${property.title}`,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: oppId ?? null,
+                  created_at: event.row.created_at,
+                  ...(event.kind === "swipe"
+                    ? {
+                      app_swipe_id: event.row.id,
+                      swipe_status: event.row.status === "pending" ? "pending" : (event.row.status as "accepted" | "rejected"),
+                    }
+                    : {}),
+                },
+                ...activities,
+              ];
+            } else if (event.kind === "visit") {
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: "visita_programada",
+                  title: "Visita propuesta desde la app",
+                  detail: property.title,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: existingOpp?.id ?? null,
+                  created_at: event.row.created_at,
+                },
+                ...activities,
+              ];
+            } else {
+              appOffers = [
+                {
+                  id: uid("of"),
+                  app_offer_id: event.row.id,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  amount_usd: event.row.amount_usd,
+                  status: event.row.status === "accepted" || event.row.status === "rejected" ? event.row.status : "pending",
+                  created_at: event.row.created_at,
+                },
+                ...appOffers,
+              ];
+              activities = [
+                {
+                  id: uid("a"),
+                  agency_id: d.agency.id,
+                  actor_id: null,
+                  type: "nota",
+                  title: "Oferta recibida desde la app",
+                  detail: `${property.title} — USD ${event.row.amount_usd.toLocaleString("es-AR")}`,
+                  contact_id: contact.id,
+                  property_id: property.id,
+                  opportunity_id: existingOpp?.id ?? null,
+                  created_at: event.row.created_at,
+                  app_offer_id: event.row.id,
+                  offer_status: "pending",
+                },
+                ...activities,
+              ];
+            }
+          }
+
+          if (processedIds.length === 0) return d;
+
+          return {
+            ...d,
+            contacts,
+            opportunities,
+            activities,
+            appOffers,
+            syncedAppEventIds: [...d.syncedAppEventIds, ...processedIds],
+          };
+        });
+      } catch (err) {
+        console.error("No se pudieron traer los leads reales de la app", err);
+      }
+    };
+
+    void run();
+    const interval = setInterval(run, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [agencyContext]);
+
+  const signIn = useCallback<StoreValue["signIn"]>(async (email, password) => {
+    if (email.trim() === "valen@propmatch.com" && password === "123456") {
+      enterDemo();
       return null;
     }
-  });
 
-  useEffect(() => {
-    try {
-      if (currentUserId) localStorage.setItem(SESSION_KEY, currentUserId);
-      else localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Sin persistencia: la sesión dura lo que dure la pestaña.
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error || !authData.user) return "Email o contraseña incorrectos.";
+    return applySession(authData.user.id, authData.user.email ?? null);
+  }, [applySession, enterDemo]);
+
+  /**
+   * Alta con email. `handle_new_user` (trigger de la app) crea la fila en
+   * `public.users` leyendo solo `name` de la metadata (`role` es nullable);
+   * `agency_name` queda guardado en la metadata del usuario para cuando alguien
+   * vincule la cuenta a una inmobiliaria. Con sesión inmediata entra directo;
+   * si Supabase pide confirmar el email, queda en `pendingLinkEmail`.
+   */
+  const signUp = useCallback<StoreValue["signUp"]>(async (input) => {
+    const { data: res, error } = await supabase.auth.signUp({
+      email: input.email.trim(),
+      password: input.password,
+      options: {
+        data: { name: input.name.trim(), agency_name: input.agencyName.trim() },
+        // El link del email vuelve al CRM desde donde se registró (tiene que
+        // estar en Auth > URL Configuration > Redirect URLs de Supabase).
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes("already")) return { error: "Ese email ya tiene una cuenta. Probá ingresar.", needsEmailConfirmation: false };
+      if (msg.includes("password")) return { error: "La contraseña no cumple los requisitos de seguridad.", needsEmailConfirmation: false };
+      return { error: "No pudimos crear la cuenta. Probá de nuevo en un rato.", needsEmailConfirmation: false };
     }
-  }, [currentUserId]);
+    // Supabase no avisa que el email existe (anti-enumeración): devuelve un usuario sin identidades.
+    if (res.user && res.user.identities?.length === 0) {
+      return { error: "Ese email ya tiene una cuenta. Probá ingresar.", needsEmailConfirmation: false };
+    }
+    if (res.session && res.user) {
+      await applySession(res.user.id, res.user.email ?? null);
+      return { error: null, needsEmailConfirmation: false };
+    }
+    setPendingLinkEmail(input.email.trim());
+    return { error: null, needsEmailConfirmation: true };
+  }, [applySession]);
 
-  const signIn = useCallback<StoreValue["signIn"]>((email, password) => {
-    const found = data.profiles.find(
-      (p) => p.email?.toLowerCase() === email.trim().toLowerCase(),
-    );
-    if (!found) return "No encontramos ninguna cuenta con ese email.";
-    if (password.trim().length < 4) return "Ingresá tu contraseña.";
-    setCurrentUserId(found.id);
-    return null;
-  }, [data.profiles]);
+  /**
+   * Requiere el provider Google habilitado en Supabase (Auth > Providers) con un
+   * cliente OAuth de Google Cloud, y `window.location.origin` en las Redirect
+   * URLs. Al volver, supabase-js lee la sesión de la URL y `getSession` (arriba)
+   * la pasa por `applySession`.
+   */
+  const signInWithGoogle = useCallback<StoreValue["signInWithGoogle"]>(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    if (!error) return null;
+    return /provider is not enabled|unsupported provider/i.test(error.message)
+      ? "Google todavía no está habilitado para PropMatch."
+      : "No pudimos conectar con Google. Probá de nuevo.";
+  }, []);
 
-  const signOut = useCallback(() => setCurrentUserId(null), []);
+  const dismissPendingLink = useCallback(() => setPendingLinkEmail(null), []);
+
+  const signOut = useCallback(() => {
+    void supabase.auth.signOut();
+    setAgencyContext(null);
+    setCurrentUserId(null);
+    if (storageKeyRef.current === DEMO_STORAGE_KEY) {
+      setDemoFlag(false);
+      setStorageKey(STORAGE_KEY);
+      setData(loadData(STORAGE_KEY));
+    }
+  }, []);
 
   /**
    * Quién hace cada acción. Ref y no dependencia: así las acciones no cambian
@@ -354,6 +914,44 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    */
   const actorRef = useRef<string>(currentUserId ?? CURRENT_USER_ID);
   actorRef.current = currentUserId ?? CURRENT_USER_ID;
+
+  /** Última versión de las propiedades, para leer `app_property_id` desde acciones con deps `[]`. */
+  const propertiesRef = useRef(data.properties);
+  propertiesRef.current = data.properties;
+  const dealsRef = useRef(data.deals);
+  dealsRef.current = data.deals;
+  const appOffersRef = useRef(data.appOffers);
+  appOffersRef.current = data.appOffers;
+
+  /** Última versión de los ids de leads ya sincronizados, para el polling de leads reales. */
+  const syncedIdsRef = useRef(data.syncedAppEventIds);
+  syncedIdsRef.current = data.syncedAppEventIds;
+
+  /** Sube fotos nuevas y crea/actualiza la fila real en la app. No se espera desde la pantalla: corre en paralelo y actualiza el estado local cuando termina. */
+  const syncPropertyToApp = useCallback(
+    async (localId: string, input: NewPropertyInput, ctx: AppPropertyContext, existingAppId: string | null) => {
+      // Seguridad: una propiedad de ejemplo nunca llega a la app de Lucas (base real).
+      if (isSample(propertiesRef.current.find((p) => p.id === localId))) return;
+      try {
+        const photoUrls = await uploadPropertyPhotos(ctx.agencyId, localId, input.photos);
+        const appId = await upsertAppProperty(input, ctx, photoUrls, existingAppId);
+        setData((d) => ({
+          ...d,
+          properties: d.properties.map((p) =>
+            p.id === localId ? { ...p, app_property_id: appId, sync_status: "synced" } : p,
+          ),
+          photos: { ...d.photos, [localId]: photoUrls },
+        }));
+      } catch (err) {
+        console.error("No se pudo publicar la propiedad en la app", err);
+        setData((d) => ({
+          ...d,
+          properties: d.properties.map((p) => (p.id === localId ? { ...p, sync_status: "error" } : p)),
+        }));
+      }
+    },
+    [],
+  );
 
   const profile = useMemo(
     () =>
@@ -384,8 +982,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         locality: input.locality,
         province: input.province,
         zone: input.locality,
-        lat: null,
-        lng: null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
         price: input.price,
         currency: input.currency,
         expenses: input.expenses,
@@ -393,19 +991,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         commission_pct: input.commission_pct,
         surface_total: input.surface_total,
         surface_covered: input.surface_covered,
-        // El formulario pide dormitorios, baños y cocheras; los "ambientes"
-        // que muestran las cards se derivan de dormitorios + 1 (estar).
-        rooms: input.bedrooms + 1,
+        rooms: roomsOf(input),
         bedrooms: input.bedrooms,
         bathrooms: input.bathrooms,
         garages: input.garages,
         age_years: input.age_years,
         features: input.features,
+        ...pickCrmDetails(input),
         is_featured: false,
         published_to_marketplace: false,
         published_at: nowIso,
         created_at: nowIso,
         updated_at: nowIso,
+        app_property_id: null,
+        sync_status: agencyContextRef.current
+          ? canPublishToApp(input)
+            ? "syncing"
+            : "not_publishable"
+          : undefined,
       };
 
       setData((d) => ({
@@ -429,9 +1032,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         ],
       }));
 
+      if (agencyContextRef.current && canPublishToApp(input)) {
+        void syncPropertyToApp(id, input, agencyContextRef.current, null);
+      }
+
       return property;
     },
-    [],
+    [syncPropertyToApp],
   );
 
   const updateProperty = useCallback<StoreValue["updateProperty"]>((id, patch) => {
@@ -441,15 +1048,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p,
       ),
     }));
+    if (patch.status) {
+      const current = propertiesRef.current.find((p) => p.id === id);
+      if (current?.app_property_id && !isSample(current)) {
+        pushStatusToApp(current.app_property_id, patch.status).catch((err) =>
+          console.error("No se pudo actualizar el estado en la app", err),
+        );
+      }
+    }
   }, []);
 
-  const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>((id, input) => {
-    const nowIso = new Date().toISOString();
-    setData((d) => ({
-      ...d,
-      properties: d.properties.map((p) =>
-        p.id === id
-          ? {
+  const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>(
+    (id, input) => {
+      const nowIso = new Date().toISOString();
+      const current = propertiesRef.current.find((p) => p.id === id);
+      // Editar un ejemplo no lo vuelve real: sigue sin sincronizarse.
+      const willPublish = Boolean(agencyContextRef.current) && canPublishToApp({ ...input, is_sample: isSample(current) });
+
+      setData((d) => ({
+        ...d,
+        properties: d.properties.map((p) =>
+          p.id === id
+            ? {
               ...p,
               title: input.title,
               description: input.description,
@@ -461,6 +1081,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               locality: input.locality,
               province: input.province,
               zone: input.locality,
+              lat: input.lat !== undefined ? input.lat : p.lat,
+              lng: input.lng !== undefined ? input.lng : p.lng,
               price: input.price,
               currency: input.currency,
               expenses: input.expenses,
@@ -468,7 +1090,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               commission_pct: input.commission_pct,
               surface_total: input.surface_total,
               surface_covered: input.surface_covered,
-              rooms: input.bedrooms + 1,
+              rooms: roomsOf(input),
               bedrooms: input.bedrooms,
               bathrooms: input.bathrooms,
               garages: input.garages,
@@ -478,13 +1100,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               owner_contact_id: input.owner_contact_id,
               authorization_type: input.authorization_type,
               authorization_expires_at: input.authorization_expires_at,
+              ...pickCrmDetails(input),
               updated_at: nowIso,
+              sync_status: agencyContextRef.current && !isSample(p)
+                ? willPublish
+                  ? "syncing"
+                  : "not_publishable"
+                : p.sync_status,
             }
-          : p,
-      ),
-      photos: { ...d.photos, [id]: input.photos },
-    }));
-  }, []);
+            : p,
+        ),
+        photos: { ...d.photos, [id]: input.photos },
+      }));
+
+      if (agencyContextRef.current && willPublish) {
+        void syncPropertyToApp(id, input, agencyContextRef.current, current?.app_property_id ?? null);
+      }
+    },
+    [syncPropertyToApp],
+  );
 
   const addContact = useCallback<StoreValue["addContact"]>((input) => {
     const nowIso = new Date().toISOString();
@@ -511,15 +1145,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // matching lo ignoraría.
     const requirement: ContactRequirement | null = input.requirement
       ? {
-          id: uid("r"),
-          agency_id: seedAgency.id,
-          contact_id: contactId,
-          ...input.requirement,
-          rooms_min: null,
-          is_active: true,
-          created_at: nowIso,
-          updated_at: nowIso,
-        }
+        id: uid("r"),
+        agency_id: seedAgency.id,
+        contact_id: contactId,
+        ...input.requirement,
+        rooms_min: null,
+        is_active: true,
+        created_at: nowIso,
+        updated_at: nowIso,
+      }
       : null;
 
     setData((d) => ({
@@ -563,15 +1197,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const next: ContactRequirement = existing
         ? { ...existing, ...input, rooms_min: null, updated_at: nowIso }
         : {
-            id: uid("r"),
-            agency_id: seedAgency.id,
-            contact_id: contactId,
-            ...input,
-            rooms_min: null,
-            is_active: true,
-            created_at: nowIso,
-            updated_at: nowIso,
-          };
+          id: uid("r"),
+          agency_id: seedAgency.id,
+          contact_id: contactId,
+          ...input,
+          rooms_min: null,
+          is_active: true,
+          created_at: nowIso,
+          updated_at: nowIso,
+        };
 
       return {
         ...d,
@@ -598,30 +1232,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         opportunities: d.opportunities.map((o) =>
           o.id === id
             ? {
-                ...o,
-                stage,
-                stage_since: nowIso,
-                updated_at: nowIso,
-                // Salir de cierre deshace el cierre: si no, Reportes lo seguiría contando.
-                closed_at: stage === "cierre" ? nowIso : null,
-              }
+              ...o,
+              stage,
+              stage_since: nowIso,
+              updated_at: nowIso,
+              // Salir de cierre deshace el cierre: si no, Reportes lo seguiría contando.
+              closed_at: stage === "cierre" ? nowIso : null,
+            }
             : o,
         ),
         activities: [
-              {
-                id: uid("a"),
-                agency_id: seedAgency.id,
-                actor_id: actorRef.current,
-                type: "etapa_avanzada" as ActivityType,
-                title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} pasó a ${STAGE_LABEL[stage]}`,
-                detail: d.properties.find((p) => p.id === opp.property_id)?.title ?? null,
-                contact_id: opp.contact_id,
-                property_id: opp.property_id,
-                opportunity_id: opp.id,
-                created_at: nowIso,
-              },
-              ...d.activities,
-            ],
+          {
+            id: uid("a"),
+            agency_id: seedAgency.id,
+            actor_id: actorRef.current,
+            type: "etapa_avanzada" as ActivityType,
+            title: `${contact?.full_name.split(" ")[0] ?? "Oportunidad"} pasó a ${STAGE_LABEL[stage]}`,
+            detail: d.properties.find((p) => p.id === opp.property_id)?.title ?? null,
+            contact_id: opp.contact_id,
+            property_id: opp.property_id,
+            opportunity_id: opp.id,
+            created_at: nowIso,
+          },
+          ...d.activities,
+        ],
       };
     });
   }, []);
@@ -642,6 +1276,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const contact = d.contacts.find((c) => c.id === match.contact_id);
         const nowIso = new Date().toISOString();
         const id = uid("o");
+        const sample = isSample(property) || isSample(contact);
 
         return {
           ...d,
@@ -662,6 +1297,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               closed_at: null,
               created_at: nowIso,
               updated_at: nowIso,
+              // Nace de un ejemplo: también es ejemplo (se va con "Usar mis datos reales").
+              ...(sample ? { is_sample: true } : {}),
             },
             ...d.opportunities,
           ],
@@ -714,9 +1351,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => {
       const contact = d.contacts.find((c) => c.id === input.contact_id);
       const property = d.properties.find((p) => p.id === input.property_id);
+      const sample = isSample(contact) || isSample(property);
       return {
         ...d,
-        opportunities: [opportunity, ...d.opportunities],
+        opportunities: [sample ? { ...opportunity, is_sample: true } : opportunity, ...d.opportunities],
         activities: [
           {
             id: uid("a"),
@@ -753,14 +1391,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ends_at: input.ends_at,
       notes: input.notes,
       created_at: nowIso,
+      ...(input.type === "visita" ? { status: input.status ?? "por_confirmar" } : {}),
     };
 
     setData((d) => {
       const contact = d.contacts.find((c) => c.id === input.contact_id);
       const property = d.properties.find((p) => p.id === input.property_id);
+      const sample = isSample(contact) || isSample(property);
       return {
         ...d,
-        events: [...d.events, event],
+        events: [...d.events, sample ? { ...event, is_sample: true } : event],
         activities: [
           {
             id: uid("a"),
@@ -791,6 +1431,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const removeEvent = useCallback<StoreValue["removeEvent"]>((id) => {
     setData((d) => ({ ...d, events: d.events.filter((e) => e.id !== id) }));
+  }, []);
+
+  const patchEvent = useCallback<StoreValue["patchEvent"]>((id, patch) => {
+    setData((d) => ({
+      ...d,
+      events: d.events.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    }));
+  }, []);
+
+  const saveAppVisitFeedback = useCallback<StoreValue["saveAppVisitFeedback"]>((visitId, feedback) => {
+    setData((d) => ({ ...d, appVisitFeedback: { ...d.appVisitFeedback, [visitId]: feedback } }));
+  }, []);
+
+  const patchAppVisitChecklist = useCallback<StoreValue["patchAppVisitChecklist"]>((visitId, patch) => {
+    setData((d) => ({
+      ...d,
+      appVisitChecklist: { ...d.appVisitChecklist, [visitId]: { ...d.appVisitChecklist[visitId], ...patch } },
+    }));
   }, []);
 
   const importContacts = useCallback<StoreValue["importContacts"]>((inputs) => {
@@ -869,8 +1527,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       locality: input.locality,
       province: input.province,
       zone: input.locality,
-      lat: null,
-      lng: null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
       price: input.price,
       currency: input.currency,
       expenses: input.expenses,
@@ -878,7 +1536,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       commission_pct: input.commission_pct,
       surface_total: input.surface_total,
       surface_covered: input.surface_covered,
-      rooms: input.bedrooms ? input.bedrooms + 1 : null,
+      rooms: input.rooms !== undefined ? input.rooms : input.bedrooms ? input.bedrooms + 1 : null,
       bedrooms: input.bedrooms,
       bathrooms: input.bathrooms,
       garages: input.garages,
@@ -1005,14 +1663,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         opportunities: d.opportunities.map((o) =>
           o.id === id
             ? {
-                ...o,
-                stage: "perdida",
-                stage_since: nowIso,
-                updated_at: nowIso,
-                closed_at: nowIso,
-                is_priority: false,
-                priority_note: reason,
-              }
+              ...o,
+              stage: "perdida",
+              stage_since: nowIso,
+              updated_at: nowIso,
+              closed_at: nowIso,
+              is_priority: false,
+              priority_note: reason,
+            }
             : o,
         ),
         activities: [
@@ -1041,13 +1699,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       opportunities: d.opportunities.map((o) =>
         o.id === id
           ? {
-              ...o,
-              stage: "nuevos",
-              stage_since: nowIso,
-              updated_at: nowIso,
-              closed_at: null,
-              priority_note: null,
-            }
+            ...o,
+            stage: "nuevos",
+            stage_since: nowIso,
+            updated_at: nowIso,
+            closed_at: null,
+            priority_note: null,
+          }
           : o,
       ),
     }));
@@ -1090,19 +1748,75 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const respondOffer = useCallback<StoreValue["respondOffer"]>(async (appOfferId, action) => {
+    // Oferta de ejemplo: su id no existe en la app. Se resuelve solo en el navegador.
+    const sampleOffer = appOffersRef.current.some((o) => o.app_offer_id === appOfferId && isSample(o));
+    if (!sampleOffer) {
+      const { error } = await respondToOffer(appOfferId, action);
+      if (error) return error;
+    }
+
+    const newStatus = action === "accept" ? "accepted" : "rejected";
+    setData((d) => ({
+      ...d,
+      appOffers: d.appOffers.map((o) => (o.app_offer_id === appOfferId ? { ...o, status: newStatus } : o)),
+      activities: d.activities.map((a) =>
+        a.app_offer_id === appOfferId ? { ...a, offer_status: newStatus } : a,
+      ),
+    }));
+    return null;
+  }, []);
+
+  const respondSwipe = useCallback<StoreValue["respondSwipe"]>(async (activityId, action) => {
+    const activity = data.activities.find((a) => a.id === activityId);
+    if (!activity?.app_swipe_id) return "Esta actividad no tiene un interés real asociado.";
+
+    const { error } = await respondToSwipe(activity.app_swipe_id, action);
+    if (error) return error;
+
+    setData((d) => ({
+      ...d,
+      activities: d.activities.map((a) => (a.id === activityId ? { ...a, swipe_status: action } : a)),
+    }));
+    return null;
+  }, [data.activities]);
+
   const reviewed = useMemo(() => new Set(data.reviewedMatches), [data.reviewedMatches]);
 
-  const matchesWithReview = useMemo(
-    () => matches.map((m) => (reviewed.has(m.id) ? { ...m, is_reviewed: true } : m)),
-    [matches, reviewed],
-  );
+  const matchesWithReview = useMemo(() => {
+    const sampleProps = new Set(data.properties.filter(isSample).map((p) => p.id));
+    const sampleReqs = new Set(data.requirements.filter(isSample).map((r) => r.id));
+    return matches.map((m) => {
+      const sample = sampleProps.has(m.property_id) || sampleReqs.has(m.requirement_id);
+      const next = reviewed.has(m.id) ? { ...m, is_reviewed: true } : m;
+      return sample ? { ...next, is_sample: true } : next;
+    });
+  }, [matches, reviewed, data.properties, data.requirements]);
 
   const addDeal = useCallback<StoreValue["addDeal"]>((input) => {
     const nowIso = new Date().toISOString();
-    const deal: Deal = { ...input, id: uid("d"), agency_id: seedAgency.id, created_at: nowIso, updated_at: nowIso };
+    const base = { ...input, id: uid("d"), agency_id: seedAgency.id, created_at: nowIso, updated_at: nowIso };
+    // El número se calcula afuera del setData para poder devolver el deal completo.
+    const number = nextDealNumber(dealsRef.current);
+    const deal: Deal = applyDealPatch(
+      { ...base, ...dealRoomDefaults(input, actorRef.current, number, nowIso) },
+      {},
+      actorRef.current,
+      { type: "created", title: "Operación iniciada" },
+    );
     setData((d) => ({
       ...d,
-      deals: [deal, ...d.deals],
+      deals: [
+        {
+          ...deal,
+          number: Math.max(number, nextDealNumber(d.deals)),
+          // Una operación sobre una propiedad o un contacto de ejemplo también es de ejemplo.
+          ...([d.properties.find((p) => p.id === input.property_id), d.contacts.find((c) => c.id === input.client_contact_id)].some(isSample)
+            ? { is_sample: true }
+            : {}),
+        },
+        ...d.deals,
+      ],
       activities: [
         {
           id: uid("a"),
@@ -1122,10 +1836,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return deal;
   }, []);
 
-  const updateDeal = useCallback<StoreValue["updateDeal"]>((id, patch) => {
+  const updateDeal = useCallback<StoreValue["updateDeal"]>((id, patch, event) => {
     setData((d) => ({
       ...d,
-      deals: d.deals.map((x) => (x.id === id ? { ...x, ...patch, updated_at: new Date().toISOString() } : x)),
+      deals: d.deals.map((x) => (x.id === id ? applyDealPatch(x, patch, actorRef.current, event) : x)),
     }));
   }, []);
 
@@ -1133,9 +1847,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, deals: d.deals.filter((x) => x.id !== id) }));
   }, []);
 
+  /** "Usar mis datos reales": saca los ejemplos y lo que depende de ellos. La demo siempre los tiene. */
+  const hideSamples = useCallback(() => {
+    if (storageKeyRef.current === DEMO_STORAGE_KEY) return;
+    setData((d) => stripSamples(d));
+  }, []);
+
+  /** "Mostrar ejemplos otra vez": vuelve a agregar la semilla, sin duplicar. */
+  const showSamples = useCallback(() => {
+    setData((d) => restoreSamples(d, actorRef.current));
+  }, []);
+
   const reset = useCallback(() => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(storageKeyRef.current);
     } catch {
       // Storage bloqueado: igual se vuelve a la semilla en memoria.
     }
@@ -1153,6 +1878,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       profile,
       currentUserId,
       signIn,
+      signUp,
+      signInWithGoogle,
+      pendingLinkEmail,
+      dismissPendingLink,
+      enterDemo,
       signOut,
       matches: matchesWithReview,
       contactById: (id) => (id ? contactIndex.get(id) : undefined),
@@ -1176,6 +1906,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addEvent,
       updateEvent,
       removeEvent,
+      patchEvent,
+      saveAppVisitFeedback,
+      patchAppVisitChecklist,
       updateAgency,
       updateProfile,
       logActivity,
@@ -1187,18 +1920,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       toggleTask,
       removeTask,
       markMatchReviewed,
+      respondOffer,
+      respondSwipe,
       addDeal,
       updateDeal,
       removeDeal,
       reset,
       persistFailed,
+      sessionLoading,
+      isDemo: storageKey === DEMO_STORAGE_KEY,
+      hideSamples,
+      showSamples,
     };
   }, [
     data,
     profile,
     matchesWithReview,
     currentUserId,
+    sessionLoading,
     signIn,
+    signUp,
+    signInWithGoogle,
+    pendingLinkEmail,
+    dismissPendingLink,
+    enterDemo,
     signOut,
     addProperty,
     updateProperty,
@@ -1215,6 +1960,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addEvent,
     updateEvent,
     removeEvent,
+    patchEvent,
+    saveAppVisitFeedback,
+    patchAppVisitChecklist,
     updateAgency,
     updateProfile,
     logActivity,
@@ -1226,11 +1974,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     toggleTask,
     removeTask,
     markMatchReviewed,
+    respondOffer,
+    respondSwipe,
     addDeal,
     updateDeal,
     removeDeal,
     reset,
     persistFailed,
+    storageKey,
+    hideSamples,
+    showSamples,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -1248,6 +2001,7 @@ const EVENT_ACTIVITY: Record<EventType, ActivityType> = {
   llamada: "llamada",
   reunion: "nota",
   seguimiento: "nota",
+  publicacion: "nota",
 };
 
 export const STAGE_LABEL: Record<OpportunityStage, string> = {

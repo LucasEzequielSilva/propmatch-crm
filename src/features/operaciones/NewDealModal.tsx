@@ -25,7 +25,7 @@ export function NewDealModal({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const { properties, contacts, opportunities, addDeal, contactById, propertyById } = useStore();
+  const { properties, contacts, opportunities, addDeal, contactById, propertyById, updateProperty } = useStore();
 
   const [propertyId, setPropertyId] = useState(initialPropertyId ?? "");
   const [clientId, setClientId] = useState(initialContactId ?? "");
@@ -88,6 +88,8 @@ export function NewDealModal({
       docs: {},
       notes: "",
     });
+    // La propiedad queda reservada mientras dure la operación (si se cae, vuelve a disponible).
+    if (property.status === "disponible") updateProperty(property.id, { status: "reservada" });
     onCreated(deal.id);
   };
 
@@ -102,7 +104,7 @@ export function NewDealModal({
           <p className="text-lg" style={{ color: "#1F0A3C", fontWeight: 800 }}>
             Nueva operación
           </p>
-          <button onClick={onClose} aria-label="Cerrar" style={{ color: "#A78BFA", fontSize: 22, lineHeight: 1 }}>
+          <button onClick={onClose} aria-label="Cerrar" style={{ color: "#7458C4", fontSize: 22, lineHeight: 1 }}>
             ×
           </button>
         </div>
