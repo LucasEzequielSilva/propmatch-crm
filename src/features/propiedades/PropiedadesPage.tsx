@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -439,7 +440,7 @@ function PropertyCard({
         </div>
 
         <h3 className="text-sm leading-snug mb-1" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-          {p.title}
+          {p.title} <SampleBadge record={p} />
         </h3>
 
         <div className="flex items-center gap-1 mb-3">
@@ -575,7 +576,7 @@ function PropertyList({
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                        {p.title}
+                        {p.title} <SampleBadge record={p} />
                       </p>
                       <div className="flex items-center gap-1 mt-0.5">
                         <MapPinIcon size={10} />

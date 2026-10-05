@@ -54,19 +54,9 @@ import {
   respondToOffer,
   respondToSwipe,
 } from "@/lib/leadSync";
-import {
-  CURRENT_USER_ID,
-  seedActivities,
-  seedAgency,
-  seedContacts,
-  seedEvents,
-  seedOpportunities,
-  seedPhotos,
-  seedProfiles,
-  seedProperties,
-  seedRequirements,
-  seedTasks,
-} from "./seed";
+import { CURRENT_USER_ID, seedAgency } from "./seed";
+import { adoptSamples, markLegacySamples, restoreSamples, sampleSlices, SAMPLES_VERSION, stripSamples } from "./samples";
+import { isSample } from "@/lib/samples";
 
 /**
  * Store del frontend.
@@ -103,7 +93,7 @@ function setDemoFlag(on: boolean) {
 }
 const SESSION_KEY = "propmatch.session.v1";
 
-interface StoreData {
+export interface StoreData {
   /** Editables desde Configuración, por eso viven con el resto de los datos. */
   agency: Agency;
   profiles: Profile[];
@@ -128,62 +118,28 @@ interface StoreData {
   appVisitFeedback: Record<string, VisitFeedback>;
   /** Checklist de coordinación de visitas reales de la app (uuid de `visits`). Solo local. */
   appVisitChecklist: Record<string, VisitChecklist>;
+  /**
+   * El usuario eligió "Usar mis datos reales": los ejemplos no se vuelven a
+   * agregar al abrir sesión. Sin definir = ejemplos visibles (ver data/samples.ts).
+   */
+  samplesHidden?: boolean;
+  /** Versión de la semilla ya ofrecida a este navegador (`SAMPLES_VERSION`). */
+  samplesVersion?: number;
 }
 
 function seedData(): StoreData {
+  // Toda la semilla va marcada como ejemplo (`is_sample`): nunca sale del navegador.
+  const samples = sampleSlices();
   return {
     agency: seedAgency,
-    profiles: seedProfiles,
-    contacts: seedContacts,
-    requirements: seedRequirements,
-    properties: seedProperties,
-    photos: seedPhotos,
-    opportunities: seedOpportunities,
-    activities: seedActivities,
-    events: seedEvents,
-    tasks: seedTasks,
-    deals: [],
+    ...samples,
     reviewedMatches: [],
     followUpSnoozes: {},
     syncedAppEventIds: [],
-    appOffers: [],
     appVisitFeedback: {},
     appVisitChecklist: {},
-  };
-}
-
-/**
- * Saca los datos de ejemplo (`seed.ts`) de lo que guarda el navegador. Se usa
- * al abrir una sesión REAL: la semilla es solo para la demo (`u-1`); con una
- * cuenta de agencia verdadera mezclaría contactos, oportunidades y propiedades
- * inventados con los reales. Lo creado por el usuario (ids generados con
- * `uid`) y lo traído de la app (`app_property_id`) se conserva.
- */
-function purgeSeed(d: StoreData): StoreData {
-  const ids = <T extends { id: string }>(rows: T[]) => new Set(rows.map((r) => r.id));
-  const contacts = ids(seedContacts);
-  const requirements = ids(seedRequirements);
-  const properties = ids(seedProperties);
-  const opportunities = ids(seedOpportunities);
-  const activities = ids(seedActivities);
-  const events = ids(seedEvents);
-  const tasks = ids(seedTasks);
-  const profiles = ids(seedProfiles);
-  const isSeedProperty = (p: Property) => properties.has(p.id) && !p.app_property_id;
-
-  return {
-    ...d,
-    contacts: d.contacts.filter((c) => !contacts.has(c.id)),
-    requirements: d.requirements.filter((r) => !requirements.has(r.id) && !contacts.has(r.contact_id)),
-    properties: d.properties.filter((p) => !isSeedProperty(p)),
-    photos: Object.fromEntries(Object.entries(d.photos).filter(([id]) => !properties.has(id))),
-    opportunities: d.opportunities.filter((o) => !opportunities.has(o.id) && !contacts.has(o.contact_id)),
-    activities: d.activities.filter((a) => !activities.has(a.id)),
-    events: d.events.filter((e) => !events.has(e.id)),
-    tasks: d.tasks.filter((t) => !tasks.has(t.id)),
-    profiles: d.profiles.filter((p) => !profiles.has(p.id)),
-    reviewedMatches: [],
-    followUpSnoozes: {},
+    samplesHidden: false,
+    samplesVersion: SAMPLES_VERSION,
   };
 }
 
@@ -193,7 +149,8 @@ function loadData(key: string = STORAGE_KEY): StoreData {
     if (!raw) return seedData();
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
-    const merged = { ...seedData(), ...parsed };
+    // markLegacySamples: lo de la semilla guardado antes de existir `is_sample` queda marcado.
+    const merged = markLegacySamples({ ...seedData(), ...parsed });
     // Deal room: pasos/documentos de boolean a {done, at, by, note}, número PM-0001 e historial.
     merged.deals = migrateDeals(merged.deals ?? [], (id) => merged.opportunities.find((o) => o.id === id)?.owner_id ?? null);
     merged.syncedAppEventIds = merged.syncedAppEventIds ?? [];
@@ -441,6 +398,12 @@ interface StoreValue extends StoreData {
   reset: () => void;
   /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
   persistFailed: boolean;
+  /** Sesión de demo (sin cuenta): los ejemplos no se pueden ocultar. */
+  isDemo: boolean;
+  /** "Usar mis datos reales": quita los datos de ejemplo y guarda la preferencia (`samplesHidden`). */
+  hideSamples: () => void;
+  /** "Mostrar ejemplos otra vez": vuelve a agregar la semilla sin duplicar. */
+  showSamples: () => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -524,7 +487,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // el que esperan Supabase y todo lo que filtra por `agency.id`) y se quitan
       // los datos de ejemplo.
       setData((d) => {
-        const clean = purgeSeed(d);
+        // Ejemplos visibles por defecto (marcados, nunca se sincronizan), salvo que eligió "Usar mis datos reales".
+        const clean = adoptSamples(d, userId);
         return { ...clean, agency: { ...clean.agency, id: agency.id, name: agency.name } };
       });
     } else {
@@ -535,7 +499,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const agencyName = (userData.user?.user_metadata?.agency_name as string | undefined)?.trim();
       setAgencyContext(null);
       setData((d) => {
-        const clean = purgeSeed(d);
+        const clean = adoptSamples(d, userId);
         return {
           ...clean,
           agency: { ...clean.agency, id: `${UNLINKED_AGENCY_PREFIX}${userId}`, name: agencyName || clean.agency.name },
@@ -574,7 +538,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setDemoFlag(true);
     if (storageKeyRef.current !== DEMO_STORAGE_KEY) {
       setStorageKey(DEMO_STORAGE_KEY);
-      setData(loadData(DEMO_STORAGE_KEY));
+      setData(adoptSamples(loadData(DEMO_STORAGE_KEY), DEMO_USER_ID, { alwaysVisible: true }));
+    } else {
+      // En la demo los ejemplos siempre están (también tras un refresh).
+      setData((d) => adoptSamples(d, DEMO_USER_ID, { alwaysVisible: true }));
     }
     setPendingLinkEmail(null);
     setAgencyContext(null);
@@ -967,6 +934,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   propertiesRef.current = data.properties;
   const dealsRef = useRef(data.deals);
   dealsRef.current = data.deals;
+  const appOffersRef = useRef(data.appOffers);
+  appOffersRef.current = data.appOffers;
 
   /** Última versión de los ids de leads ya sincronizados, para el polling de leads reales. */
   const syncedIdsRef = useRef(data.syncedAppEventIds);
@@ -975,6 +944,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   /** Sube fotos nuevas y crea/actualiza la fila real en la app. No se espera desde la pantalla: corre en paralelo y actualiza el estado local cuando termina. */
   const syncPropertyToApp = useCallback(
     async (localId: string, input: NewPropertyInput, ctx: AppPropertyContext, existingAppId: string | null) => {
+      // Seguridad: una propiedad de ejemplo nunca llega a la app de Lucas (base real).
+      if (isSample(propertiesRef.current.find((p) => p.id === localId))) return;
       try {
         const photoUrls = await uploadPropertyPhotos(ctx.agencyId, localId, input.photos);
         const appId = await upsertAppProperty(input, ctx, photoUrls, existingAppId);
@@ -1093,7 +1064,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
     if (patch.status) {
       const current = propertiesRef.current.find((p) => p.id === id);
-      if (current?.app_property_id) {
+      if (current?.app_property_id && !isSample(current)) {
         pushStatusToApp(current.app_property_id, patch.status).catch((err) =>
           console.error("No se pudo actualizar el estado en la app", err),
         );
@@ -1105,7 +1076,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (id, input) => {
       const nowIso = new Date().toISOString();
       const current = propertiesRef.current.find((p) => p.id === id);
-      const willPublish = Boolean(agencyContextRef.current) && canPublishToApp(input);
+      // Editar un ejemplo no lo vuelve real: sigue sin sincronizarse.
+      const willPublish = Boolean(agencyContextRef.current) && canPublishToApp({ ...input, is_sample: isSample(current) });
 
       setData((d) => ({
         ...d,
@@ -1144,7 +1116,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               authorization_expires_at: input.authorization_expires_at,
               ...pickCrmDetails(input),
               updated_at: nowIso,
-              sync_status: agencyContextRef.current
+              sync_status: agencyContextRef.current && !isSample(p)
                 ? willPublish
                   ? "syncing"
                   : "not_publishable"
@@ -1318,6 +1290,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const contact = d.contacts.find((c) => c.id === match.contact_id);
         const nowIso = new Date().toISOString();
         const id = uid("o");
+        const sample = isSample(property) || isSample(contact);
 
         return {
           ...d,
@@ -1338,6 +1311,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               closed_at: null,
               created_at: nowIso,
               updated_at: nowIso,
+              // Nace de un ejemplo: también es ejemplo (se va con "Usar mis datos reales").
+              ...(sample ? { is_sample: true } : {}),
             },
             ...d.opportunities,
           ],
@@ -1390,9 +1365,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => {
       const contact = d.contacts.find((c) => c.id === input.contact_id);
       const property = d.properties.find((p) => p.id === input.property_id);
+      const sample = isSample(contact) || isSample(property);
       return {
         ...d,
-        opportunities: [opportunity, ...d.opportunities],
+        opportunities: [sample ? { ...opportunity, is_sample: true } : opportunity, ...d.opportunities],
         activities: [
           {
             id: uid("a"),
@@ -1435,9 +1411,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => {
       const contact = d.contacts.find((c) => c.id === input.contact_id);
       const property = d.properties.find((p) => p.id === input.property_id);
+      const sample = isSample(contact) || isSample(property);
       return {
         ...d,
-        events: [...d.events, event],
+        events: [...d.events, sample ? { ...event, is_sample: true } : event],
         activities: [
           {
             id: uid("a"),
@@ -1786,8 +1763,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const respondOffer = useCallback<StoreValue["respondOffer"]>(async (appOfferId, action) => {
-    const { error } = await respondToOffer(appOfferId, action);
-    if (error) return error;
+    // Oferta de ejemplo: su id no existe en la app. Se resuelve solo en el navegador.
+    const sampleOffer = appOffersRef.current.some((o) => o.app_offer_id === appOfferId && isSample(o));
+    if (!sampleOffer) {
+      const { error } = await respondToOffer(appOfferId, action);
+      if (error) return error;
+    }
 
     const newStatus = action === "accept" ? "accepted" : "rejected";
     setData((d) => ({
@@ -1816,10 +1797,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const reviewed = useMemo(() => new Set(data.reviewedMatches), [data.reviewedMatches]);
 
-  const matchesWithReview = useMemo(
-    () => matches.map((m) => (reviewed.has(m.id) ? { ...m, is_reviewed: true } : m)),
-    [matches, reviewed],
-  );
+  const matchesWithReview = useMemo(() => {
+    const sampleProps = new Set(data.properties.filter(isSample).map((p) => p.id));
+    const sampleReqs = new Set(data.requirements.filter(isSample).map((r) => r.id));
+    return matches.map((m) => {
+      const sample = sampleProps.has(m.property_id) || sampleReqs.has(m.requirement_id);
+      const next = reviewed.has(m.id) ? { ...m, is_reviewed: true } : m;
+      return sample ? { ...next, is_sample: true } : next;
+    });
+  }, [matches, reviewed, data.properties, data.requirements]);
 
   const addDeal = useCallback<StoreValue["addDeal"]>((input) => {
     const nowIso = new Date().toISOString();
@@ -1834,7 +1820,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
     setData((d) => ({
       ...d,
-      deals: [{ ...deal, number: Math.max(number, nextDealNumber(d.deals)) }, ...d.deals],
+      deals: [
+        {
+          ...deal,
+          number: Math.max(number, nextDealNumber(d.deals)),
+          // Una operación sobre una propiedad o un contacto de ejemplo también es de ejemplo.
+          ...([d.properties.find((p) => p.id === input.property_id), d.contacts.find((c) => c.id === input.client_contact_id)].some(isSample)
+            ? { is_sample: true }
+            : {}),
+        },
+        ...d.deals,
+      ],
       activities: [
         {
           id: uid("a"),
@@ -1863,6 +1859,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const removeDeal = useCallback<StoreValue["removeDeal"]>((id) => {
     setData((d) => ({ ...d, deals: d.deals.filter((x) => x.id !== id) }));
+  }, []);
+
+  /** "Usar mis datos reales": saca los ejemplos y lo que depende de ellos. La demo siempre los tiene. */
+  const hideSamples = useCallback(() => {
+    if (storageKeyRef.current === DEMO_STORAGE_KEY) return;
+    setData((d) => stripSamples(d));
+  }, []);
+
+  /** "Mostrar ejemplos otra vez": vuelve a agregar la semilla, sin duplicar. */
+  const showSamples = useCallback(() => {
+    setData((d) => restoreSamples(d, actorRef.current));
   }, []);
 
   const reset = useCallback(() => {
@@ -1935,6 +1942,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       reset,
       persistFailed,
       sessionLoading,
+      isDemo: storageKey === DEMO_STORAGE_KEY,
+      hideSamples,
+      showSamples,
     };
   }, [
     data,
@@ -1985,6 +1995,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeDeal,
     reset,
     persistFailed,
+    storageKey,
+    hideSamples,
+    showSamples,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

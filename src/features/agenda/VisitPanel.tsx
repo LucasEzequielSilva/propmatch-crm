@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { CheckIcon, ClockIcon, EditIcon, EventTypeIcon, MapPinIcon, PhoneIcon, WhatsAppIcon } from "@/components/ui/icons";
@@ -194,7 +195,7 @@ export function VisitPanel({
           </span>
           <div className="flex-1 min-w-0">
             <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-              {item.title}
+              {item.title} <SampleBadge record={item.event} />
             </p>
             <p className="text-xs flex items-center gap-1.5 flex-wrap mt-0.5" style={{ color: "#7C6A99" }}>
               {TYPE_LABEL[item.type]}

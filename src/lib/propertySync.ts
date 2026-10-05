@@ -77,8 +77,12 @@ export const STATUS_FROM_APP: Record<string, PropertyStatus> = {
   deleted: "pausada",
 };
 
-/** Única condición real para poder publicar: la app solo tiene precio en USD. */
-export function canPublishToApp(input: { currency: CurrencyCode }): boolean {
+/**
+ * Condiciones para publicar en la app: precio en USD (la app no tiene otro) y
+ * que NO sea un dato de ejemplo (`is_sample`): esos nunca salen del navegador.
+ */
+export function canPublishToApp(input: { currency: CurrencyCode; is_sample?: boolean }): boolean {
+  if (input.is_sample) return false;
   return input.currency === "USD";
 }
 

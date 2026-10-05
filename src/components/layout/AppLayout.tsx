@@ -3,6 +3,7 @@ import { useStore } from "@/data/store";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { ProppiPanel } from "@/features/proppi/ProppiPanel";
+import { SampleBanner } from "./SampleBanner";
 
 /**
  * Marco de la aplicación: sidebar fijo + área de contenido.
@@ -33,6 +34,7 @@ export function AppLayout() {
             último que cargaste se pierde al recargar la página.
           </div>
         )}
+        <SampleBanner />
         <div key={pathname} className="pm-enter flex-1 flex flex-col overflow-hidden min-w-0">
           <Outlet />
         </div>

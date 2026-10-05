@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -319,7 +320,7 @@ function ContactRow({
           </div>
           <div className="min-w-0">
             <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-              {contact.full_name}
+              {contact.full_name} <SampleBadge record={contact} />
             </p>
             <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
               {requirement?.zones[0] ?? contact.email ?? "—"}
@@ -488,7 +489,7 @@ function TopMatchesPanel({
                     {initials(row.contact.full_name)}
                   </div>
                   <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                    {row.contact.full_name}
+                    {row.contact.full_name} <SampleBadge record={row.contact} />
                   </p>
                 </div>
                 <p className="text-xs" style={{ color: "#7458C4" }}>
@@ -573,7 +574,7 @@ function ContactCardMobile({ row, onOpen }: { row: Row; onOpen: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-            {contact.full_name}
+            {contact.full_name} <SampleBadge record={contact} />
           </p>
           <span
             className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0"

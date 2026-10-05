@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { EventTypeIcon } from "@/components/ui/icons";
 import {
   STATUS_META,
@@ -287,6 +288,7 @@ function GridBlock({
         >
           {item.title}
         </span>
+        {!short && item.event?.is_sample && <SampleBadge record={item.event} />}
         {!short && item.status && (
           <span className="mt-auto pt-0.5">
             <StatusChip item={item} size="xs" />
@@ -379,6 +381,7 @@ export function MonthGrid({
                       <span className="truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                         {i.title}
                       </span>
+                      <SampleBadge record={i.event} />
                     </button>
                   );
                 })}
@@ -498,6 +501,7 @@ export function ListView({
                               {i.title}
                             </span>
                             <SourceBadge item={i} />
+                            <SampleBadge record={i.event} />
                           </span>
                           <span className="block text-xs truncate" style={{ color: "#7C6A99" }}>
                             {[TYPE_LABEL[i.type], prop, who && !i.title.includes(who) ? who : null].filter(Boolean).join(" · ")}

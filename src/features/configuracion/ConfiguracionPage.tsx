@@ -5,6 +5,8 @@ import { useStore, type AgencyInput, type ProfileInput } from "@/data/store";
 import { avatarGradient, initials } from "@/lib/format";
 import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
 import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
+import { SampleDataCard } from "./SampleDataCard";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 
 /**
  * Configuración.
@@ -66,7 +68,7 @@ export default function ConfiguracionPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                      {p.full_name}
+                      {p.full_name} <SampleBadge record={p} />
                       {p.id === profile.id && (
                         <span className="ml-1.5 text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
                           (vos)
@@ -92,6 +94,7 @@ export default function ConfiguracionPage() {
           </Card>
 
           <ChannelsSettings />
+          <SampleDataCard onDone={setToast} />
 
           <ResetCard onReset={reset} />
 
@@ -249,7 +252,7 @@ function ResetCard({ onReset }: { onReset: () => void }) {
 
   return (
     <Card>
-      <SectionHeader inCard title="Datos de ejemplo" subtitle="Solo afecta a este navegador" />
+      <SectionHeader inCard title="Restablecer este navegador" subtitle="Solo afecta a este navegador" />
       <div className="p-5">
         <p className="text-sm" style={{ color: "#4C3A6B" }}>
           Mientras el CRM no tenga backend, todo lo que cargás se guarda en este navegador. Volver a los datos

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useStore } from "@/data/store";
 import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSync";
 import type { Property, PropertyPublication, PublicationChannel, PublicationStatus } from "@/types/db";
+import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
 
 export interface ChannelInfo {
   channel: PublicationChannel;
@@ -69,7 +70,7 @@ export function usePublications() {
   }, [agency.id]);
 
   /** Se guarda en la base solo si hay tabla y la propiedad ya existe allá. */
-  const isPersistent = useCallback((p: Property) => remote !== null && !!p.app_property_id, [remote]);
+  const isPersistent = useCallback((p: Property) => remote !== null && !!p.app_property_id && !isSample(p), [remote]);
 
   const channelsOf = useCallback(
     (p: Property): ChannelState[] =>
@@ -104,6 +105,11 @@ export function usePublications() {
   const queue = useCallback(
     async (p: Property, channels: PublicationChannel[]) => {
       if (channels.length === 0) return;
+      // Seguridad: una propiedad de ejemplo no se publica en ningún portal (ni en cola local).
+      if (isSample(p)) {
+        setError(SAMPLE_PUBLISH_BLOCKED);
+        return;
+      }
       if (!isPersistent(p)) {
         setLocal((prev) => ({
           ...prev,

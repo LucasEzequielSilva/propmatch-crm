@@ -23,6 +23,8 @@ import { MeliLocationPicker, type MeliLocationValue } from "./MeliLocationPicker
 import { toMeliListing, useMeliPublish, type MeliAction } from "./useMeliPublish";
 import type { ChannelState } from "./usePublications";
 import type { useMeliConnection } from "./useIntegrations";
+import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
+import { SampleNotice } from "@/components/ui/SampleBadge";
 
 type MeliConnection = ReturnType<typeof useMeliConnection>;
 
@@ -120,7 +122,9 @@ export function MeliPublishPanel({
   const categoryId = categoryFor(property.type, property.operation);
   const required = categoryId ? MELI_REQUIRED[categoryId] ?? [] : [];
 
-  const synced = !!property.app_property_id;
+  // Seguridad: una propiedad de ejemplo nunca llega a Mercado Libre.
+  const sample = isSample(property);
+  const synced = !!property.app_property_id && !sample;
   const status = channel.status;
   // Con error, el aviso puede haber quedado cerrado (p. ej. sin cupo): se ofrece publicar de nuevo
   // y el servidor decide si actualiza o crea uno nuevo según el estado real en Mercado Libre.
@@ -128,7 +132,7 @@ export function MeliPublishPanel({
 
   const act = useCallback(
     async (action: MeliAction) => {
-      if (!property.app_property_id) return;
+      if (!property.app_property_id || sample) return;
       if (action === "close" && !window.confirm("¿Finalizar el aviso en Mercado Libre? No se puede reactivar: habría que publicarlo de nuevo.")) return;
       setMessage(null);
       setWarnings([]);
@@ -157,7 +161,7 @@ export function MeliPublishPanel({
   const primary = { background: "#7C3AED", color: "white", fontWeight: 700 };
   const secondary = { background: "white", color: "#5B21B6", border: "1px solid #DDD6FE", fontWeight: 700 };
   const danger = { background: "white", color: "#BE123C", border: "1px solid #FECDD3", fontWeight: 700 };
-  const canPublish = meli.connected && synced && isPublishable(localIssues) && !busy;
+  const canPublish = meli.connected && synced && !sample && isPublishable(localIssues) && !busy;
 
   return (
     <Card>
@@ -191,7 +195,8 @@ export function MeliPublishPanel({
             <Link to="/publicador#plataformas" className="underline" style={{ fontWeight: 700 }}>Plataformas</Link>.
           </p>
         )}
-        {!synced && (
+        {sample && <SampleNotice>{SAMPLE_PUBLISH_BLOCKED} en Mercado Libre.</SampleNotice>}
+        {!synced && !sample && (
           <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
             Esta propiedad todavía no está sincronizada con la app, así que no hay fotos con URL pública ni dónde guardar
             la publicación. Hoy solo se sincronizan las propiedades con precio en USD.

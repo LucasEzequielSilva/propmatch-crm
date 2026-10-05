@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { isSample } from "@/lib/samples";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -54,6 +56,7 @@ export default function ContactoDetallePage() {
     properties,
     createOpportunityFromMatch,
     respondOffer,
+    appOffers,
     respondSwipe,
     currentUserId,
   } = useStore();
@@ -68,8 +71,9 @@ export default function ContactoDetallePage() {
     setRespondingId(activityId);
     setRespondError(null);
     const error = await respondOffer(appOfferId, action);
+    const sample = isSample(appOffers.find((o) => o.app_offer_id === appOfferId));
     if (error) setRespondError(error);
-    else setToast(action === "accept" ? "Oferta aceptada." : "Oferta rechazada.");
+    else setToast(`${action === "accept" ? "Oferta aceptada." : "Oferta rechazada."}${sample ? " Oferta de ejemplo: no se envía a la app." : ""}`);
     setRespondingId(null);
     setTimeout(() => setToast(null), 3500);
   }
@@ -206,6 +210,7 @@ export default function ContactoDetallePage() {
                 <h2 className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
                   {contact.full_name}
                 </h2>
+                <SampleBadge record={contact} size="sm" />
                 <Badge bg={statusStyle.bg} text={statusStyle.text} border={statusStyle.border}>
                   {CONTACT_STATUS_LABEL[contact.status]}
                 </Badge>
@@ -637,7 +642,8 @@ export default function ContactoDetallePage() {
                           </div>
                         )}
                         {a.app_offer_id && (
-                          <div className="mt-2">
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <SampleBadge record={a} />
                             {a.offer_status === "accepted" ? (
                               <span className="text-xs px-2.5 py-1 rounded-full inline-block" style={{ background: "#F0FDF4", color: "#15803D", fontWeight: 600 }}>
                                 Aceptaste esta oferta

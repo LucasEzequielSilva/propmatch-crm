@@ -70,6 +70,8 @@ export interface Profile {
   role: UserRole;
   is_active: boolean;
   created_at: string;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export interface Contact {
@@ -88,6 +90,8 @@ export interface Contact {
   updated_at: string;
   /** uuid del usuario real en la app, si este contacto vino de un lead real (`source: "consumer_app"`). */
   app_user_id?: string | null;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export interface ContactRequirement {
@@ -110,6 +114,8 @@ export interface ContactRequirement {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export type PropertyLayout = "frente" | "contrafrente" | "lateral" | "interno";
@@ -190,6 +196,12 @@ export interface Property extends PropertyCrmDetails {
   sync_status?: "not_publishable" | "synced" | "syncing" | "error";
   /** La agencia tiene las llaves de la propiedad. Sin definir = no se cargó. */
   keys_custody?: boolean;
+  /**
+   * Dato de ejemplo (semilla para conocer PropMatch). Solo vive en el navegador:
+   * nunca se sincroniza con la app, ni se publica, ni se manda a nadie. Editarlo
+   * no lo vuelve real. Ver src/lib/samples.ts.
+   */
+  is_sample?: boolean;
 }
 
 export interface PropertyPhoto {
@@ -229,6 +241,8 @@ export interface Match {
   is_reviewed: boolean;
   is_dismissed: boolean;
   created_at: string;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export interface Opportunity {
@@ -247,6 +261,8 @@ export interface Opportunity {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export interface Activity {
@@ -267,6 +283,8 @@ export interface Activity {
   /** uuid del swipe real en la app, solo si esta actividad es "Le interesó tu propiedad en la app". */
   app_swipe_id?: string | null;
   swipe_status?: "pending" | "accepted" | "rejected" | null;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 export interface CalendarEvent {
@@ -288,6 +306,8 @@ export interface CalendarEvent {
   feedback?: VisitFeedback | null;
   /** Checklist manual de coordinación (ISO de cuándo se tildó). */
   checklist?: VisitChecklist;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 /* ── Agenda: estado y feedback de visitas ─────────────────────────────────── */
@@ -320,6 +340,8 @@ export interface Task {
   due_date: string | null;
   contact_id: string | null;
   created_at: string;
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 /* ── Vistas compuestas que usan las pantallas ─────────────────────────────── */
@@ -357,6 +379,11 @@ export interface AppOffer {
   amount_usd: number;
   status: "pending" | "accepted" | "rejected";
   created_at: string;
+  /**
+   * Oferta de ejemplo: NO existe en la app (su `app_offer_id` es inventado).
+   * Aceptarla o rechazarla se resuelve solo en el navegador (store.respondOffer).
+   */
+  is_sample?: boolean;
 }
 
 /* ── Operaciones (expediente de una venta o un alquiler) ──────────────────── */
@@ -440,6 +467,8 @@ export interface Deal {
   event_ids: string[];
   /** Historial: solo se agrega (`deal_events`). */
   events: DealEvent[];
+  /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
+  is_sample?: boolean;
 }
 
 /** Etapas de `deals.stage` que usa el CRM hoy (sin firma electrónica). */

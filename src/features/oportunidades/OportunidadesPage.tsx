@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -354,7 +355,7 @@ function LostSection({
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                  {contactName}
+                  {contactName} <SampleBadge record={opp} />
                 </p>
                 <p className="text-xs truncate mt-0.5" style={{ color: "#7C6A99" }}>
                   {propertyTitle}
@@ -599,7 +600,7 @@ function OpportunityCard({
                 onOpenContact();
               }}
             >
-              {contactName}
+              {contactName} <SampleBadge record={opp} />
             </p>
             <p className="text-xs truncate mt-0.5" style={{ color: "#7458C4" }}>
               {propertyTitle}
