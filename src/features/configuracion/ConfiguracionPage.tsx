@@ -3,6 +3,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader } from "@/components/ui/Card";
 import { useStore, type AgencyInput, type ProfileInput } from "@/data/store";
 import { avatarGradient, initials } from "@/lib/format";
+import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
 
 /**
  * Configuración.
@@ -90,6 +91,8 @@ export default function ConfiguracionPage() {
           </Card>
 
           <ResetCard onReset={reset} />
+
+          <ProppiSettingsCard key={`proppi-${agency.id}`} onSaved={setToast} />
         </div>
       </div>
 
