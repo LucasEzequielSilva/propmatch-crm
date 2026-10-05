@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { EmptyState } from "@/components/ui/states";
@@ -121,6 +122,7 @@ export default function OperacionDetallePage() {
                   {property ? ` · ${PROPERTY_TYPE_LABEL[property.type]}` : ""}
                 </Pill>
                 <Pill tone={statusTone}>{statusText}</Pill>
+                <SampleBadge record={deal} size="sm" />
               </div>
               <h2 className="text-lg md:text-xl text-ink font-extrabold mt-2 break-words">{property?.title ?? "Sin propiedad"}</h2>
               <p className="text-xs text-ink-soft mt-1">

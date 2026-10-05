@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -264,7 +265,7 @@ export default function PropiedadDetallePage() {
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="min-w-0">
                     <h2 className="text-xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-                      {property.title}
+                      {property.title} <SampleBadge record={property} size="sm" />
                     </h2>
                     <div className="flex items-center gap-1.5 mt-1">
                       <MapPinIcon size={13} />
@@ -566,7 +567,7 @@ export default function PropiedadDetallePage() {
                             className="text-sm truncate block text-left hover:underline"
                             style={{ color: "#1F0A3C", fontWeight: 700 }}
                           >
-                            {offerContact?.full_name ?? "Sin contacto"}
+                            {offerContact?.full_name ?? "Sin contacto"} <SampleBadge record={offer} />
                           </button>
                           <p className="text-xs" style={{ color: "#7458C4" }}>
                             {money(offer.amount_usd, "USD")}

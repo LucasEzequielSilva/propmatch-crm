@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card } from "@/components/ui/Card";
@@ -130,7 +131,7 @@ function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase" style={{ color: "#7458C4", fontWeight: 700, letterSpacing: "0.08em" }}>
-            {dealNumberLabel(deal.number)} · {deal.kind === "venta" ? "Venta" : "Alquiler"}
+            {dealNumberLabel(deal.number)} · {deal.kind === "venta" ? "Venta" : "Alquiler"} <SampleBadge record={deal} />
           </p>
           <p className="text-sm mt-0.5 truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
             {property?.title ?? "Sin propiedad"}

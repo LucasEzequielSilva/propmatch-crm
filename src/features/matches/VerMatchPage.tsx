@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate, useParams } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -112,7 +113,7 @@ export default function VerMatchPage() {
                   {state.label}
                 </Badge>
                 <p className="text-2xl tracking-tight mt-2" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-                  {matchQuality(match.score)}
+                  {matchQuality(match.score)} <SampleBadge record={match} size="sm" className="bg-white" />
                 </p>
                 <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
                   {contact.full_name} y {property.title} coinciden en {match.reasons.length}{" "}

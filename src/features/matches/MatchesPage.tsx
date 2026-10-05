@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { FilterDropdown, FilterTabs } from "@/components/ui/FilterTabs";
@@ -349,7 +350,7 @@ function MatchCard({
               {initials(contact.full_name)}
             </div>
             <p className="text-sm leading-tight" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-              {contact.full_name}
+              {contact.full_name} <SampleBadge record={match} />
             </p>
             <p className="text-xs mt-1" style={{ color: "#7458C4" }}>
               Busca: {requirement.property_types.map((t) => PROPERTY_TYPE_LABEL[t]).join(", ")}
@@ -557,7 +558,7 @@ function WhyMatchPanel({ item, onCreateOpp }: { item: HydratedMatch; onCreateOpp
           <div className="flex justify-between mt-2.5 gap-2">
             <div className="min-w-0">
               <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                {contact.full_name}
+                {contact.full_name} <SampleBadge record={match} />
               </p>
               <p className="text-xs" style={{ color: "#7458C4", fontSize: "10px" }}>
                 Cliente

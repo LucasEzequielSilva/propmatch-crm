@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { isSample } from "@/lib/samples";
+import { SampleBadge } from "@/components/ui/SampleBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, SectionHeader, Badge } from "@/components/ui/Card";
@@ -21,13 +23,14 @@ export default function OfertasPage() {
   async function handleRespond(appOfferId: string, action: "accept" | "reject") {
     setRespondingId(appOfferId);
     const error = await respondOffer(appOfferId, action);
+    const sample = isSample(appOffers.find((o) => o.app_offer_id === appOfferId));
     setRespondingId(null);
     if (error) {
       setToast({ kind: "error", text: error });
     } else {
       setToast({
         kind: "ok",
-        text: action === "accept" ? "Oferta aceptada." : "Oferta rechazada.",
+        text: `${action === "accept" ? "Oferta aceptada." : "Oferta rechazada."}${sample ? " Oferta de ejemplo: no se envía a la app." : ""}`,
       });
     }
     setTimeout(() => setToast(null), 3500);
@@ -83,7 +86,8 @@ export default function OfertasPage() {
                           onClick={() => navigate(`/contactos/${offer.contact_id}`)}
                         >
                           {contact?.full_name ?? "Sin contacto"}
-                        </p>
+                        </p>{" "}
+                        <SampleBadge record={offer} />
                         <p
                           className="text-xs mt-0.5 hover:underline cursor-pointer"
                           style={{ color: "#7458C4" }}

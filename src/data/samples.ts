@@ -122,6 +122,28 @@ export function markLegacySamples<D extends Partial<StoreData>>(d: D): D {
   };
 }
 
+/** Reemplaza cada ejemplo viejo por su versión actual de la semilla (mismo id). */
+function upgradeLegacySamples(d: StoreData, userId: string): StoreData {
+  const fresh = sampleSlices(userId);
+  const swap = <T extends WithId>(rows: T[], seed: T[]) => {
+    const byId = new Map(seed.map((r) => [r.id, r]));
+    return rows.map((r) => (r.is_sample && byId.has(r.id) ? byId.get(r.id)! : r));
+  };
+  const properties = swap(d.properties, fresh.properties);
+  const upgraded = properties.filter((p, i) => p !== d.properties[i] && p.is_sample).map((p) => p.id);
+  return {
+    ...d,
+    contacts: swap(d.contacts, fresh.contacts),
+    requirements: swap(d.requirements, fresh.requirements),
+    properties,
+    photos: { ...d.photos, ...Object.fromEntries(upgraded.map((id) => [id, fresh.photos[id] ?? []])) },
+    opportunities: swap(d.opportunities, fresh.opportunities),
+    activities: swap(d.activities, fresh.activities),
+    events: swap(d.events, fresh.events),
+    tasks: swap(d.tasks, fresh.tasks),
+  };
+}
+
 /* ── Alta ─────────────────────────────────────────────────────────────────── */
 
 /** Agrega solo lo que no está (por id). Lo existente, aunque esté editado, se respeta. */
@@ -190,6 +212,9 @@ function adoptOwnership(d: StoreData, userId: string): StoreData {
  */
 export function adoptSamples(d: StoreData, userId: string, opts: { alwaysVisible?: boolean } = {}): StoreData {
   let next = markLegacySamples(d);
+  // Datos guardados antes de esta versión (p. ej. la demo con la semilla vieja):
+  // los ejemplos viejos se reemplazan por los nuevos, más completos.
+  if (next.samplesVersion === undefined) next = upgradeLegacySamples(next, userId);
   if (next.samplesHidden && !opts.alwaysVisible) return stripSamples(next);
   if (next.samplesVersion !== SAMPLES_VERSION || opts.alwaysVisible) next = restoreSamples(next, userId);
   return adoptOwnership(next, userId);
