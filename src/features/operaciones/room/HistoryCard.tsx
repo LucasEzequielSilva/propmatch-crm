@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isSample } from "@/lib/samples";
 import { DownloadIcon } from "@/components/ui/icons";
 import { datedFilename, downloadCsv } from "@/lib/csv";
 import { EVENT_TYPE_LABEL, dateTime, dealNumberLabel, profileName } from "@/lib/dealRoom";
@@ -25,7 +26,9 @@ export function HistoryCard({ room }: { room: Room }) {
   const shown = showAll ? events : events.slice(0, PAGE);
 
   const exportCsv = () =>
-    downloadCsv(datedFilename(`historial-${dealNumberLabel(deal.number).toLowerCase()}`), [
+    downloadCsv(datedFilename(`historial-${isSample(deal) ? "ejemplo-" : ""}${dealNumberLabel(deal.number).toLowerCase()}`), [
+      // Una operación de ejemplo sale marcada en el CSV: nunca se confunde con una real.
+      ...(isSample(deal) ? [["DATOS DE EJEMPLO: esta operación no es real"]] : []),
       ["Fecha", "Tipo", "Qué pasó", "Detalle", "Quién"],
       ...deal.events.map((e) => [dateTime(e.created_at), EVENT_TYPE_LABEL[e.type], e.title, e.detail ?? "", e.actor_id ? profileName(profiles, e.actor_id) : "—"]),
     ]);

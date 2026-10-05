@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { isSample, sampleCsvCell } from "@/lib/samples";
 import { useNavigate } from "react-router-dom";
 import {
   CartesianGrid,
@@ -205,6 +206,10 @@ export default function ReportesPage() {
     const rows: (string | number | null)[][] = [
       ["Reporte PropMatch", periodLabel],
       ["Generado", new Date().toLocaleString("es-AR")],
+      // Los ejemplos cuentan en las cifras de pantalla: el CSV lo avisa y marca cada fila.
+      ...(properties.some(isSample) || opportunities.some(isSample)
+        ? [["Atención", "Incluye datos de ejemplo (columna Ejemplo). Se ocultan en Configuración › Datos de ejemplo."]]
+        : []),
       [],
       ["Indicador", "Valor"],
       ["Leads nuevos", kpis.leads.length],
@@ -216,11 +221,11 @@ export default function ReportesPage() {
       ["Embudo", "Cantidad"],
       ...funnel.map((f) => [f.label, f.value]),
       [],
-      ["Propiedad", "Matches", "Oportunidades", "Visitas"],
-      ...propertyPerf.map((r) => [r.property.title, r.matchCount, r.opps, r.visits]),
+      ["Propiedad", "Matches", "Oportunidades", "Visitas", "Ejemplo"],
+      ...propertyPerf.map((r) => [r.property.title, r.matchCount, r.opps, r.visits, sampleCsvCell(r.property)]),
       [],
-      ["Agente", "Oportunidades", "Cerradas", "Conversión (%)"],
-      ...team.map((r) => [r.agent.full_name, r.opps, r.conv, r.rate]),
+      ["Agente", "Oportunidades", "Cerradas", "Conversión (%)", "Ejemplo"],
+      ...team.map((r) => [r.agent.full_name, r.opps, r.conv, r.rate, sampleCsvCell(r.agent)]),
       [],
       ["Fecha", "Leads", "Oportunidades", "Cierres"],
       ...series.map((pt) => [pt.date, pt.leads, pt.ops, pt.conv]),
