@@ -15,11 +15,11 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { waitUntil } from "@vercel/functions";
-import { isConfigured, env } from "../_lib/env.js";
-import { getMeliSession } from "../_lib/meli.js";
-import { meliFetch, type MeliItem } from "../_lib/meliItems.js";
-import { supabaseAdmin } from "../_lib/supabaseAdmin.js";
-import { mapMeliItemStatus } from "../../shared/meliListing.js";
+import { isConfigured, env } from "../../env.js";
+import { getMeliSession } from "../../meli.js";
+import { meliFetch, type MeliItem } from "../../meliItems.js";
+import { supabaseAdmin } from "../../supabaseAdmin.js";
+import { mapMeliItemStatus } from "../../../../shared/meliListing.js";
 
 const RESOURCE = /^\/items\/(MLA\d{6,15})$/;
 

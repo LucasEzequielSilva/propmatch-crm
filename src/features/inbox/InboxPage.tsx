@@ -8,8 +8,12 @@ import { summarizeHours, useAutomationRunner } from "./automationEngine";
 import { useAutomationState } from "./automationState";
 import { buildTemplateContext } from "./templates";
 import { ChatView } from "./ChatView";
-import { buildConversations, CHANNEL_META, norm, SOON_CHANNELS, useSeen } from "./conversations";
-import { ConversationList } from "./ConversationList";
+import { buildConversations, norm, useSeen } from "./conversations";
+import { useInboxChannels } from "./channels/useInboxChannels";
+import { SourceFilter } from "./channels/SourceFilter";
+import { UnifiedConversationList } from "./channels/UnifiedConversationList";
+import { ChannelChatView } from "./channels/ChannelChatView";
+import { ChannelProfilePanel } from "./channels/ChannelProfilePanel";
 import { useInboxFeed } from "./inboxFeed";
 import { ProfilePanel } from "./ProfilePanel";
 
@@ -88,11 +92,14 @@ export default function InboxPage() {
     });
   }, [base, tab, query]);
 
+  // Canales externos (WhatsApp / Instagram / Messenger): ver channels/.
+  const ch = useInboxChannels({ appVisible: visible, tab, query, agentId, selectedId });
+
   // En pantallas anchas arranca con la primera conversación abierta; en celular se espera a que elijan.
   useEffect(() => {
-    if (selectedId || visible.length === 0) return;
-    if (window.matchMedia("(min-width: 768px)").matches) setSelectedId(visible[0].id);
-  }, [selectedId, visible]);
+    if (selectedId || ch.firstId === null) return;
+    if (window.matchMedia("(min-width: 768px)").matches) setSelectedId(ch.firstId);
+  }, [selectedId, ch.firstId]);
 
   const selected = all.find((c) => c.id === selectedId) ?? null;
   const crmMatch = useMemo(
@@ -108,8 +115,8 @@ export default function InboxPage() {
   const onSeen = useCallback((iso: string) => selectedMatchId && mark(selectedMatchId, iso), [selectedMatchId, mark]);
 
   const tabs: { value: Tab; label: string }[] = [
-    { value: "todas", label: `Todas ${counts.todas}` },
-    { value: "no_leidas", label: `No leídas ${counts.no_leidas}` },
+    { value: "todas", label: `Todas ${counts.todas + ch.all.length}` },
+    { value: "no_leidas", label: `No leídas ${counts.no_leidas + ch.unread}` },
     { value: "app", label: `App ${counts.app}` },
   ];
 
@@ -123,7 +130,7 @@ export default function InboxPage() {
         subtitle="Respondé a quienes te escriben desde la app, con la ficha del comprador al lado."
       >
         <div className="flex gap-2">
-          <Kpi label="Conversaciones" value={all.length} />
+          <Kpi label="Conversaciones" value={all.length + ch.all.length} />
           <Kpi label="Sin responder" value={unanswered} />
           <Kpi label="Leads activos" value={activeLeads} />
         </div>
@@ -148,20 +155,13 @@ export default function InboxPage() {
           ))}
         </div>
 
-        <ul className="flex flex-wrap gap-2" aria-label="Canales por conectar">
-          {SOON_CHANNELS.map((ch) => (
-            <li
-              key={ch}
-              title="Disponible al conectar tu cuenta"
-              aria-disabled="true"
-              className="text-xs px-3 py-1.5 rounded-full border border-dashed cursor-not-allowed"
-              style={{ borderColor: "#DDD6FE", color: "#6B5A8E", background: "#FDFCFF" }}
-            >
-              {CHANNEL_META[ch].label} · <span style={{ fontWeight: 700 }}>Conectar</span>
-              <span className="sr-only">. Disponible al conectar tu cuenta</span>
-            </li>
-          ))}
-        </ul>
+        <SourceFilter
+          value={ch.source}
+          onChange={ch.setSource}
+          appCount={visible.length}
+          channelConversations={ch.all}
+          channelsConfigured={ch.configured}
+        />
 
         <div className="flex items-center gap-2 ml-auto w-full md:w-auto">
           <button
@@ -217,8 +217,9 @@ export default function InboxPage() {
 
       <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)] grid-cols-1 md:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)_340px]">
         <div className={`${view === "list" ? "block" : "hidden"} md:block ${pane} overflow-y-auto`} style={{ borderColor: "#EDE9FE" }}>
-          <ConversationList
-            items={visible}
+          <UnifiedConversationList
+            appItems={ch.appItems}
+            channelItems={ch.channelItems}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id);
@@ -226,7 +227,7 @@ export default function InboxPage() {
             }}
             loading={feed.loading}
             error={feed.error}
-            hasAny={all.length > 0}
+            hasAny={all.length + ch.all.length > 0}
           />
         </div>
 
@@ -246,6 +247,13 @@ export default function InboxPage() {
               onProfile={() => setView("profile")}
               onSeen={onSeen}
             />
+          ) : ch.selected ? (
+            <ChannelChatView
+              key={ch.selected.id}
+              conversation={ch.selected}
+              onBack={() => setView("list")}
+              onProfile={() => setView("profile")}
+            />
           ) : (
             <div className="h-full flex items-center justify-center p-8 text-center">
               <p className="text-sm" style={{ color: "#7C6A99" }}>
@@ -258,6 +266,8 @@ export default function InboxPage() {
         <div className={`${view === "profile" ? "block" : "hidden"} xl:block min-h-0 overflow-hidden`}>
           {selected ? (
             <ProfilePanel conversation={selected} crmMatch={crmMatch} onBack={() => setView("chat")} />
+          ) : ch.selected ? (
+            <ChannelProfilePanel conversation={ch.selected} onBack={() => setView("chat")} />
           ) : (
             <div className="p-4">
               <Card padded>

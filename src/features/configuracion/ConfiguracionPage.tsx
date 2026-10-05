@@ -4,6 +4,7 @@ import { Card, SectionHeader } from "@/components/ui/Card";
 import { useStore, type AgencyInput, type ProfileInput } from "@/data/store";
 import { avatarGradient, initials } from "@/lib/format";
 import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
+import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
 
 /**
  * Configuración.
@@ -89,6 +90,8 @@ export default function ConfiguracionPage() {
               Invitar agentes y cambiar roles va a estar disponible cuando el CRM tenga backend.
             </p>
           </Card>
+
+          <ChannelsSettings />
 
           <ResetCard onReset={reset} />
 

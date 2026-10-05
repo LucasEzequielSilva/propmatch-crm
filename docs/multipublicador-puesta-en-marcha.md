@@ -16,13 +16,13 @@ Resumen corto:
 
 | Pieza | Archivo | Qué hace |
 |---|---|---|
-| Conectar | `api/meli/connect.ts` | Arma la URL de autorización con `state` y PKCE S256. Guarda `state`, `code_verifier`, agencia y usuario en una cookie HttpOnly cifrada con AES-256-GCM que vence a los 10 minutos. Solo para admins de la agencia. |
-| Callback | `api/meli/callback.ts` | Valida `state` en tiempo constante, canjea el `code` con el `code_verifier`, exige refresh token (scope offline), lee `/users/me` y guarda los tokens **cifrados** en `agency_integrations` con la service role. Rechaza una cuenta de ML ya conectada a otra inmobiliaria. |
-| Estado | `api/meli/status.ts` | Conectada, sin conectar, o `needsReauth`. Nunca lee las columnas de tokens. |
-| Desconectar | `api/meli/disconnect.ts` | Revoca la autorización en ML (mejor esfuerzo) y borra la fila. Solo admins. |
+| Conectar | `api/_lib/routes/meli/connect.ts` | Arma la URL de autorización con `state` y PKCE S256. Guarda `state`, `code_verifier`, agencia y usuario en una cookie HttpOnly cifrada con AES-256-GCM que vence a los 10 minutos. Solo para admins de la agencia. |
+| Callback | `api/_lib/routes/meli/callback.ts` | Valida `state` en tiempo constante, canjea el `code` con el `code_verifier`, exige refresh token (scope offline), lee `/users/me` y guarda los tokens **cifrados** en `agency_integrations` con la service role. Rechaza una cuenta de ML ya conectada a otra inmobiliaria. |
+| Estado | `api/_lib/routes/meli/status.ts` | Conectada, sin conectar, o `needsReauth`. Nunca lee las columnas de tokens. |
+| Desconectar | `api/_lib/routes/meli/disconnect.ts` | Revoca la autorización en ML (mejor esfuerzo) y borra la fila. Solo admins. |
 | Tokens | `api/_lib/meli.ts` | Refresca 5 minutos antes de que venza. El refresh token es de un solo uso, así que la escritura es condicional al token leído y, si falla, relee la fila por si otra request ya lo renovó. Solo marca `needs_reauth` si ML rechaza la credencial (400 o 401). |
-| Publicar | `api/meli/publish.ts` | Acciones `check`, `publish`, `update`, `pause`, `activate`, `close` (solo admins) y `sync`. Ver 1.2. |
-| Notificaciones | `api/meli/notifications.ts` | Callback del topic `items`. Responde 200 al instante y sincroniza en segundo plano con `waitUntil`. |
+| Publicar | `api/_lib/routes/meli/publish.ts` | Acciones `check`, `publish`, `update`, `pause`, `activate`, `close` (solo admins) y `sync`. Ver 1.2. |
+| Notificaciones | `api/_lib/routes/meli/notifications.ts` | Callback del topic `items`. Responde 200 al instante y sincroniza en segundo plano con `waitUntil`. |
 | Mapeo y validación | `shared/meliListing.ts` | Funciones puras con la fuente de cada regla. Tests: `npm run test:meli`. |
 | Pantalla | `src/features/propiedades/MeliPublishPanel.tsx` | En `/publicador/:id`: qué falta, ubicación de ML, tipo de publicación, acciones, estado, error y link al aviso. |
 
