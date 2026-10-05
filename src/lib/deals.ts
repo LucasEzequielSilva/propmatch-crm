@@ -163,17 +163,17 @@ export const DEAL_DOCS: Record<DealKind, ChecklistGroup[]> = {
 
 export function stepProgress(deal: Deal): { done: number; total: number } {
   const steps = DEAL_STEPS[deal.kind];
-  return { done: steps.filter((s) => deal.steps[s.id]).length, total: steps.length };
+  return { done: steps.filter((s) => deal.steps[s.id]?.done).length, total: steps.length };
 }
 
 export function docProgress(deal: Deal): { done: number; total: number } {
   const items = DEAL_DOCS[deal.kind].flatMap((g) => g.items);
-  return { done: items.filter((i) => deal.docs[i.id]).length, total: items.length };
+  return { done: items.filter((i) => deal.docs[i.id]?.done).length, total: items.length };
 }
 
 /** Primer paso pendiente: "qué sigue". */
 export function nextStep(deal: Deal): ChecklistItem | null {
-  return DEAL_STEPS[deal.kind].find((s) => !deal.steps[s.id]) ?? null;
+  return DEAL_STEPS[deal.kind].find((s) => !deal.steps[s.id]?.done) ?? null;
 }
 
 export const emptyParty = (): DealParty => ({

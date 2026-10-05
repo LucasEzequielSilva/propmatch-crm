@@ -12,6 +12,7 @@ import type {
   ContactStatus,
   CurrencyCode,
   Deal,
+  DealEventType,
   EventType,
   Match,
   OperationType,
@@ -25,6 +26,7 @@ import type {
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
 import { isDeadPhotoUrl } from "@/lib/images";
+import { applyDealPatch, dealRoomDefaults, migrateDeals, nextDealNumber } from "@/lib/dealRoom";
 import { supabase } from "@/lib/supabase";
 import {
   canPublishToApp,
@@ -159,7 +161,8 @@ function loadData(): StoreData {
     const parsed = JSON.parse(raw) as Partial<StoreData>;
     // Se completa con la semilla por si el guardado es de una versión anterior.
     const merged = { ...seedData(), ...parsed };
-    merged.deals = merged.deals ?? [];
+    // Deal room: pasos/documentos de boolean a {done, at, by, note}, número PM-0001 e historial.
+    merged.deals = migrateDeals(merged.deals ?? [], (id) => merged.opportunities.find((o) => o.id === id)?.owner_id ?? null);
     merged.syncedAppEventIds = merged.syncedAppEventIds ?? [];
     merged.appOffers = merged.appOffers ?? [];
     // Campos que se sumaron después: los registros guardados no los tienen.
@@ -277,7 +280,12 @@ export interface NewOpportunityInput {
   owner_id: string | null;
 }
 
-export type NewDealInput = Omit<Deal, "id" | "agency_id" | "created_at" | "updated_at">;
+export type NewDealInput = Omit<Deal, "id" | "agency_id" | "created_at" | "updated_at" | DealRoomKeys> &
+  Partial<Pick<Deal, DealRoomKeys>>;
+/** Lo que una acción deja en el historial de la operación. */
+export type DealEventInput = { type: DealEventType; title: string; detail?: string | null };
+/** Campos del deal room que completa el store si la pantalla no los manda. */
+type DealRoomKeys = keyof ReturnType<typeof dealRoomDefaults>;
 
 interface StoreValue extends StoreData {
   agency: Agency;
@@ -357,7 +365,8 @@ interface StoreValue extends StoreData {
   /** Acepta/rechaza un "me interesa" real de la app (actividad con `app_swipe_id`). Devuelve el error a mostrar, o `null` si salió bien. */
   respondSwipe: (activityId: string, action: "accepted" | "rejected") => Promise<string | null>;
   addDeal: (input: NewDealInput) => Deal;
-  updateDeal: (id: string, patch: Partial<Deal>) => void;
+  /** `event` = qué dejar en el historial de la operación (además del cambio de etapa, que se registra solo). */
+  updateDeal: (id: string, patch: Partial<Deal>, event?: DealEventInput) => void;
   removeDeal: (id: string) => void;
   reset: () => void;
   /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
@@ -854,6 +863,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   /** Última versión de las propiedades, para leer `app_property_id` desde acciones con deps `[]`. */
   const propertiesRef = useRef(data.properties);
   propertiesRef.current = data.properties;
+  const dealsRef = useRef(data.deals);
+  dealsRef.current = data.deals;
 
   /** Última versión de los ids de leads ya sincronizados, para el polling de leads reales. */
   const syncedIdsRef = useRef(data.syncedAppEventIds);
@@ -1689,10 +1700,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addDeal = useCallback<StoreValue["addDeal"]>((input) => {
     const nowIso = new Date().toISOString();
-    const deal: Deal = { ...input, id: uid("d"), agency_id: seedAgency.id, created_at: nowIso, updated_at: nowIso };
+    const base = { ...input, id: uid("d"), agency_id: seedAgency.id, created_at: nowIso, updated_at: nowIso };
+    // El número se calcula afuera del setData para poder devolver el deal completo.
+    const number = nextDealNumber(dealsRef.current);
+    const deal: Deal = applyDealPatch(
+      { ...base, ...dealRoomDefaults(input, actorRef.current, number, nowIso) },
+      {},
+      actorRef.current,
+      { type: "created", title: "Operación iniciada" },
+    );
     setData((d) => ({
       ...d,
-      deals: [deal, ...d.deals],
+      deals: [{ ...deal, number: Math.max(number, nextDealNumber(d.deals)) }, ...d.deals],
       activities: [
         {
           id: uid("a"),
@@ -1712,10 +1731,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return deal;
   }, []);
 
-  const updateDeal = useCallback<StoreValue["updateDeal"]>((id, patch) => {
+  const updateDeal = useCallback<StoreValue["updateDeal"]>((id, patch, event) => {
     setData((d) => ({
       ...d,
-      deals: d.deals.map((x) => (x.id === id ? { ...x, ...patch, updated_at: new Date().toISOString() } : x)),
+      deals: d.deals.map((x) => (x.id === id ? applyDealPatch(x, patch, actorRef.current, event) : x)),
     }));
   }, []);
 

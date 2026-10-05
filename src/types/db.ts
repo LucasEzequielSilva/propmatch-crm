@@ -348,12 +348,126 @@ export interface Deal {
   deposit_months: number | null;
   update_rule: string;
   destination: string;
-  /** Ids de pasos y de documentos tildados. */
-  steps: Record<string, boolean>;
-  docs: Record<string, boolean>;
+  /** Estado de cada paso y de cada documento, por id. Antes eran `boolean` (se migran al cargar). */
+  steps: Record<string, DealCheck>;
+  docs: Record<string, DealDocState>;
   notes: string;
   created_at: string;
   updated_at: string;
+  /* ── Deal room (fase 1, localStorage). Misma forma que supabase/drafts/deal_room.sql. ── */
+  /** Correlativo por agencia (`deals.deal_number`). Se muestra como `PM-0007`. */
+  number: number;
+  /** Etapa derivada de los pasos (`deals.stage`). La recalcula el store en cada cambio. */
+  stage: DealStage;
+  stage_since: string;
+  created_by: string | null;
+  /** Agente responsable (`deals.responsible_user_id`) y co-agente opcional. */
+  responsible_id: string | null;
+  co_agent_id: string | null;
+  /** `YYYY-MM-DD`. Cierre estimado (`deals.expected_close_date`). */
+  expected_close_date: string | null;
+  /** `YYYY-MM-DD`. Firma del boleto (venta) o del contrato (alquiler). */
+  signing_date: string | null;
+  /** Contacto del escribano (el nombre sigue en `escribano`). */
+  escribano_phone: string;
+  escribano_email: string;
+  /** Firma en papel por parte (`client`, `owner`, `guarantor`). */
+  signatures: Partial<Record<DealPartyRole, DealSignature>>;
+  payments: DealPayment[];
+  commission: DealCommission;
+  /** Ids de eventos de Agenda creados desde la operación. */
+  event_ids: string[];
+  /** Historial: solo se agrega (`deal_events`). */
+  events: DealEvent[];
+}
+
+/** Etapas de `deals.stage` que usa el CRM hoy (sin firma electrónica). */
+export type DealStage =
+  | "negociacion"
+  | "reserva"
+  | "documentacion"
+  | "contrato"
+  | "firma"
+  | "cierre"
+  | "completada"
+  | "caida";
+
+export type DealPartyRole = "client" | "owner" | "guarantor";
+
+/** Un paso tildado: cuándo y quién. */
+export interface DealCheck {
+  done: boolean;
+  /** ISO. `null` en datos viejos (antes solo se guardaba el tilde). */
+  at: string | null;
+  /** Id del perfil que lo tildó. */
+  by: string | null;
+  note: string | null;
+}
+
+/** `deal_documents.status` sin archivo: en fase 1 no se suben archivos. */
+export type DealDocStatus = "pendiente" | "recibido" | "validado" | "vencido";
+
+export interface DealDocState extends DealCheck {
+  status: DealDocStatus;
+  /** `YYYY-MM-DD` */
+  expires_at: string | null;
+  validated_by: string | null;
+}
+
+export interface DealSignature {
+  signed: boolean;
+  /** `YYYY-MM-DD` en que firmó en papel. */
+  date: string | null;
+  by: string | null;
+  at: string | null;
+}
+
+/** `deal_payments` (registro administrativo, no mueve dinero). */
+export type DealPaymentConcept = "reserva" | "refuerzo" | "anticipo" | "saldo" | "comision";
+
+export interface DealPayment {
+  id: string;
+  concept: DealPaymentConcept;
+  amount: number;
+  currency: CurrencyCode;
+  /** `YYYY-MM-DD` */
+  paid_at: string | null;
+  receipt_text: string;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** `deal_commissions` + `deal_commission_splits`. */
+export interface DealCommission {
+  buyer_mode: "percent" | "fixed";
+  buyer_value: number;
+  seller_mode: "percent" | "fixed";
+  seller_value: number;
+  expenses: number;
+  splits: { user_id: string; share_pct: number }[];
+}
+
+export type DealEventType =
+  | "created"
+  | "stage_changed"
+  | "status_changed"
+  | "step"
+  | "document"
+  | "signature"
+  | "payment"
+  | "calendar"
+  | "note"
+  | "updated";
+
+/** `deal_events`: no se edita ni se borra. */
+export interface DealEvent {
+  id: string;
+  type: DealEventType;
+  title: string;
+  detail: string | null;
+  actor_id: string | null;
+  created_at: string;
 }
 
 export type PublicationChannel =
