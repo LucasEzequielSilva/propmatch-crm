@@ -18,15 +18,19 @@ const STATUS_TEXT: Record<string, string> = {
 
 /**
  * Por qué una propiedad todavía no se puede publicar en el canal (`null` = lista).
- * Hoy el único canal con conector real es Mercado Libre: necesita la propiedad
- * sincronizada con la app (fotos con URL pública), y la app solo toma USD.
+ * Los canales con conector real (Mercado Libre, Facebook, Instagram) necesitan
+ * la propiedad sincronizada con la app (fotos con URL pública), y la app solo toma USD.
  */
 export function publishBlockReason(p: Property, channel: PublicationChannel): string | null {
   if (isSample(p)) return "Es una propiedad de ejemplo: no se publica.";
-  if (channel === "mercadolibre" && !p.app_property_id) {
+  // Mercado Libre, Facebook e Instagram toman las fotos de su URL pública en la app.
+  if ((channel === "mercadolibre" || channel === "facebook" || channel === "instagram") && !p.app_property_id) {
     return p.currency !== "USD"
       ? "Precio en pesos: por ahora solo se publican propiedades en USD."
       : "Todavía no está sincronizada con la app (guardala de nuevo con tu cuenta de la inmobiliaria).";
+  }
+  if ((channel === "facebook" || channel === "instagram") && p.status !== "disponible") {
+    return "No está disponible: solo se publican propiedades disponibles.";
   }
   return null;
 }

@@ -31,6 +31,10 @@ export const metaEnv = {
   messagingConfigId: (import.meta.env.VITE_META_MESSAGING_CONFIG_ID as string | undefined) ?? "",
   /** IG/Messenger: apagado hasta que Meta apruebe los permisos. */
   messagingEnabled: import.meta.env.VITE_META_MESSAGING_ENABLED === "1",
+  /** Configuración de Facebook Login for Business para PUBLICAR (Página + Instagram). */
+  publishConfigId: (import.meta.env.VITE_META_PUBLISH_CONFIG_ID as string | undefined) ?? "",
+  /** Publicar en Facebook/Instagram: apagado hasta que Meta apruebe los permisos. */
+  publishEnabled: import.meta.env.VITE_META_PUBLISH_ENABLED === "1",
 };
 
 let loading: Promise<FbSdk> | null = null;
@@ -162,6 +166,21 @@ export async function launchMessagingLogin(): Promise<string> {
         else reject(new SignupCancelled("login"));
       },
       { config_id: metaEnv.messagingConfigId, response_type: "code", override_default_response_type: true },
+    );
+  });
+}
+
+/** Facebook Login for Business con permisos de publicación (Página + Instagram) → code. */
+export async function launchPublishLogin(): Promise<string> {
+  const FB = await loadFacebookSdk(metaEnv.appId);
+  return new Promise<string>((resolve, reject) => {
+    FB.login(
+      (r) => {
+        const c = r.authResponse?.code;
+        if (c) resolve(c);
+        else reject(new SignupCancelled("login"));
+      },
+      { config_id: metaEnv.publishConfigId, response_type: "code", override_default_response_type: true },
     );
   });
 }

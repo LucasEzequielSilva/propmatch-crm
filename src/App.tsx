@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -30,6 +31,10 @@ import OperacionesPage from "@/features/operaciones/OperacionesPage";
 import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
 import DocumentoPage from "@/features/operaciones/DocumentoPage";
 
+// Web pública de la inmobiliaria: se carga aparte (los visitantes no necesitan el CRM).
+const SitioPage = lazy(() => import("@/features/sitio/SitioPage"));
+const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPage"));
+
 /**
  * Navegación.
  *
@@ -47,6 +52,9 @@ export default function App() {
         <Routes>
           {/* Ficha que recibe el cliente: pública, sin sesión y sin el layout del CRM. */}
           <Route path="/ficha" element={<FichaPage />} />
+          {/* Web pública de la inmobiliaria (canal "web"): sin sesión. */}
+          <Route path="/sitio/:slug" element={<Suspense fallback={null}><SitioPage /></Suspense>} />
+          <Route path="/sitio/:slug/p/:id" element={<Suspense fallback={null}><SitioPropiedadPage /></Suspense>} />
 
           <Route path="/login" element={<PublicOnly />}>
             <Route index element={<LoginPage />} />

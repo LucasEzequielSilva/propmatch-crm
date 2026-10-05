@@ -100,7 +100,7 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     steps: [
       "Confirmá que sos administrador de la página y que figura en tu Meta Business.",
       "La conexión es la misma que la de Instagram: un solo login con Facebook.",
-      CONNECT_SOON,
+      "Tocá «Conectar con Facebook», elegí la Página de la inmobiliaria y aceptá los permisos.",
     ],
     estimatedTime: "5 minutos",
     warning:
@@ -118,19 +118,23 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     steps: [
       "Pasá tu Instagram a cuenta profesional si todavía no lo es (Configuración, Cuenta).",
       "Vinculá ese Instagram con la página de Facebook de la inmobiliaria.",
-      CONNECT_SOON,
+      "Tocá «Conectar con Facebook» (en esta tarjeta o en la de Facebook) y elegí esa Página: el Instagram vinculado se conecta solo.",
     ],
     estimatedTime: "5 minutos",
     warning:
-      "Se publica en el feed de tu Instagram (hasta 10 fotos por carrusel). No es un aviso clasificado.",
+      "Se publica en el feed de tu Instagram (hasta 10 fotos por carrusel, en JPEG). Instagram no permite borrar por API: se borra desde la app.",
     verified: true,
   },
   web: {
-    tagline: "Tu catálogo se publica solo en tu sitio web.",
+    tagline: "Tu catálogo se publica solo en tu web de PropMatch.",
     difficulty: "facil",
     recommendation: null,
     needs: ["Elegir qué propiedades se muestran."],
-    steps: ["Es un canal propio: no depende de ningún portal."],
+    steps: [
+      "Es un canal propio: no depende de ningún portal.",
+      "Aparecen las propiedades disponibles y sincronizadas; podés ocultar cualquiera desde su pantalla de publicación.",
+      "Compartí el link o insertalo en tu sitio con el código que te damos.",
+    ],
     estimatedTime: null,
     warning: null,
     verified: true,

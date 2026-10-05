@@ -12,8 +12,12 @@ Tipos: Carrusel (2–10), Foto única, Story (imagen o video, 9:16) y Reel (vide
 - Real: subir fotos/videos propios (IndexedDB), editor no destructivo, vista previa (Feed/Perfil/Story/Reel),
   texto con plantillas, recordatorio (Agenda + campana + `.ics` + aviso opcional del navegador), descarga de
   archivos listos, «Marcar como publicada», lista, duplicar, reprogramar, eliminar.
-- Deshabilitado: «Publicar en Instagram» por API (`INSTAGRAM_CONNECTED = false` en `connection.ts`).
-  PropMatch no tiene servidor que publique a la hora indicada: la fecha crea un recordatorio, no una publicación.
+- «Publicar ahora» por la API oficial (`ApiPublishCard.tsx`): foto, carrusel y story de imagen. Se habilita con la
+  conexión de Meta del multipublicador (`connection.ts` → `useMetaConnection`) y `VITE_META_PUBLISH_ENABLED=1`; sin
+  eso dice «Requiere aprobación de Meta». Hornea las ediciones a JPEG, las sube a `property-photos/<agency_id>/instagram/`
+  (Meta necesita una URL pública) y llama a `/api/meta/ig-create` + `/api/meta/ig-publish`.
+- No por API: Reels y stories de video (el bucket de la app solo acepta imágenes de hasta 5 MB) ni programar:
+  PropMatch no tiene cola en el servidor, la fecha crea un recordatorio. Ver docs/meta-publicaciones-y-web.md.
 
 ## Persistencia
 

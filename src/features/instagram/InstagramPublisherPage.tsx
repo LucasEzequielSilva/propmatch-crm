@@ -15,7 +15,7 @@ import { getFormat, IG_FORMATS, IG_LIMITS, type IgFormatId } from "./imageSpecs"
 import { PhoneMockup, type PreviewTab } from "./PhoneMockup";
 import { PhotoPanel, type IgPhoto } from "./PhotoPanel";
 import { useImageInfos } from "./useImageInfos";
-import { INSTAGRAM_CONNECTED } from "./connection";
+import { useInstagramConnection } from "./connection";
 
 
 interface EditorState {
@@ -59,6 +59,7 @@ function Editor({ property }: { property: Property }) {
   const navigate = useNavigate();
   const { photos: photoMap, agency } = useStore();
   const { channelsOf, queue } = usePublications();
+  const igConn = useInstagramConnection();
   const urls = photoMap[property.id] ?? [];
 
   const [s, setS] = useState<EditorState>(() => initialState(property, urls, agency, true));
@@ -196,7 +197,13 @@ function Editor({ property }: { property: Property }) {
   const alreadyQueued = igChannel?.status === "pending" || queued;
 
   const checklist: { ok: boolean; label: string; detail: string }[] = [
-    { ok: INSTAGRAM_CONNECTED, label: "Cuenta profesional de Instagram conectada", detail: "Todavía no hay conexión con Meta (cuenta profesional vinculada a una Página de Facebook)." },
+    {
+      ok: igConn.hasInstagram,
+      label: "Cuenta profesional de Instagram conectada",
+      detail: igConn.approvalPending
+        ? "Publicar por API requiere aprobación de Meta. Mientras tanto, descargá las fotos y subilas a mano."
+        : "Conectá tu Página de Facebook (con su Instagram profesional vinculado) en el multipublicador. Para publicar ya, abrí el Estudio.",
+    },
     { ok: included.length >= 1, label: "Al menos una foto", detail: "Elegí una o más fotos." },
     {
       ok: included.length <= IG_LIMITS.carouselMax,

@@ -3,6 +3,9 @@
   "functions": {
     "api/meli.ts": {
       "maxDuration": 60
+    },
+    "api/meta.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -21,6 +24,32 @@
     {
       "source": "/api/meta/:action",
       "destination": "/api/meta?action=:action"
+    },
+    {
+      "source": "/api/web/:action",
+      "destination": "/api/web?action=:action"
+    },
+    {
+      "source": "/sitio/:slug/p/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|Embedly|Iframely|vkShare).*"
+        }
+      ],
+      "destination": "/api/web?action=og&slug=:slug&id=:id"
+    },
+    {
+      "source": "/sitio/:slug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|Embedly|Iframely|vkShare).*"
+        }
+      ],
+      "destination": "/api/web?action=og&slug=:slug"
     },
     {
       "source": "/api/(.*)",
