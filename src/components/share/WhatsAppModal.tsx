@@ -120,6 +120,9 @@ export function WhatsAppModal({
           r.visitsDone || r.visitsUpcoming
             ? `🏠 ${r.visitsDone} ${r.visitsDone === 1 ? "visita hecha" : "visitas hechas"}${r.visitsUpcoming ? ` y ${r.visitsUpcoming} ${r.visitsUpcoming === 1 ? "agendada" : "agendadas"}` : ""}`
             : null,
+          r.veryInterested
+            ? `⭐ ${r.veryInterested} ${r.veryInterested === 1 ? "quedó muy interesado" : "quedaron muy interesados"}`
+            : null,
           auth.tone === "expired" || auth.tone === "warning"
             ? `\n📝 La autorización ${auth.tone === "expired" ? "ya venció" : `vence en ${auth.daysLeft} días`}: ¿coordinamos para renovarla?`
             : null,
