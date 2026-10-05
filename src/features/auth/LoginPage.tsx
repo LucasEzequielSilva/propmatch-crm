@@ -6,10 +6,10 @@ import BrandPanel, { LogoMark } from "./BrandPanel";
  * Acceso: ingresar, crear cuenta y continuar con Google.
  *
  * Auth real contra el mismo Supabase que usa la app. Una cuenta recién creada
- * (o de Google) todavía no pertenece a ninguna inmobiliaria: el cliente no
- * puede crear agencias, así que en vez de un error se muestra una pantalla de
- * espera (`pendingLinkEmail` del store). El alta real de la agencia es una
- * decisión pendiente.
+ * (o de Google) entra aunque no pertenezca a ninguna inmobiliaria, en modo
+ * local (ver `applySession` del store). Si hay que confirmar el email, se
+ * muestran los pasos (`pendingLinkEmail` del store). El alta real de la
+ * agencia es una decisión pendiente.
  */
 
 type Mode = "login" | "signup";
@@ -334,7 +334,7 @@ function PendingLink({
         Cuenta creada
       </h2>
       <p className="text-sm mt-2 leading-relaxed" style={{ color: "#7C6A99" }}>
-        Falta vincularla a tu inmobiliaria. Te avisamos cuando esté lista.
+        Confirmá tu email y ya podés ingresar.
       </p>
 
       <ul className="mt-6 space-y-3 text-left">
@@ -350,14 +350,14 @@ function PendingLink({
           />
         )}
         <Step
-          title="Vinculamos tu inmobiliaria"
+          title="Ingresá"
           text={
             email ? (
               <>
-                Cuando esté lista vas a poder ingresar con <strong style={{ color: "#1F0A3C" }}>{email}</strong>.
+                Volvé al inicio y entrá con <strong style={{ color: "#1F0A3C" }}>{email}</strong>.
               </>
             ) : (
-              "Cuando esté lista vas a poder ingresar con tu cuenta."
+              "Volvé al inicio y entrá con tu cuenta."
             )
           }
         />

@@ -368,6 +368,10 @@ const StoreContext = createContext<StoreValue | null>(null);
 
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
+/** `agency.id` de una cuenta sin inmobiliaria: no existe en Supabase, así que nada lo consulta allá. */
+export const UNLINKED_AGENCY_PREFIX = "local-";
+export const isLinkedAgencyId = (id: string) => !id.startsWith(UNLINKED_AGENCY_PREFIX) && id !== "ag-1";
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<StoreData>(loadData);
   /** `true` si el último guardado falló (cuota llena, storage bloqueado). */
@@ -395,12 +399,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Sesión: auth real de Supabase (mismo proyecto que la app), con el agente
-   * atado a `agency_members`. Sin membresía en ninguna agencia, no hay CRM
-   * para esa cuenta — el login existe para eso, no solo para el flujo.
+   * atado a `agency_members`. Sin membresía la cuenta entra igual, con una
+   * agencia local que no sincroniza con la app hasta que la vinculen.
    */
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
-  /** Cuenta válida pero sin inmobiliaria: el login muestra una pantalla de espera, no un error. */
+  /** Cuenta creada que todavía tiene que confirmar el email: el login muestra los pasos que faltan. */
   const [pendingLinkEmail, setPendingLinkEmail] = useState<string | null>(null);
   const [agencyContext, setAgencyContext] = useState<AppPropertyContext | null>(null);
   const agencyContextRef = useRef<AppPropertyContext | null>(null);
@@ -428,25 +432,35 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       | { id: string; name: string; owner_user_id: string | null }
       | null;
 
-    if (!membership || !agency?.owner_user_id) {
-      await supabase.auth.signOut();
-      setPendingLinkEmail(email);
-      return "Tu cuenta todavía no está vinculada a ninguna inmobiliaria en PropMatch.";
+    if (membership && agency?.owner_user_id) {
+      setAgencyContext({
+        agencyId: agency.id,
+        agencyOwnerUserId: agency.owner_user_id,
+        managedByUserId: userId,
+      });
+
+      // Con una cuenta real, `agency` pasa a ser la agencia verdadera (su uuid es
+      // el que esperan Supabase y todo lo que filtra por `agency.id`) y se quitan
+      // los datos de ejemplo.
+      setData((d) => {
+        const clean = purgeSeed(d);
+        return { ...clean, agency: { ...clean.agency, id: agency.id, name: agency.name } };
+      });
+    } else {
+      // Cuenta sin inmobiliaria: entra igual y trabaja en modo local (sin
+      // sincronizar con la app) hasta que alguien la vincule. La agencia local
+      // toma el nombre que cargó al registrarse.
+      const { data: userData } = await supabase.auth.getUser();
+      const agencyName = (userData.user?.user_metadata?.agency_name as string | undefined)?.trim();
+      setAgencyContext(null);
+      setData((d) => {
+        const clean = purgeSeed(d);
+        return {
+          ...clean,
+          agency: { ...clean.agency, id: `${UNLINKED_AGENCY_PREFIX}${userId}`, name: agencyName || clean.agency.name },
+        };
+      });
     }
-
-    setAgencyContext({
-      agencyId: agency.id,
-      agencyOwnerUserId: agency.owner_user_id,
-      managedByUserId: userId,
-    });
-
-    // Con una cuenta real, `agency` pasa a ser la agencia verdadera (su uuid es
-    // el que esperan Supabase y todo lo que filtra por `agency.id`) y se quitan
-    // los datos de ejemplo.
-    setData((d) => {
-      const clean = purgeSeed(d);
-      return { ...clean, agency: { ...clean.agency, id: agency.id, name: agency.name } };
-    });
 
     setData((d) => {
       if (d.profiles.some((p) => p.id === userId)) return d;
@@ -459,7 +473,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         phone: null,
         avatar_url: null,
         initials: initials(name),
-        role: membership.role === "admin" ? "owner" : "agente",
+        // Sin inmobiliaria, la cuenta es dueña de su agencia local.
+        role: !membership || membership.role === "admin" ? "owner" : "agente",
         is_active: true,
         created_at: new Date().toISOString(),
       };
@@ -777,8 +792,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * Alta con email. `handle_new_user` (trigger de la app) crea la fila en
    * `public.users` leyendo solo `name` de la metadata (`role` es nullable);
    * `agency_name` queda guardado en la metadata del usuario para cuando alguien
-   * vincule la cuenta a una inmobiliaria. El cliente no puede crear agencias
-   * (RLS), así que la cuenta nueva termina en `pendingLinkEmail`.
+   * vincule la cuenta a una inmobiliaria. Con sesión inmediata entra directo;
+   * si Supabase pide confirmar el email, queda en `pendingLinkEmail`.
    */
   const signUp = useCallback<StoreValue["signUp"]>(async (input) => {
     const { data: res, error } = await supabase.auth.signUp({

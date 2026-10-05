@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { fetchAgencyMatches, fetchMessagesForMatches, type MatchRow, type MessageRow } from "@/lib/leadSync";
+import { isLinkedAgencyId } from "@/data/store";
 
 /**
  * Fuente única del Inbox: un fetch de matches + uno de mensajes, compartido
@@ -51,11 +52,17 @@ export async function refreshInboxFeed(): Promise<void> {
 
 function start(agencyId: string) {
   consumers++;
+  // Agencia local (cuenta sin inmobiliaria o demo): no hay chats de la app que traer.
+  if (!isLinkedAgencyId(agencyId)) {
+    activeAgency = null;
+    setState({ ...EMPTY, agencyId, loading: false });
+    return;
+  }
   if (activeAgency !== agencyId) {
     activeAgency = agencyId;
     setState({ ...EMPTY, agencyId });
   }
-  if (consumers === 1) {
+  if (!timer) {
     refreshInboxFeed();
     timer = setInterval(() => {
       if (!document.hidden) refreshInboxFeed();
