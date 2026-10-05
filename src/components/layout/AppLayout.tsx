@@ -35,7 +35,10 @@ export function AppLayout() {
           </div>
         )}
         <SampleBanner />
-        <div key={pathname} className="pm-enter flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* `relative`: los `absolute` de las pantallas se ubican acá adentro (y se
+            recortan con overflow-hidden) en vez de estirar el body; los `fixed`
+            (modales) siguen tomando la ventana entera. */}
+        <div key={pathname} className="pm-enter relative flex-1 flex flex-col overflow-hidden min-w-0">
           <Outlet />
         </div>
       </main>

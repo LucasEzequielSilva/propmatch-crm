@@ -76,6 +76,7 @@ export function MeliLocationPicker({
   const [states, setStates] = useState<Node[]>([]);
   const [cities, setCities] = useState<Node[]>([]);
   const [hoods, setHoods] = useState<Node[]>([]);
+  const [loadingHoods, setLoadingHoods] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stateId = value?.stateId ?? "";
@@ -128,6 +129,7 @@ export function MeliLocationPicker({
     onNeighborhoodCount?.(null);
     if (!cityId) return;
     let off = false;
+    setLoadingHoods(true);
     children(`cities/${encodeURIComponent(cityId)}`, "neighborhoods")
       .then((list) => {
         if (off) return;
@@ -139,7 +141,8 @@ export function MeliLocationPicker({
           if (n) onChange({ stateId, cityId, neighborhoodId: n.id, label: city ? `${n.name}, ${city}` : n.name });
         }
       })
-      .catch(() => !off && setError("No pudimos cargar los barrios."));
+      .catch(() => !off && setError("No pudimos cargar los barrios. Recargá la página."))
+      .finally(() => !off && setLoadingHoods(false));
     return () => {
       off = true;
     };
@@ -182,10 +185,18 @@ export function MeliLocationPicker({
         </select>
       </label>
       <label className="text-xs" style={{ color: "#6B5A8E", fontWeight: 600 }}>
-        Barrio {cityId && hoods.length === 0 ? "(esta ciudad no tiene)" : ""}
+        Barrio{" "}
+        {cityId && loadingHoods ? (
+          "(cargando…)"
+        ) : cityId && hoods.length === 0 ? (
+          "(esta ciudad no tiene)"
+        ) : cityId && !hoodId ? (
+          <span style={{ color: "#BE123C" }}>· obligatorio para esta ciudad</span>
+        ) : null}
         <select
           className={select}
-          style={border}
+          style={cityId && !loadingHoods && hoods.length > 0 && !hoodId ? { ...border, borderColor: "#FDA4AF" } : border}
+          aria-invalid={!!cityId && !loadingHoods && hoods.length > 0 && !hoodId}
           value={hoodId}
           disabled={!cityId || hoods.length === 0}
           onChange={(e) => {
