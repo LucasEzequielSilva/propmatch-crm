@@ -117,7 +117,15 @@ export function MeliPublishPanel({
 
   // Solo URLs públicas (las data: locales no le sirven a Mercado Libre).
   const publicPhotos = useMemo(() => photos.filter((u) => /^https:\/\//.test(u)), [photos]);
-  const localIssues = validateMeliListing(listing, publicPhotos);
+  // Mensaje de ubicación más preciso que el genérico de la validación.
+  const locationMessage = !loc?.cityId
+    ? "Elegí la ciudad de Mercado Libre donde está la propiedad."
+    : hoodCount === null
+      ? "Cargando los barrios de la ciudad…"
+      : "Falta el barrio: en Mercado Libre esta ciudad tiene barrios y hay que elegir uno.";
+  const localIssues = validateMeliListing(listing, publicPhotos).map((i) =>
+    i.field === "location" && !effectiveLocation ? { ...i, message: locationMessage } : i,
+  );
   const issues = serverIssues ?? localIssues;
   const categoryId = categoryFor(property.type, property.operation);
   const required = categoryId ? MELI_REQUIRED[categoryId] ?? [] : [];
