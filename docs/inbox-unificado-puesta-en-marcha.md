@@ -33,6 +33,10 @@ Todo lo de este documento depende de vos: crear cuentas, cargar credenciales y a
        (WhatsApp, Messenger e Instagram usan la MISMA URL; se rutea por `object`)
 ```
 
+- **Funciones de Vercel.** Para no pasar el límite de 12 funciones por deploy del plan Hobby, cada grupo es **una sola función**:
+  - las funciones son `api/meli.ts`, `api/inbox.ts`, `api/whatsapp.ts`, `api/meta.ts` y `api/proppi.ts`;
+  - `vercel.json` reescribe `/api/<grupo>/<acción>` → `/api/<grupo>?action=<acción>`, así las URLs públicas no cambian;
+  - los handlers viven en `api/_lib/routes/**`, que no cuenta como función porque está dentro de una carpeta con `_`.
 - El navegador **nunca** habla con el Supabase del CRM ni ve tokens de Meta.
 - Los tokens se guardan cifrados con AES-256-GCM usando `INBOX_ENC_KEY`.
 - Las tablas tienen RLS activada y ninguna policy: solo entra la service role.
@@ -82,7 +86,7 @@ Ya existe un checklist general en `docs/meta-app-review-checklist.md`, armado pa
   El **Configuration ID** va en `VITE_META_WA_CONFIG_ID`.
 - **Qué hace el código.** Llama a `FB.login({ config_id, response_type: "code", override_default_response_type: true, extras: { setup: {} } })`. Para la coexistencia, `extras` además lleva `featureType: "whatsapp_business_app_onboarding"`. Después escucha el `postMessage` `WA_EMBEDDED_SIGNUP`, solo si viene de un origen `*.facebook.com`, para leer `waba_id`, `phone_number_id` y `business_id`. [V] https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/implementation
 - **El `code` vence en ~30 s.** El servidor lo canjea en el momento con `GET /oauth/access_token?client_id&client_secret&code`, sin `redirect_uri`, igual que en el ejemplo oficial. [V] https://developers.facebook.com/docs/whatsapp/embedded-signup/onboarding-customers-as-a-tech-provider. Que funcione siempre sin `redirect_uri` es **[NV]**: la doc no lo dice de forma explícita, solo lo omite.
-- **Pasos del servidor** (`api/whatsapp/onboard.ts`):
+- **Pasos del servidor** (`api/_lib/routes/whatsapp/onboard.ts`):
   1. Lee los datos del número.
   2. Llama a `POST /{waba_id}/subscribed_apps`.
   3. Llama a `POST /{phone_number_id}/register` con un PIN aleatorio de 6 dígitos, que queda guardado cifrado. **En coexistencia este paso no se hace**, porque el número ya está registrado.
