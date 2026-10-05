@@ -21,6 +21,7 @@ import type {
   Property,
   PropertyType,
   Task,
+  PropertyCrmDetails,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
@@ -209,7 +210,7 @@ export interface NewContactInput {
   requirement: RequirementInput | null;
 }
 
-export interface NewPropertyInput {
+export interface NewPropertyInput extends PropertyCrmDetails {
   title: string;
   description: string | null;
   type: Property["type"];
@@ -247,6 +248,22 @@ export interface NewPropertyInput {
   authorization_type: Property["authorization_type"];
   authorization_expires_at: string | null;
   photos: string[];
+}
+
+const CRM_DETAIL_KEYS = [
+  "subtype", "toilettes", "surface_semicovered", "surface_uncovered", "layout", "orientation",
+  "floor", "unit", "expenses_currency", "credit_eligible", "accepts_swap",
+  "reserve_min_price", "reserve_min_currency",
+] as const satisfies readonly (keyof PropertyCrmDetails)[];
+
+/**
+ * Copia solo los datos "de CRM" que vinieron definidos. Al editar, lo que no
+ * vino se conserva tal como estaba en la propiedad.
+ */
+function pickCrmDetails(input: PropertyCrmDetails): PropertyCrmDetails {
+  const out: Record<string, unknown> = {};
+  for (const key of CRM_DETAIL_KEYS) if (input[key] !== undefined) out[key] = input[key];
+  return out as PropertyCrmDetails;
 }
 
 export interface NewEventInput {
@@ -939,6 +956,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         garages: input.garages,
         age_years: input.age_years,
         features: input.features,
+        ...pickCrmDetails(input),
         is_featured: false,
         published_to_marketplace: false,
         published_at: nowIso,
@@ -1040,6 +1058,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               owner_contact_id: input.owner_contact_id,
               authorization_type: input.authorization_type,
               authorization_expires_at: input.authorization_expires_at,
+              ...pickCrmDetails(input),
               updated_at: nowIso,
               sync_status: agencyContextRef.current
                 ? willPublish
