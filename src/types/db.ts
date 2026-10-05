@@ -155,6 +155,8 @@ export interface Property {
   app_property_id?: string | null;
   /** Estado de la sincronización con la app. Sin definir = todavía no se intentó. */
   sync_status?: "not_publishable" | "synced" | "syncing" | "error";
+  /** La agencia tiene las llaves de la propiedad. Sin definir = no se cargó. */
+  keys_custody?: boolean;
 }
 
 export interface PropertyPhoto {
@@ -247,6 +249,32 @@ export interface CalendarEvent {
   ends_at: string;
   notes: string | null;
   created_at: string;
+  /** Solo visitas. Sin definir en una visita = "por_confirmar". */
+  status?: VisitStatus;
+  /** Cómo salió la visita, cargado por el agente después. */
+  feedback?: VisitFeedback | null;
+  /** Checklist manual de coordinación (ISO de cuándo se tildó). */
+  checklist?: VisitChecklist;
+}
+
+/* ── Agenda: estado y feedback de visitas ─────────────────────────────────── */
+
+export type VisitStatus = "por_confirmar" | "confirmada" | "realizada" | "reprogramada" | "no_show" | "cancelada";
+export type VisitHappened = "si" | "reprogramada" | "no_show";
+export type VisitInterest = "alto" | "medio" | "descarto";
+export type VisitNextAction = "carta_oferta" | "segunda_visita" | "enviar_alternativas" | "tasacion_parte_pago" | "otra";
+
+export interface VisitFeedback {
+  happened: VisitHappened;
+  interest: VisitInterest | null;
+  next_action: VisitNextAction | null;
+  notes: string | null;
+  saved_at: string;
+}
+
+export interface VisitChecklist {
+  reminder_sent_at?: string;
+  location_sent_at?: string;
 }
 
 export interface Task {

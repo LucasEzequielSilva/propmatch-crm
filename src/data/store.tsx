@@ -21,6 +21,9 @@ import type {
   Property,
   PropertyType,
   Task,
+  VisitChecklist,
+  VisitFeedback,
+  VisitStatus,
 } from "@/types/db";
 import { buildMatches } from "@/lib/matching";
 import { initials } from "@/lib/format";
@@ -95,6 +98,10 @@ interface StoreData {
   syncedAppEventIds: string[];
   /** Ofertas reales de la app — fuente de verdad para el Dashboard, la pantalla de Ofertas y la ficha de propiedad. */
   appOffers: AppOffer[];
+  /** Feedback post-visita de visitas reales de la app (uuid de `visits`). Solo local: la app no se entera. */
+  appVisitFeedback: Record<string, VisitFeedback>;
+  /** Checklist de coordinación de visitas reales de la app (uuid de `visits`). Solo local. */
+  appVisitChecklist: Record<string, VisitChecklist>;
 }
 
 function seedData(): StoreData {
@@ -114,6 +121,8 @@ function seedData(): StoreData {
     followUpSnoozes: {},
     syncedAppEventIds: [],
     appOffers: [],
+    appVisitFeedback: {},
+    appVisitChecklist: {},
   };
 }
 
@@ -247,6 +256,8 @@ export interface NewEventInput {
   ends_at: string;
   notes: string | null;
   owner_id: string | null;
+  /** Solo visitas. Sin definir = "por_confirmar". */
+  status?: VisitStatus;
 }
 
 export interface LogActivityInput {
@@ -334,6 +345,12 @@ interface StoreValue extends StoreData {
   addEvent: (input: NewEventInput) => CalendarEvent;
   updateEvent: (id: string, input: NewEventInput) => void;
   removeEvent: (id: string) => void;
+  /** Cambios puntuales de un evento (estado, feedback, checklist). */
+  patchEvent: (id: string, patch: Partial<CalendarEvent>) => void;
+  /** Guarda el feedback de una visita real de la app (solo local). */
+  saveAppVisitFeedback: (visitId: string, feedback: VisitFeedback) => void;
+  /** Tilda un ítem del checklist de una visita real de la app (solo local). */
+  patchAppVisitChecklist: (visitId: string, patch: VisitChecklist) => void;
   updateAgency: (input: AgencyInput) => void;
   /** Alta masiva desde un Excel. Devuelve los ids creados, para poder deshacer. */
   importContacts: (inputs: NewContactInput[]) => string[];
@@ -1314,6 +1331,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ends_at: input.ends_at,
       notes: input.notes,
       created_at: nowIso,
+      ...(input.type === "visita" ? { status: input.status ?? "por_confirmar" } : {}),
     };
 
     setData((d) => {
@@ -1352,6 +1370,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const removeEvent = useCallback<StoreValue["removeEvent"]>((id) => {
     setData((d) => ({ ...d, events: d.events.filter((e) => e.id !== id) }));
+  }, []);
+
+  const patchEvent = useCallback<StoreValue["patchEvent"]>((id, patch) => {
+    setData((d) => ({
+      ...d,
+      events: d.events.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    }));
+  }, []);
+
+  const saveAppVisitFeedback = useCallback<StoreValue["saveAppVisitFeedback"]>((visitId, feedback) => {
+    setData((d) => ({ ...d, appVisitFeedback: { ...d.appVisitFeedback, [visitId]: feedback } }));
+  }, []);
+
+  const patchAppVisitChecklist = useCallback<StoreValue["patchAppVisitChecklist"]>((visitId, patch) => {
+    setData((d) => ({
+      ...d,
+      appVisitChecklist: { ...d.appVisitChecklist, [visitId]: { ...d.appVisitChecklist[visitId], ...patch } },
+    }));
   }, []);
 
   const importContacts = useCallback<StoreValue["importContacts"]>((inputs) => {
@@ -1770,6 +1806,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addEvent,
       updateEvent,
       removeEvent,
+      patchEvent,
+      saveAppVisitFeedback,
+      patchAppVisitChecklist,
       updateAgency,
       updateProfile,
       logActivity,
@@ -1817,6 +1856,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addEvent,
     updateEvent,
     removeEvent,
+    patchEvent,
+    saveAppVisitFeedback,
+    patchAppVisitChecklist,
     updateAgency,
     updateProfile,
     logActivity,
