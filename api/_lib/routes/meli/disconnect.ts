@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireAgencyAdmin } from "../_lib/auth.js";
-import { decrypt } from "../_lib/crypto.js";
-import { env, isConfigured } from "../_lib/env.js";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { MELI_API } from "../_lib/meli.js";
-import { supabaseAdmin } from "../_lib/supabaseAdmin.js";
+import { requireAgencyAdmin } from "../../auth.js";
+import { decrypt } from "../../crypto.js";
+import { env, isConfigured } from "../../env.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { MELI_API } from "../../meli.js";
+import { supabaseAdmin } from "../../supabaseAdmin.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!allowMethod(req, res, "POST")) return;

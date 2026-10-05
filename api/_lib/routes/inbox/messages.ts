@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fail, json, noStore } from "../_lib/http.js";
-import { crmDb } from "../_lib/inbox/db.js";
-import { inboxCoreConfigured } from "../_lib/inbox/env.js";
-import { inboxAuth, isUuid, jsonBody } from "../_lib/inbox/request.js";
-import { accountById } from "../_lib/inbox/accounts.js";
-import { waDownloadMedia } from "../_lib/inbox/whatsapp.js";
+import { fail, json, noStore } from "../../http.js";
+import { crmDb } from "../../inbox/db.js";
+import { inboxCoreConfigured } from "../../inbox/env.js";
+import { inboxAuth, isUuid, jsonBody } from "../../inbox/request.js";
+import { accountById } from "../../inbox/accounts.js";
+import { waDownloadMedia } from "../../inbox/whatsapp.js";
 
 // Vercel corta las respuestas de funciones en ~4.5 MB.
 const MAX_MEDIA_BYTES = 4_000_000;

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireAgencyMember } from "../_lib/auth.js";
-import { isConfigured } from "../_lib/env.js";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { supabaseAdmin } from "../_lib/supabaseAdmin.js";
+import { requireAgencyMember } from "../../auth.js";
+import { isConfigured } from "../../env.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { supabaseAdmin } from "../../supabaseAdmin.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!allowMethod(req, res, "GET")) return;

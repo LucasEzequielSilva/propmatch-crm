@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { requireAgencyAdmin } from "../_lib/auth.js";
-import { encrypt } from "../_lib/crypto.js";
-import { env, isConfigured } from "../_lib/env.js";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { MELI_AUTH_URL } from "../_lib/meli.js";
-import { challengeS256, newVerifier, randomToken } from "../_lib/pkce.js";
+import { requireAgencyAdmin } from "../../auth.js";
+import { encrypt } from "../../crypto.js";
+import { env, isConfigured } from "../../env.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { MELI_AUTH_URL } from "../../meli.js";
+import { challengeS256, newVerifier, randomToken } from "../../pkce.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!allowMethod(req, res, "POST")) return;

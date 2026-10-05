@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { crmDb, ingestMessage } from "../_lib/inbox/db.js";
-import { humanAgentTagEnabled, metaConfigured } from "../_lib/inbox/env.js";
-import { inboxAuth, isUuid, jsonBody, str } from "../_lib/inbox/request.js";
-import { accountById } from "../_lib/inbox/accounts.js";
-import { GraphError } from "../_lib/inbox/graph.js";
-import { waErrorCode, waSendTemplate, waSendText } from "../_lib/inbox/whatsapp.js";
-import { metaSendText } from "../_lib/inbox/meta.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { crmDb, ingestMessage } from "../../inbox/db.js";
+import { humanAgentTagEnabled, metaConfigured } from "../../inbox/env.js";
+import { inboxAuth, isUuid, jsonBody, str } from "../../inbox/request.js";
+import { accountById } from "../../inbox/accounts.js";
+import { GraphError } from "../../inbox/graph.js";
+import { waErrorCode, waSendTemplate, waSendText } from "../../inbox/whatsapp.js";
+import { metaSendText } from "../../inbox/meta.js";
 
 const H24 = 24 * 3600 * 1000;
 const D7 = 7 * 24 * 3600 * 1000;

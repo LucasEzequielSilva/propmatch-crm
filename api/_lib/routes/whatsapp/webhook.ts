@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { noStore } from "../_lib/http.js";
-import { crmDb } from "../_lib/inbox/db.js";
-import { ienv, metaConfigured } from "../_lib/inbox/env.js";
-import { safeEqualStr, validMetaSignature } from "../_lib/inbox/crypto.js";
-import { clientIp, readRawBody } from "../_lib/inbox/request.js";
-import { rateHit } from "../_lib/inbox/db.js";
-import { processWaEntry, type WaEntry } from "../_lib/inbox/whatsapp.js";
-import { processMessagingEntry, type MessagingEntry } from "../_lib/inbox/meta.js";
+import { noStore } from "../../http.js";
+import { crmDb } from "../../inbox/db.js";
+import { ienv, metaConfigured } from "../../inbox/env.js";
+import { safeEqualStr, validMetaSignature } from "../../inbox/crypto.js";
+import { clientIp, readRawBody } from "../../inbox/request.js";
+import { rateHit } from "../../inbox/db.js";
+import { processWaEntry, type WaEntry } from "../../inbox/whatsapp.js";
+import { processMessagingEntry, type MessagingEntry } from "../../inbox/meta.js";
 
 /**
  * Webhook ÚNICO de Meta: WhatsApp (object=whatsapp_business_account),

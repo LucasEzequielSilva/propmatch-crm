@@ -1,12 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { crmDb, PUBLIC_ACCOUNT_COLUMNS } from "../_lib/inbox/db.js";
-import { metaConfigured } from "../_lib/inbox/env.js";
-import { randomPin, sealToken } from "../_lib/inbox/crypto.js";
-import { GraphError } from "../_lib/inbox/graph.js";
-import { inboxAuth, jsonBody, str } from "../_lib/inbox/request.js";
-import { exchangeCode, phoneInfo, registerNumber, requestSmbSync, subscribeWaba, syncTemplates } from "../_lib/inbox/whatsapp.js";
-import type { AccountRow } from "../_lib/inbox/accounts.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { crmDb, PUBLIC_ACCOUNT_COLUMNS } from "../../inbox/db.js";
+import { metaConfigured } from "../../inbox/env.js";
+import { randomPin, sealToken } from "../../inbox/crypto.js";
+import { GraphError } from "../../inbox/graph.js";
+import { inboxAuth, jsonBody, str } from "../../inbox/request.js";
+import { exchangeCode, phoneInfo, registerNumber, requestSmbSync, subscribeWaba, syncTemplates } from "../../inbox/whatsapp.js";
+import type { AccountRow } from "../../inbox/accounts.js";
 
 /**
  * Cierre del Embedded Signup de WhatsApp (v4).

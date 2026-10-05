@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fail, json, noStore } from "../_lib/http.js";
-import { crmDb, PUBLIC_ACCOUNT_COLUMNS } from "../_lib/inbox/db.js";
-import { inboxCoreConfigured, metaConfigured, metaMessagingEnabled } from "../_lib/inbox/env.js";
-import { inboxAuth, isUuid, jsonBody } from "../_lib/inbox/request.js";
-import { accountById, tokenOf } from "../_lib/inbox/accounts.js";
-import { graph } from "../_lib/inbox/graph.js";
-import { syncTemplates } from "../_lib/inbox/whatsapp.js";
+import { fail, json, noStore } from "../../http.js";
+import { crmDb, PUBLIC_ACCOUNT_COLUMNS } from "../../inbox/db.js";
+import { inboxCoreConfigured, metaConfigured, metaMessagingEnabled } from "../../inbox/env.js";
+import { inboxAuth, isUuid, jsonBody } from "../../inbox/request.js";
+import { accountById, tokenOf } from "../../inbox/accounts.js";
+import { graph } from "../../inbox/graph.js";
+import { syncTemplates } from "../../inbox/whatsapp.js";
 
 /**
  * Canales conectados de la agencia (sin tokens).

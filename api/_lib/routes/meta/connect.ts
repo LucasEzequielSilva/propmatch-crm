@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowMethod, fail, json } from "../_lib/http.js";
-import { crmDb } from "../_lib/inbox/db.js";
-import { metaMessagingEnabled } from "../_lib/inbox/env.js";
-import { sealToken } from "../_lib/inbox/crypto.js";
-import { GraphError } from "../_lib/inbox/graph.js";
-import { inboxAuth, jsonBody, str } from "../_lib/inbox/request.js";
-import { pagesFromCode, subscribePage, type PageInfo } from "../_lib/inbox/meta.js";
+import { allowMethod, fail, json } from "../../http.js";
+import { crmDb } from "../../inbox/db.js";
+import { metaMessagingEnabled } from "../../inbox/env.js";
+import { sealToken } from "../../inbox/crypto.js";
+import { GraphError } from "../../inbox/graph.js";
+import { inboxAuth, jsonBody, str } from "../../inbox/request.js";
+import { pagesFromCode, subscribePage, type PageInfo } from "../../inbox/meta.js";
 
 /**
  * Conecta Messenger e Instagram (mensajes) de una Página de Facebook.

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fail, json, noStore } from "../_lib/http.js";
-import { crmDb } from "../_lib/inbox/db.js";
-import { inboxCoreConfigured } from "../_lib/inbox/env.js";
-import { inboxAuth, isUuid, jsonBody, str } from "../_lib/inbox/request.js";
+import { fail, json, noStore } from "../../http.js";
+import { crmDb } from "../../inbox/db.js";
+import { inboxCoreConfigured } from "../../inbox/env.js";
+import { inboxAuth, isUuid, jsonBody, str } from "../../inbox/request.js";
 
 const CHANNELS = new Set(["whatsapp", "instagram", "messenger"]);
 
