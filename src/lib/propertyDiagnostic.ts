@@ -180,7 +180,8 @@ export interface PropertyDiagnostic {
   quality: { checks: DiagnosticCheck[]; ok: number; total: number };
   score: { value: number | null; components: ScoreComponent[]; summary: string };
   signals: Signal[];
-  narrative: string[];
+  /** Lectura en lenguaje natural, una frase por grupo de reglas (`NARRATIVE_RULES`). */
+  narrative: { id: string; group: NarrativeRule["group"]; text: string }[];
   recommendations: Recommendation[];
   sources: { crm: number; app: number; appAvailable: boolean };
 }
@@ -298,7 +299,14 @@ const CONFIDENCE_LABEL: Record<Confidence, string> = {
 
 function buildCandidates(target: Property, ctx: DiagnosticContext): { list: Candidate[]; crm: number; app: number } {
   const crm: Candidate[] = ctx.inventory
-    .filter((p) => p.id !== target.id && p.status === "disponible" && p.price != null && p.price > 0)
+    .filter(
+      (p) =>
+        p.id !== target.id &&
+        p.status === "disponible" &&
+        p.operation === target.operation &&
+        p.price != null &&
+        p.price > 0,
+    )
     .map((p) => {
       const surface = surfaceOf(p);
       return {
@@ -315,11 +323,8 @@ function buildCandidates(target: Property, ctx: DiagnosticContext): { list: Cand
         currency: p.currency,
         pricePerM2: surface ? p.price! / surface : null,
         zoneKeys: zoneKeysOf(p),
-        operation: p.operation,
       };
-    })
-    .map(({ operation, ...c }) => ({ ...c, _op: operation }) as Candidate & { _op: OperationType })
-    .filter((c) => c._op === target.operation);
+    });
 
   // Las de la app que ya están en el CRM (vinculadas) se cuentan una sola vez, como inventario.
   const linked = new Set(ctx.inventory.map((p) => p.app_property_id).filter(Boolean));
@@ -805,7 +810,7 @@ interface Facts {
   interested: number | null;
 }
 
-interface NarrativeRule {
+export interface NarrativeRule {
   id: string;
   /** Solo una regla por grupo (la primera que aplique). */
   group: "ficha" | "precio" | "datos";
@@ -903,13 +908,13 @@ export const NARRATIVE_RULES: NarrativeRule[] = [
   },
 ];
 
-function buildNarrative(f: Facts): string[] {
+function buildNarrative(f: Facts): PropertyDiagnostic["narrative"] {
   const used = new Set<string>();
-  const out: string[] = [];
+  const out: PropertyDiagnostic["narrative"] = [];
   for (const rule of NARRATIVE_RULES) {
     if (used.has(rule.group) || !rule.when(f)) continue;
     used.add(rule.group);
-    out.push(rule.text(f));
+    out.push({ id: rule.id, group: rule.group, text: rule.text(f) });
   }
   return out;
 }

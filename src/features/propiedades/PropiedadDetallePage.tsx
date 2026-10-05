@@ -29,6 +29,7 @@ import { usePublications } from "./usePublications";
 import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorization";
 import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
+import { DiagnosticoSection } from "./diagnostico/DiagnosticoSection";
 
 const OPERATION_LABEL: Record<string, string> = {
   venta: "Venta",
@@ -68,9 +69,12 @@ export default function PropiedadDetallePage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
 
-  const { channelsOf } = usePublications();
+  const { channelsOf, loading: publicationsLoading } = usePublications();
   // Solo los canales donde ya se intentó publicar (y la web, que es propia y siempre está).
   const publications = property ? channelsOf(property).filter((c) => c.status !== null) : [];
+  const externalPublished = publicationsLoading
+    ? null
+    : publications.filter((c) => c.info.channel !== "web" && c.status === "published").length;
 
   const gallery = property ? (photos[property.id] ?? []) : [];
 
@@ -278,6 +282,17 @@ export default function PropiedadDetallePage() {
                     <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
                       Publicada {relativeTime(property.published_at).toLowerCase()}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById("diagnostico")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        document.getElementById("diagnostico-title")?.focus({ preventScroll: true });
+                      }}
+                      className="mt-1 min-h-11 px-3 rounded-xl text-xs hover:bg-violet-50"
+                      style={{ color: "#6D28D9", fontWeight: 700 }}
+                    >
+                      Ver diagnóstico ↓
+                    </button>
                   </div>
                 </div>
               </div>
@@ -369,6 +384,12 @@ export default function PropiedadDetallePage() {
                 </div>
               )}
             </Card>
+
+            <DiagnosticoSection
+              property={property}
+              channelsPublished={externalPublished}
+              onShare={() => setSharing(true)}
+            />
 
             {/* Oportunidades */}
             {propertyOpps.length > 0 && (
