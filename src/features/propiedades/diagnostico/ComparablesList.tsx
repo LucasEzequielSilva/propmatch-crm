@@ -33,7 +33,14 @@ function Title({ c }: { c: Comparable }) {
   );
 }
 
-export function ComparablesList({ comparables }: { comparables: Comparable[] }) {
+export function ComparablesList({
+  comparables,
+  diffNote = "«Dif.» = cuánto más caro (+) o más barato (−) es cada comparable que esta propiedad.",
+}: {
+  comparables: Comparable[];
+  /** Texto que explica la columna «Dif.» (el tasador la calcula contra el precio sugerido). */
+  diffNote?: string;
+}) {
   const [sort, setSort] = useState<SortKey>("similitud");
   const [showAll, setShowAll] = useState(false);
 
@@ -50,7 +57,7 @@ export function ComparablesList({ comparables }: { comparables: Comparable[] }) 
     <div>
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <p className="text-xs" style={{ color: "#7458C4" }}>
-          «Dif.» = cuánto más caro (+) o más barato (−) es cada comparable que esta propiedad.
+          {diffNote}
         </p>
         <div role="group" aria-label="Ordenar comparables" className="flex rounded-xl p-1" style={{ background: "#F5F3FF" }}>
           {(["similitud", "precio"] as SortKey[]).map((k) => (
