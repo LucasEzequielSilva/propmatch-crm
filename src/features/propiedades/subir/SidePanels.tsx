@@ -22,6 +22,7 @@ import {
   editorFieldId,
   fixForMeliField,
   fixesForCheck,
+  lc,
   missingSizeParts,
   shortMissingForCheck,
   shortMissingForMeli,
@@ -195,7 +196,7 @@ export function ChannelsPanel({
     for (const c of diagnose(draft, photoCount)) {
       if (c.ok) continue;
       if (c.id === "size") {
-        for (const k of missingSizeParts(draft)) out.push({ text: FIX_LABEL[k].toLowerCase(), target: editorFieldId(k) });
+        for (const k of missingSizeParts(draft)) out.push({ text: lc(FIX_LABEL[k]), target: editorFieldId(k) });
       } else {
         const [k] = fixesForCheck(c, draft) as (FieldKey | LinkKey)[];
         out.push({ text: shortMissingForCheck(c, draft, photoCount)[0], target: k ? editorFieldId(k) : undefined });
@@ -350,27 +351,26 @@ function ChannelRow({
         </p>
       )}
       {row.missing && row.missing.length > 0 && (
-        <div className="ml-11 mt-1.5">
-          <p className="text-xs" style={{ color: "#B45309", fontWeight: 600 }}>
-            Falta: {row.missing.map((m) => m.text).join(", ")}
-          </p>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {row.missing
-              .filter((m) => m.target || m.path)
-              .map((m) => (
+        <p className="ml-11 mt-1 text-xs leading-7" style={{ color: "#B45309", fontWeight: 600 }}>
+          Falta:{" "}
+          {row.missing.map((m, i) => (
+            <span key={m.text}>
+              {m.target || m.path ? (
                 <button
-                  key={m.text}
                   type="button"
                   onClick={() => (m.target ? onFix(m.target) : m.path && onNavigate(m.path))}
-                  aria-label={`Completar ${m.text} para ${row.name}`}
-                  className={fixBtnClass}
-                  style={fixBtnStyle}
+                  aria-label={`Completar ${m.text} (${row.name})`}
+                  className="inline py-1.5 rounded underline decoration-dotted underline-offset-2 hover:text-[#7C3AED] focus-visible:text-[#7C3AED]"
                 >
-                  {m.text.charAt(0).toUpperCase() + m.text.slice(1)} <span aria-hidden="true">→</span>
+                  {m.text}
                 </button>
-              ))}
-          </div>
-        </div>
+              ) : (
+                m.text
+              )}
+              {i < row.missing!.length - 1 ? ", " : ""}
+            </span>
+          ))}
+        </p>
       )}
       {row.missing && row.missing.length === 0 && (
         <p className="ml-11 mt-1 text-xs flex items-center gap-1" style={{ color: "#15803D", fontWeight: 600 }}>

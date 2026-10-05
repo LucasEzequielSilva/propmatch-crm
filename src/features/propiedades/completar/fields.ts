@@ -149,6 +149,9 @@ export function fixesForCheck(c: DiagnosticCheck, p: Property): FixKey[] {
   }
 }
 
+/** Primera letra en minúscula, sin tocar nombres propios ("Mercado Libre"). */
+export const lc = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
 /** Faltante corto para "Falta: …" (en minúscula, para encadenar con comas). */
 export function shortMissingForCheck(c: DiagnosticCheck, p: Property, photoCount: number): string[] {
   if (c.ok) return [];
@@ -162,7 +165,7 @@ export function shortMissingForCheck(c: DiagnosticCheck, p: Property, photoCount
     case "description":
       return ["descripción más larga"];
     case "size":
-      return missingSizeParts(p).map((k) => FIX_LABEL[k].toLowerCase());
+      return missingSizeParts(p).map((k) => lc(FIX_LABEL[k]));
     case "authorization":
       return ["autorización vigente"];
     case "coords":
@@ -170,7 +173,7 @@ export function shortMissingForCheck(c: DiagnosticCheck, p: Property, photoCount
     case "price":
       return ["precio"];
     default:
-      return [c.label.toLowerCase()];
+      return [lc(c.label)];
   }
 }
 
@@ -221,7 +224,7 @@ export function shortMissingForMeli(field: string): string {
   if (k === "photos") return "fotos sincronizadas con la app";
   if (k === "type") return "tipo u operación que acepte Mercado Libre";
   if (k === "price" && field === "currency") return "moneda ARS o USD";
-  return k ? FIX_LABEL[k].toLowerCase() : field;
+  return k ? lc(FIX_LABEL[k]) : field;
 }
 
 const noInterior = (p: Property) => p.type === "terreno";
