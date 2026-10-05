@@ -231,6 +231,12 @@ export interface NewPropertyInput {
    * de dormitorios + 1 (estar), que era la única regla antes de poder editarlo.
    */
   rooms?: number | null;
+  /**
+   * Coordenadas del pin. Solo viven en el CRM (ver buildAppPayload). Sin
+   * definir = el formulario no las tocó: al editar se conservan las que había.
+   */
+  lat?: number | null;
+  lng?: number | null;
   bedrooms: number;
   bathrooms: number;
   garages: number;
@@ -918,8 +924,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         locality: input.locality,
         province: input.province,
         zone: input.locality,
-        lat: null,
-        lng: null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
         price: input.price,
         currency: input.currency,
         expenses: input.expenses,
@@ -1015,6 +1021,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               locality: input.locality,
               province: input.province,
               zone: input.locality,
+              lat: input.lat !== undefined ? input.lat : p.lat,
+              lng: input.lng !== undefined ? input.lng : p.lng,
               price: input.price,
               currency: input.currency,
               expenses: input.expenses,
@@ -1434,8 +1442,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       locality: input.locality,
       province: input.province,
       zone: input.locality,
-      lat: null,
-      lng: null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
       price: input.price,
       currency: input.currency,
       expenses: input.expenses,

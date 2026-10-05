@@ -23,6 +23,7 @@ import type {
   PropertyType,
 } from "@/types/db";
 import { compressImage } from "@/lib/images";
+import { isShortMapsLink, isValidLatLng, parseCoordinates } from "@/lib/geo";
 import { AUTHORIZATION_LABEL, AUTHORIZATION_TONE_STYLE, authorizationState, dateInputFromNow } from "@/lib/authorization";
 import type { AuthorizationType } from "@/types/db";
 
@@ -86,6 +87,10 @@ export default function SubirPropiedadPage() {
   // propiedad está en "La Plata" pero su zona es "La Plata Centro").
   const [locality, setLocality] = useState(editing?.zone ?? editing?.locality ?? "City Bell");
   const [province, setProvince] = useState(editing?.province ?? "Buenos Aires");
+  const [lat, setLat] = useState(num(editing?.lat));
+  const [lng, setLng] = useState(num(editing?.lng));
+  const [mapsLink, setMapsLink] = useState("");
+  const [mapsMsg, setMapsMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   // Bloque 3 — características
   const [price, setPrice] = useState(num(editing?.price));
@@ -134,7 +139,7 @@ export default function SubirPropiedadPage() {
    * el formulario vacío; en edición, la propiedad tal como estaba.
    */
   const snapshot = JSON.stringify([
-    type, operation, title, description, street, streetNumber, locality, province,
+    type, operation, title, description, street, streetNumber, locality, province, lat, lng,
     price, currency, surfaceTotal, surfaceCovered, rooms, bedrooms, bathrooms, garages, age,
     photos, expenses, taxes, commission, status, agentId, [...features].sort(),
     ownerId, authType, authExpires,
@@ -160,6 +165,31 @@ export default function SubirPropiedadPage() {
    * contra los requerimientos reales, mientras se completa el formulario.
    */
   const roomsValue = rooms ? Number(rooms) : bedrooms + 1;
+  /** Las dos o ninguna: media coordenada no sirve para nada. */
+  const coords = (() => {
+    if (!lat.trim() || !lng.trim()) return null;
+    const la = Number(lat);
+    const ln = Number(lng);
+    return isValidLatLng(la, ln) ? { lat: la, lng: ln } : null;
+  })();
+
+  function applyMapsLink(text: string) {
+    setMapsLink(text);
+    if (!text.trim()) return setMapsMsg(null);
+    const found = parseCoordinates(text);
+    if (found) {
+      setLat(String(found.lat));
+      setLng(String(found.lng));
+      setMapsMsg({ kind: "ok", text: "Listo: tomamos las coordenadas del link." });
+    } else if (isShortMapsLink(text)) {
+      setMapsMsg({
+        kind: "error",
+        text: "Los links cortos (maps.app.goo.gl) no traen coordenadas. Abrilo en el navegador y copiá la dirección larga de la barra.",
+      });
+    } else {
+      setMapsMsg({ kind: "error", text: "No encontramos coordenadas en ese texto." });
+    }
+  }
 
   const potential = useMemo(() => {
     const priceNum = Number(price) || null;
@@ -182,8 +212,8 @@ export default function SubirPropiedadPage() {
       locality,
       province,
       zone: locality,
-      lat: null,
-      lng: null,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       price: priceNum,
       currency,
       expenses: null,
@@ -226,6 +256,7 @@ export default function SubirPropiedadPage() {
     if (!price.trim()) e.price = "El precio es obligatorio";
     else if (Number.isNaN(Number(price))) e.price = "El precio debe ser un número";
     if (!street.trim()) e.street = "La dirección es obligatoria";
+    if ((lat.trim() || lng.trim()) && !coords) e.coords = "Revisá las coordenadas: latitud entre -90 y 90, longitud entre -180 y 180";
     if (authType && !authExpires) e.authExpires = "Poné hasta cuándo vale la autorización";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -247,6 +278,8 @@ export default function SubirPropiedadPage() {
       street_number: streetNumber.trim() || null,
       locality,
       province,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       price: Number(price),
       currency,
       expenses: expenses ? Number(expenses) : null,
@@ -457,29 +490,56 @@ export default function SubirPropiedadPage() {
                 </Field>
               </div>
 
-              {/* Mapa: placeholder visual, igual que en el prototipo */}
-              <div
-                className="rounded-xl overflow-hidden relative h-40 flex items-center justify-center"
-                style={{
-                  background:
-                    "repeating-linear-gradient(45deg, #F9F7FF, #F9F7FF 12px, #F5F3FF 12px, #F5F3FF 24px)",
-                  border: "1px solid #EDE9FE",
-                }}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{ background: "var(--gradient-brand)", boxShadow: "0 4px 14px rgba(124,58,237,0.35)" }}
-                  >
-                    <MapPinIcon size={18} color="white" />
-                  </div>
-                  <span
-                    className="text-xs px-3 py-1 rounded-full"
-                    style={{ background: "white", color: "#7C3AED", fontWeight: 600, border: "1px solid #EDE9FE" }}
-                  >
-                    {locality}, {province}
-                  </span>
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
+                <Field label="Pegá un link de Google Maps (opcional)">
+                  <input
+                    value={mapsLink}
+                    onChange={(e) => applyMapsLink(e.target.value)}
+                    placeholder="https://www.google.com/maps/place/…/@-34.87,-58.04,17z"
+                    className={inputClass(false)}
+                  />
+                </Field>
+                {mapsMsg && (
+                  <p className="text-xs" role="status" style={{ color: mapsMsg.kind === "ok" ? "#15803D" : "#B45309", fontWeight: 600 }}>
+                    {mapsMsg.text}
+                  </p>
+                )}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Latitud" error={errors.coords}>
+                    <input
+                      value={lat}
+                      onChange={(e) => setLat(e.target.value.replace(/[^\d.-]/g, ""))}
+                      inputMode="decimal"
+                      placeholder="-34.8712"
+                      className={inputClass(!!errors.coords)}
+                    />
+                  </Field>
+                  <Field label="Longitud">
+                    <input
+                      value={lng}
+                      onChange={(e) => setLng(e.target.value.replace(/[^\d.-]/g, ""))}
+                      inputMode="decimal"
+                      placeholder="-58.0456"
+                      className={inputClass(!!errors.coords)}
+                    />
+                  </Field>
                 </div>
+                <p className="text-xs" style={{ color: "#7458C4" }}>
+                  Quedan guardadas en el CRM. Todavía no se mandan a la app.
+                  {coords && (
+                    <>
+                      {" "}
+                      <a
+                        href={`https://www.google.com/maps?q=${coords.lat},${coords.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "#7C3AED", fontWeight: 600 }}
+                      >
+                        Ver en Google Maps
+                      </a>
+                    </>
+                  )}
+                </p>
               </div>
             </Section>
 
