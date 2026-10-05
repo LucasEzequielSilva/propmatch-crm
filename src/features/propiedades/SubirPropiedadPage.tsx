@@ -15,7 +15,6 @@ import { FEATURE_CHIPS, ZONES } from "@/data/seed";
 import { computeMatch, MATCH_THRESHOLD } from "@/lib/matching";
 import { PROPERTY_STATUS_LABEL, PROPERTY_TYPE_LABEL, money } from "@/lib/format";
 import type {
-  ClientProfile,
   CurrencyCode,
   OperationType,
   Property,
@@ -33,13 +32,6 @@ const OPERATIONS: { value: OperationType; label: string }[] = [
   { value: "venta", label: "Venta" },
   { value: "alquiler", label: "Alquiler" },
   { value: "alquiler_temporal", label: "Temporal" },
-];
-const CLIENT_PROFILES: { value: ClientProfile; label: string }[] = [
-  { value: "inversor", label: "Inversor" },
-  { value: "primera_vivienda", label: "Primera vivienda" },
-  { value: "familia", label: "Familia" },
-  { value: "estudiante", label: "Estudiante" },
-  { value: "profesional", label: "Profesional" },
 ];
 
 const MAX_PHOTO_MB = 10;
@@ -125,7 +117,6 @@ export default function SubirPropiedadPage() {
   const [newOwner, setNewOwner] = useState<{ name: string; phone: string } | null>(null);
 
   // Bloque 6 — preferencias de match
-  const [clientProfiles, setClientProfiles] = useState<Set<ClientProfile>>(new Set(["familia"]));
   const [features, setFeatures] = useState<Set<string>>(
     new Set(editing?.features ?? ["Jardín", "Cochera"]),
   );
@@ -914,31 +905,8 @@ export default function SubirPropiedadPage() {
             <Section
               title="Preferencias para Match"
               icon={<MatchesSolidIcon size={16} color="#7C3AED" />}
-              subtitle="Definí qué tipo de cliente podría encajar mejor con esta propiedad."
+              subtitle="Lo que tiene la propiedad: se compara con lo que busca cada contacto."
             >
-              <Field label="Tipo de cliente">
-                <div className="flex flex-wrap gap-2">
-                  {CLIENT_PROFILES.map((cp) => {
-                    const active = clientProfiles.has(cp.value);
-                    return (
-                      <Chip
-                        key={cp.value}
-                        label={cp.label}
-                        active={active}
-                        onClick={() =>
-                          setClientProfiles((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(cp.value)) next.delete(cp.value);
-                            else next.add(cp.value);
-                            return next;
-                          })
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              </Field>
-
               <Field label="Características de la propiedad">
                 <div className="flex flex-wrap gap-2">
                   {FEATURE_CHIPS.map((f) => (
