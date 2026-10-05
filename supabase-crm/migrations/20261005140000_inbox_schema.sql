@@ -51,6 +51,9 @@ create table public.channel_accounts (
   -- en el servidor con INBOX_ENC_KEY. Nunca se selecciona hacia el cliente.
   access_token_enc  text,
   token_expires_at  timestamptz,
+  -- PIN de verificación en dos pasos que fijamos al registrar el número en
+  -- Cloud API (no aplica en coexistencia). Cifrado igual que el token.
+  wa_pin_enc        text,
   last_error        text,
   connected_by      uuid,
   connected_at      timestamptz not null default now(),
