@@ -17,6 +17,7 @@ import {
   SettingsIcon,
   type IconProps,
 } from "@/components/ui/icons";
+import { MercadoIcon } from "@/features/mercado/MercadoIcon";
 
 /**
  * Navegación en el celular.
@@ -43,6 +44,7 @@ const TABS: Item[] = [
 const MORE: Item[] = [
   { to: "/agenda", label: "Agenda", icon: AgendaIcon },
   { to: "/oportunidades", label: "Oportunidades", icon: OpportunitiesIcon },
+  { to: "/mercado", label: "Mercado", icon: MercadoIcon },
   { to: "/publicador", label: "Publicaciones", icon: PropertiesIcon },
   { to: "/instagram", label: "Instagram", icon: InstagramIcon },
   { to: "/ofertas", label: "Ofertas", icon: OperacionesIcon },

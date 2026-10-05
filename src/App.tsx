@@ -24,6 +24,7 @@ import ReportesPage from "@/features/reportes/ReportesPage";
 import ConfiguracionPage from "@/features/configuracion/ConfiguracionPage";
 import FichaPage from "@/features/ficha/FichaPage";
 import ImportarPage from "@/features/importar/ImportarPage";
+import MercadoPage from "@/features/mercado/MercadoPage";
 import OperacionesPage from "@/features/operaciones/OperacionesPage";
 import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
 import DocumentoPage from "@/features/operaciones/DocumentoPage";
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="propiedades/nueva" element={<SubirPropiedadPage />} />
               <Route path="propiedades/:propertyId" element={<PropiedadDetallePage />} />
               <Route path="propiedades/:propertyId/editar" element={<SubirPropiedadPage />} />
+              <Route path="mercado" element={<MercadoPage />} />
 
               <Route path="publicador" element={<MultipublicadorPage />} />
               <Route path="publicador/:propertyId" element={<MultipublicadorVivoPage />} />
