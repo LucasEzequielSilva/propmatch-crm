@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
+import { ProppiPanel } from "@/features/proppi/ProppiPanel";
 
 /**
  * Marco de la aplicación: sidebar fijo + área de contenido.
@@ -37,6 +38,7 @@ export function AppLayout() {
         </div>
       </main>
       <MobileNav />
+      <ProppiPanel />
     </div>
   );
 }
