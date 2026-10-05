@@ -22,6 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isConfigured()) return fail(res, 503, "not_configured");
 
   const back = (reason?: string) => {
+    // Solo el motivo (sin códigos ni tokens): para diagnosticar desde los logs de Vercel.
+    if (reason) console.warn(`[meli/callback] fallo: ${reason}`);
     res.setHeader("Set-Cookie", CLEAR_COOKIE);
     redirect(res, `${appUrl()}/publicador?meli=${reason ? `error&reason=${reason}` : "connected"}`);
   };
