@@ -7,7 +7,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Badge } from "@/components/ui/Card";
-import { AlertTriangleIcon, CheckIcon } from "@/components/ui/icons";
+import { CheckIcon } from "@/components/ui/icons";
 import type { Property, PropertyPublication } from "@/types/db";
 import {
   MELI_LAND_ACCESS,
@@ -25,6 +25,9 @@ import type { ChannelState } from "./usePublications";
 import type { useMeliConnection } from "./useIntegrations";
 import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
 import { SampleNotice } from "@/components/ui/SampleBadge";
+import { FixList, type Fix, type FixItem } from "./completar/InlineFix";
+import { FIX_LABEL, MELI_EXTRA_ID, editorHref, fixForMeliField, isFieldKey, type MeliExtraKey } from "./completar/fields";
+import { focusField } from "./completar/focusField";
 
 type MeliConnection = ReturnType<typeof useMeliConnection>;
 
@@ -37,7 +40,8 @@ interface Extras {
 
 const storageKey = (propertyId: string) => `pm.meli.extras.${propertyId}`;
 
-function loadExtras(propertyId: string): Extras {
+/** Datos del aviso que se eligen en este panel (ubicación de ML, huéspedes, acceso), guardados en este navegador. */
+export function loadExtras(propertyId: string): Extras {
   const empty: Extras = { location: null, guests: null, landAccess: null, listingType: "silver" };
   try {
     const raw = window.localStorage.getItem(storageKey(propertyId));
@@ -57,25 +61,6 @@ function saveExtras(propertyId: string, e: Extras) {
 
 const INK = "#1F0A3C";
 const MUTED = "#6B5A8E";
-
-function IssueList({ issues }: { issues: MeliIssue[] }) {
-  if (issues.length === 0) return null;
-  const sorted = [...issues].sort((a, b) => Number(b.blocking) - Number(a.blocking));
-  return (
-    <ul className="flex flex-col gap-1.5">
-      {sorted.map((i, k) => (
-        <li key={`${i.field}-${k}`} className="flex items-start gap-2 text-xs" style={{ color: i.blocking ? "#BE123C" : "#92400E" }}>
-          <span className="mt-0.5 flex-shrink-0">
-            <AlertTriangleIcon size={12} color={i.blocking ? "#E11D48" : "#D97706"} />
-          </span>
-          <span>
-            <strong>{i.blocking ? "Falta" : "Sugerencia"}:</strong> {i.message}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export function MeliPublishPanel({
   property,
@@ -169,6 +154,37 @@ export function MeliPublishPanel({
   const primary = { background: "#7C3AED", color: "white", fontWeight: 700 };
   const secondary = { background: "white", color: "#5B21B6", border: "1px solid #DDD6FE", fontWeight: 700 };
   const danger = { background: "white", color: "#BE123C", border: "1px solid #FECDD3", fontWeight: 700 };
+  /** Lleva al control del panel: en la ubicación, al primer select que falta (provincia, ciudad o barrio). */
+  const focusExtra = (k: MeliExtraKey) => {
+    if (k === "meli_location") {
+      const which = !loc?.stateId ? "provincia" : !loc?.cityId ? "ciudad" : "barrio";
+      focusField(`${MELI_EXTRA_ID.meli_location}-${which}`);
+    } else focusField(MELI_EXTRA_ID[k]);
+  };
+
+  // Cada faltante con su arreglo al lado: bloqueantes primero.
+  const seen = new Map<string, number>();
+  const issueItems: FixItem[] = [...issues]
+    .sort((a, b) => Number(b.blocking) - Number(a.blocking))
+    .map((i) => {
+      const n = seen.get(i.field) ?? 0;
+      seen.set(i.field, n + 1);
+      const key = fixForMeliField(i.field);
+      const fixes: Fix[] = [];
+      if (key && isFieldKey(key)) fixes.push({ kind: "field", key });
+      else if (key === "photos") fixes.push({ kind: "link", key, label: "Subir fotos", to: editorHref(property.id, "photos") });
+      else if (key === "type") fixes.push({ kind: "link", key, label: "Cambiar tipo u operación", to: editorHref(property.id, "type") });
+      else if (key && !hasItem && (key === "meli_location" || key === "meli_guests" || key === "meli_land_access"))
+        fixes.push({ kind: "action", key, label: key === "meli_location" ? "Elegir ubicación" : "Completar", onClick: () => focusExtra(key) });
+      return {
+        id: `${i.field}#${n}`,
+        title: key ? FIX_LABEL[key] : i.blocking ? "Falta un dato" : "Sugerencia",
+        detail: `${i.blocking ? "Falta" : "Sugerencia"}: ${i.message}`,
+        tone: i.blocking ? "block" : "warn",
+        fixes,
+      };
+    });
+
   const canPublish = meli.connected && synced && !sample && isPublishable(localIssues) && !busy;
 
   return (
@@ -234,9 +250,10 @@ export function MeliPublishPanel({
 
         {!hasItem && (
           <>
-            <div>
+            <div id={MELI_EXTRA_ID.meli_location} className="scroll-mt-6">
               <p className="text-sm mb-2" style={{ color: INK, fontWeight: 700 }}>Ubicación en Mercado Libre</p>
               <MeliLocationPicker
+                idPrefix={MELI_EXTRA_ID.meli_location}
                 value={extras.location}
                 onChange={(v) => update({ location: v })}
                 hints={{ province: property.province, locality: property.locality, zone: property.zone }}
@@ -250,6 +267,7 @@ export function MeliPublishPanel({
                   <label className="text-xs" style={{ color: MUTED, fontWeight: 600 }}>
                     Huéspedes (alquiler temporario)
                     <input
+                      id={MELI_EXTRA_ID.meli_guests}
                       type="number"
                       min={1}
                       inputMode="numeric"
@@ -264,6 +282,7 @@ export function MeliPublishPanel({
                   <label className="text-xs" style={{ color: MUTED, fontWeight: 600 }}>
                     Acceso del terreno
                     <select
+                      id={MELI_EXTRA_ID.meli_land_access}
                       value={extras.landAccess ?? ""}
                       onChange={(e) => update({ landAccess: e.target.value || null })}
                       className="w-full min-h-[44px] px-3 rounded-xl border text-sm bg-white"
@@ -304,7 +323,12 @@ export function MeliPublishPanel({
               </span>
             )}
           </p>
-          <IssueList issues={issues} />
+          {issueItems.length > 0 && (
+            <>
+              <p className="text-xs mb-1 text-ink-soft">Completalo acá mismo: al guardar se vuelve a validar.</p>
+              <FixList property={property} items={issueItems} onSaved={() => setServerIssues(null)} />
+            </>
+          )}
         </div>
 
         {message && (

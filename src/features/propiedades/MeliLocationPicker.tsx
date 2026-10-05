@@ -94,12 +94,15 @@ export function MeliLocationPicker({
   onChange,
   hints,
   onNeighborhoodCount,
+  idPrefix,
 }: {
   value: MeliLocationValue | null;
   onChange: (v: MeliLocationValue) => void;
   hints: { province: string | null; locality: string | null; zone: string | null };
   /** Cuántos barrios tiene la ciudad elegida (null = todavía no se sabe). */
   onNeighborhoodCount?: (n: number | null) => void;
+  /** Prefijo de ids de los selects (`-provincia`, `-ciudad`, `-barrio`) para llevar el foco desde "qué falta". */
+  idPrefix?: string;
 }) {
   const [states, setStates] = useState<Node[]>([]);
   const [cities, setCities] = useState<Node[]>([]);
@@ -200,6 +203,7 @@ export function MeliLocationPicker({
       <label className="text-xs" style={{ color: "#6B5A8E", fontWeight: 600 }}>
         Provincia / zona
         <select
+          id={idPrefix ? `${idPrefix}-provincia` : undefined}
           className={select}
           style={border}
           value={stateId}
@@ -214,6 +218,7 @@ export function MeliLocationPicker({
       <label className="text-xs" style={{ color: "#6B5A8E", fontWeight: 600 }}>
         Ciudad / partido
         <select
+          id={idPrefix ? `${idPrefix}-ciudad` : undefined}
           className={select}
           style={border}
           value={cityId}
@@ -239,6 +244,7 @@ export function MeliLocationPicker({
           className={select}
           style={cityId && !loadingHoods && hoods.length > 0 && !hoodId ? { ...border, borderColor: "#FDA4AF" } : border}
           aria-invalid={!!cityId && !loadingHoods && hoods.length > 0 && !hoodId}
+          id={idPrefix ? `${idPrefix}-barrio` : undefined}
           value={hoodId}
           disabled={!cityId || hoods.length === 0}
           onChange={(e) => {

@@ -8,30 +8,50 @@ import { Card } from "@/components/ui/Card";
 import { ScoreRing } from "@/components/ui/ScoreRing";
 import { AlertTriangleIcon, CheckIcon, ClockIcon, MatchesSolidIcon } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
-import type { DiagnosticCheck } from "@/lib/listingDiagnostics";
+import { diagnose, type DiagnosticCheck } from "@/lib/listingDiagnostics";
 import { computeMatch, MATCH_THRESHOLD } from "@/lib/matching";
 import type { CurrencyCode, Property, PropertyStatus, PublicationStatus } from "@/types/db";
 import { INTEGRATION_GUIDES } from "../integrationGuides";
 import { EXTERNAL_CHANNELS, WEB_CHANNEL, usePublications } from "../usePublications";
 import { useMeliConnection } from "../useIntegrations";
+import { loadExtras } from "../MeliPublishPanel";
+import { toMeliListing } from "../useMeliPublish";
+import { validateMeliListing } from "../../../../shared/meliListing";
+import {
+  FIX_LABEL,
+  editorFieldId,
+  fixForMeliField,
+  fixesForCheck,
+  lc,
+  missingSizeParts,
+  shortMissingForCheck,
+  shortMissingForMeli,
+  type FieldKey,
+  type LinkKey,
+} from "../completar/fields";
 
 const PANEL_TITLE = "text-xs uppercase";
 const PANEL_TITLE_STYLE = { color: "#7458C4", fontWeight: 700, letterSpacing: "0.1em" } as const;
 
-/** A qué sección del formulario lleva cada check del diagnóstico. */
-export const CHECK_SECTION: Record<string, string> = {
-  title: "informacion",
-  description: "informacion",
-  photos: "galeria",
-  price: "precios",
-  coords: "ubicacion",
-  size: "superficies",
-  authorization: "propietario",
-};
+const fixBtnClass =
+  "inline-flex items-center gap-1 px-3 min-h-11 rounded-xl text-xs border transition-all hover:bg-violet-50 bg-white";
+const fixBtnStyle = { borderColor: "#DDD6FE", color: "#7C3AED", fontWeight: 700 } as const;
 
 /* ── (a) Índice de calidad ─────────────────────────────────────────────── */
 
-export function QualityPanel({ checks, onJump }: { checks: DiagnosticCheck[]; onJump: (sectionId: string) => void }) {
+export function QualityPanel({
+  checks,
+  draft,
+  photoCount,
+  onFix,
+}: {
+  checks: DiagnosticCheck[];
+  /** La propiedad como quedaría (para saber qué parte de cada check falta). */
+  draft: Property;
+  photoCount: number;
+  /** Lleva el foco al control (`campo-…`). */
+  onFix: (fieldId: string) => void;
+}) {
   const ok = checks.filter((c) => c.ok).length;
   const pct = checks.length ? Math.round((100 * ok) / checks.length) : 0;
   return (
@@ -49,13 +69,11 @@ export function QualityPanel({ checks, onJump }: { checks: DiagnosticCheck[]; on
         </p>
       </div>
       <ul className="mt-4 space-y-1">
-        {checks.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              onClick={() => onJump(CHECK_SECTION[c.id] ?? "informacion")}
-              className="w-full flex items-start gap-2.5 text-left px-2 py-2 min-h-11 rounded-lg hover:bg-violet-50"
-            >
+        {checks.map((c) => {
+          const fixes = fixesForCheck(c, draft) as (FieldKey | LinkKey)[];
+          const missing = shortMissingForCheck(c, draft, photoCount);
+          return (
+            <li key={c.id} className="flex items-start gap-2.5 px-2 py-2 rounded-lg">
               <span
                 className="w-5 h-5 mt-0.5 rounded-full flex items-center justify-center flex-shrink-0"
                 style={{ background: c.ok ? "#F0FDF4" : "#FFFBEB", border: `1px solid ${c.ok ? "#BBF7D0" : "#FDE68A"}` }}
@@ -63,18 +81,34 @@ export function QualityPanel({ checks, onJump }: { checks: DiagnosticCheck[]; on
               >
                 {c.ok ? <CheckIcon size={10} color="#16A34A" /> : <span style={{ color: "#B45309", fontSize: 11, fontWeight: 800 }}>!</span>}
               </span>
-              <span className="min-w-0">
+              <span className="min-w-0 flex-1">
                 <span className="block text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>
                   {c.label}
                   <span className="sr-only">{c.ok ? ": cumple" : ": falta"}</span>
                 </span>
-                <span className="block text-xs" style={{ color: "#7C6A99" }}>
-                  {c.detail}
+                <span className="block text-xs" style={{ color: c.ok ? "#7C6A99" : "#B45309" }}>
+                  {c.ok || c.id !== "size" ? c.detail : `Falta: ${missing.join(", ")}.`}
                 </span>
+                {fixes.length > 0 && (
+                  <span className="flex flex-wrap gap-1.5 mt-1.5">
+                    {fixes.map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => onFix(editorFieldId(k))}
+                        aria-label={`Completar ${FIX_LABEL[k].toLowerCase()}`}
+                        className={fixBtnClass}
+                        style={fixBtnStyle}
+                      >
+                        {fixes.length > 1 ? FIX_LABEL[k] : "Completar"} <span aria-hidden="true">→</span>
+                      </button>
+                    ))}
+                  </span>
+                )}
               </span>
-            </button>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
     </Card>
   );
@@ -99,6 +133,16 @@ interface ChannelRowData {
   tone: Tone;
   detail?: string | null;
   requirements: { text: string; ok?: boolean }[];
+  /** Datos de la ficha que le faltan a este canal, cada uno con su arreglo. `null` = el canal no pide datos de la ficha. */
+  missing: Missing[] | null;
+}
+
+interface Missing {
+  text: string;
+  /** Campo del editor al que lleva "Completar". */
+  target?: string;
+  /** O una pantalla (p. ej. la ubicación de Mercado Libre, que se elige en el publicador). */
+  path?: string;
 }
 
 function externalLabel(status: PublicationStatus | null, connected: boolean): { label: string; tone: Tone } {
@@ -125,6 +169,10 @@ export function ChannelsPanel({
   status,
   photoCount,
   appLinked,
+  draft,
+  photos,
+  onFix,
+  onNavigate,
 }: {
   /** La propiedad tal como está guardada (en el alta, `undefined`). */
   saved: Property | undefined;
@@ -132,9 +180,50 @@ export function ChannelsPanel({
   status: PropertyStatus;
   photoCount: number;
   appLinked: boolean;
+  /** La propiedad como quedaría con lo que hay en el formulario. */
+  draft: Property;
+  photos: string[];
+  onFix: (fieldId: string) => void;
+  /** Navegar respetando "cambios sin guardar". */
+  onNavigate: (path: string) => void;
 }) {
   const { channelsOf } = usePublications();
   const meli = useMeliConnection();
+
+  // Lo que le falta a la ficha según el diagnóstico (lo usan los portales en cola).
+  const portalMissing: Missing[] = useMemo(() => {
+    const out: Missing[] = [];
+    for (const c of diagnose(draft, photoCount)) {
+      if (c.ok) continue;
+      if (c.id === "size") {
+        for (const k of missingSizeParts(draft)) out.push({ text: lc(FIX_LABEL[k]), target: editorFieldId(k) });
+      } else {
+        const [k] = fixesForCheck(c, draft) as (FieldKey | LinkKey)[];
+        out.push({ text: shortMissingForCheck(c, draft, photoCount)[0], target: k ? editorFieldId(k) : undefined });
+      }
+    }
+    return out;
+  }, [draft, photoCount]);
+
+  // Mercado Libre: la misma validación previa del panel del publicador (solo lo que bloquea).
+  const meliMissing: Missing[] = useMemo(() => {
+    const extras = saved ? loadExtras(saved.id) : null;
+    const loc = extras?.location;
+    const location = loc?.neighborhoodId ? { neighborhoodId: loc.neighborhoodId } : loc?.cityId ? { cityId: loc.cityId } : null;
+    const listing = toMeliListing(draft, { location, guests: extras?.guests ?? null, landAccess: extras?.landAccess ?? null });
+    const publicPhotos = photos.filter((u) => /^https:\/\//.test(u));
+    const out: Missing[] = [];
+    for (const i of validateMeliListing(listing, publicPhotos)) {
+      if (!i.blocking) continue;
+      const k = fixForMeliField(i.field);
+      const text = shortMissingForMeli(i.field);
+      if (out.some((m) => m.text === text)) continue;
+      if (k === "meli_location" || k === "meli_guests" || k === "meli_land_access") {
+        out.push(saved ? { text, path: `/publicador/${saved.id}#mercadolibre` } : { text: `${text} (se elige al publicar)` });
+      } else out.push({ text, target: k ? editorFieldId(k as FieldKey | LinkKey) : undefined });
+    }
+    return out;
+  }, [draft, photos, saved]);
 
   const rows: ChannelRowData[] = useMemo(() => {
     const out: ChannelRowData[] = [];
@@ -163,6 +252,7 @@ export function ChannelsPanel({
       color: "#7C3AED",
       ...app,
       requirements: [{ text: "Precio en USD", ok: usd }],
+      missing: usd ? [] : [{ text: "precio en USD", target: editorFieldId("currency") }],
     });
 
     out.push({
@@ -174,6 +264,7 @@ export function ChannelsPanel({
       tone: "ok",
       detail: "Canal propio: la ficha se comparte por link.",
       requirements: [],
+      missing: null,
     });
 
     const states = saved ? channelsOf(saved) : null;
@@ -197,10 +288,11 @@ export function ChannelsPanel({
         tone,
         detail: st?.errorMessage ?? null,
         requirements,
+        missing: info.channel === "mercadolibre" ? meliMissing : portalMissing,
       });
     }
     return out;
-  }, [appLinked, currency, saved, status, channelsOf, meli.connected, photoCount]);
+  }, [appLinked, currency, saved, status, channelsOf, meli.connected, photoCount, meliMissing, portalMissing]);
 
   return (
     <Card padded>
@@ -212,14 +304,22 @@ export function ChannelsPanel({
       </p>
       <ul className="mt-3 divide-y" style={{ borderColor: "#F3F0FF" }}>
         {rows.map((r) => (
-          <ChannelRow key={r.key} row={r} />
+          <ChannelRow key={r.key} row={r} onFix={onFix} onNavigate={onNavigate} />
         ))}
       </ul>
     </Card>
   );
 }
 
-function ChannelRow({ row }: { row: ChannelRowData }) {
+function ChannelRow({
+  row,
+  onFix,
+  onNavigate,
+}: {
+  row: ChannelRowData;
+  onFix: (fieldId: string) => void;
+  onNavigate: (path: string) => void;
+}) {
   const tone = TONE[row.tone];
   const logo = row.color;
   return (
@@ -250,10 +350,37 @@ function ChannelRow({ row }: { row: ChannelRowData }) {
           {row.detail}
         </p>
       )}
+      {row.missing && row.missing.length > 0 && (
+        <p className="ml-11 mt-1 text-xs leading-7" style={{ color: "#B45309", fontWeight: 600 }}>
+          Falta:{" "}
+          {row.missing.map((m, i) => (
+            <span key={m.text}>
+              {m.target || m.path ? (
+                <button
+                  type="button"
+                  onClick={() => (m.target ? onFix(m.target) : m.path && onNavigate(m.path))}
+                  aria-label={`Completar ${m.text} (${row.name})`}
+                  className="inline py-1.5 rounded underline decoration-dotted underline-offset-2 hover:text-[#7C3AED] focus-visible:text-[#7C3AED]"
+                >
+                  {m.text}
+                </button>
+              ) : (
+                m.text
+              )}
+              {i < row.missing!.length - 1 ? ", " : ""}
+            </span>
+          ))}
+        </p>
+      )}
+      {row.missing && row.missing.length === 0 && (
+        <p className="ml-11 mt-1 text-xs flex items-center gap-1" style={{ color: "#15803D", fontWeight: 600 }}>
+          <CheckIcon size={10} color="#16A34A" /> La ficha tiene todo lo que pide este canal
+        </p>
+      )}
       {row.requirements.length > 0 && (
         <details className="ml-11 mt-1">
           <summary className="text-xs cursor-pointer min-h-8 flex items-center" style={{ color: "#7C3AED", fontWeight: 600 }}>
-            Requisitos
+            {row.key === "app" ? "Requisitos" : "Requisitos de la cuenta"}
           </summary>
           <ul className="mt-1 space-y-1">
             {row.requirements.map((req) => (

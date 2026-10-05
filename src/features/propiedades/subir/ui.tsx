@@ -101,6 +101,8 @@ export function MoneyField({
   placeholder,
   error,
   hint,
+  id: idProp,
+  currencyId,
 }: {
   label: string;
   value: string;
@@ -110,8 +112,13 @@ export function MoneyField({
   placeholder?: string;
   error?: string;
   hint?: React.ReactNode;
+  /** id del input del número (para llevar el foco desde "Completar"). */
+  id?: string;
+  /** id del selector de moneda. */
+  currencyId?: string;
 }) {
-  const id = useId();
+  const autoId = useId();
+  const id = idProp ?? autoId;
   return (
     <div>
       <label htmlFor={id} className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
@@ -119,6 +126,7 @@ export function MoneyField({
       </label>
       <div className="flex gap-2">
         <select
+          id={currencyId}
           value={currency}
           onChange={(e) => onCurrency(e.target.value as "USD" | "ARS")}
           aria-label={`Moneda de ${label.toLowerCase()}`}
@@ -150,10 +158,13 @@ export function Stepper({
   label,
   value,
   onChange,
+  id,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
+  /** id del botón "Sumar": es el que recibe el foco desde "Completar". */
+  id?: string;
 }) {
   return (
     <div role="group" aria-label={label}>
@@ -177,6 +188,7 @@ export function Stepper({
           {value}
         </span>
         <button
+          id={id}
           type="button"
           onClick={() => onChange(value + 1)}
           aria-label={`Sumar ${label.toLowerCase()}`}
