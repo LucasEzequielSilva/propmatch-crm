@@ -95,13 +95,14 @@ export function MeliPublishPanel({
   const [warnings, setWarnings] = useState<string[]>([]);
   const { run, busy } = useMeliPublish(onRow);
 
-  const update = (patch: Partial<Extras>) =>
+  const update = (patch: Partial<Extras>) => {
+    setServerIssues(null);
     setExtras((prev) => {
       const next = { ...prev, ...patch };
       saveExtras(property.id, next);
-      setServerIssues(null);
       return next;
     });
+  };
 
   // Alcanza con el barrio; la ciudad sola solo si no tiene barrios.
   const loc = extras.location;
@@ -121,7 +122,9 @@ export function MeliPublishPanel({
 
   const synced = !!property.app_property_id;
   const status = channel.status;
-  const hasItem = !!channel.externalId && status !== "removed";
+  // Con error, el aviso puede haber quedado cerrado (p. ej. sin cupo): se ofrece publicar de nuevo
+  // y el servidor decide si actualiza o crea uno nuevo según el estado real en Mercado Libre.
+  const hasItem = !!channel.externalId && status !== "removed" && status !== "error";
 
   const act = useCallback(
     async (action: MeliAction) => {
@@ -304,8 +307,13 @@ export function MeliPublishPanel({
           {!hasItem && (
             <>
               <button type="button" className={btn} style={primary} disabled={!canPublish} onClick={() => void act("publish")}>
-                {busy === "publish" ? "Publicando…" : "Publicar en Mercado Libre"}
+                {busy === "publish" ? "Publicando…" : status === "error" || status === "removed" ? "Publicar de nuevo" : "Publicar en Mercado Libre"}
               </button>
+              {!!channel.externalId && status === "error" && (
+                <button type="button" className={btn} style={secondary} disabled={!meli.connected || !!busy} onClick={() => void act("sync")}>
+                  {busy === "sync" ? "Consultando…" : "Actualizar estado"}
+                </button>
+              )}
               <button type="button" className={btn} style={secondary} disabled={!meli.connected || !synced || !!busy} onClick={() => void act("check")}>
                 {busy === "check" ? "Verificando…" : "Verificar con Mercado Libre"}
               </button>

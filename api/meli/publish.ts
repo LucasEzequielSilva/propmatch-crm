@@ -204,8 +204,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prep = await prepare(listing, publicPhotos(prop.photos));
     const wanted: MeliListingType = MELI_LISTING_TYPES.some((t) => t.id === b.listingType) ? (b.listingType as MeliListingType) : "silver";
 
-    // Si ya hay un aviso vivo, "publicar" es actualizarlo (no se duplica).
-    const live = !!itemId && existing?.status !== "removed";
+    // Si ya hay un aviso vivo, "publicar" es actualizarlo (no se duplica). Se mira el estado
+    // real en Mercado Libre: un aviso cerrado (finalizado o sin cupo) no se puede editar.
+    let live = !!itemId && existing?.status !== "removed";
+    if (live && action === "publish") {
+      const current = await readItem(session, itemId!);
+      if (current.status === 404 || current.body?.status === "closed") live = false;
+    }
     const mode: Action = action === "publish" && live ? "update" : action;
 
     if (mode === "update" && !itemId) return json(res, 409, { error: "not_published", message: "Esta propiedad todavía no tiene aviso en Mercado Libre." });
