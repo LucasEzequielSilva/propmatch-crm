@@ -23,6 +23,7 @@ import { PhotoGallery } from "./subir/PhotoGallery";
 import { BuyersPanel, ChannelsPanel, QualityPanel, useCompatibleBuyers } from "./subir/SidePanels";
 import { LAYOUTS, ORIENTATIONS, editorFieldId as fid } from "./completar/fields";
 import { focusField } from "./completar/focusField";
+import { VozPropiedadEntry } from "@/features/voz/VozPropiedadEntry";
 
 const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
 const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
@@ -400,6 +401,7 @@ export default function SubirPropiedadPage() {
                 Estado: {PROPERTY_STATUS_LABEL[form.status]}
               </button>
             )}
+            <VozPropiedadEntry isNew={!editing} setForm={setForm} />
             <HeaderButton
               variant="ghost"
               onClick={() =>

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useStore } from "@/data/store";
+import { MicIcon } from "@/features/voz/icons";
+import { vozNavState } from "@/features/voz/prefill";
+import { VozModal } from "@/features/voz/VozModal";
+import type { VozKind } from "../../../shared/voz";
 import { runTurn, todayLine } from "@/lib/proppi/agent";
 import type { ApiMessage } from "@/lib/proppi/client";
 import { CloseIcon, CopyIcon, ProppiIcon } from "./ProppiIcon";
@@ -26,6 +31,8 @@ interface Chat {
 const EMPTY: Chat = { history: [], items: [] };
 const SUGGESTIONS = ["¿Qué leads no contesté?", "Resumime la semana", "¿Qué propiedades tienen el precio alto?"];
 const chatKey = (agencyId: string) => `pm.proppi.chat.${agencyId}`;
+/** "dictá una propiedad" / "dictar una búsqueda" abre la carga por voz en vez de preguntarle a Proppi. */
+const DICTATE_RE = /^\s*dict(?:a|á|ar)\s+(?:una?\s+)?(?:(propiedad|ficha)|(b[uú]squeda|requerimiento))/i;
 const newId = () => Math.random().toString(36).slice(2, 10);
 
 function loadChat(key: string): Chat {
@@ -51,6 +58,8 @@ export function ProppiPanel() {
   const available = useProppiAvailable();
   const { settings, consume, limitReached } = useProppiSettings(agency.id);
   const [open, setOpen] = useState(false);
+  const [voz, setVoz] = useState<VozKind | null>(null);
+  const navigate = useNavigate();
 
   if (!settings.enabled || !settings.panelEnabled) return null;
 
@@ -76,6 +85,18 @@ export function ProppiPanel() {
           consume={consume}
           settingsPayload={payloadOf(settings)}
           onClose={() => setOpen(false)}
+          onDictate={(k) => {
+            setOpen(false);
+            setVoz(k);
+          }}
+        />
+      )}
+      {voz && (
+        <VozModal
+          kind={voz}
+          applyLabel={voz === "propiedad" ? "Abrir la ficha precargada" : "Abrir el contacto precargado"}
+          onApply={(r) => navigate(r.kind === "propiedad" ? "/propiedades/nueva" : "/contactos", { state: vozNavState(r) })}
+          onClose={() => setVoz(null)}
         />
       )}
     </>
@@ -89,6 +110,7 @@ function ProppiDrawer({
   consume,
   settingsPayload,
   onClose,
+  onDictate,
 }: {
   agencyId: string;
   available: boolean;
@@ -96,6 +118,7 @@ function ProppiDrawer({
   consume: () => boolean;
   settingsPayload: ReturnType<typeof payloadOf>;
   onClose: () => void;
+  onDictate: (kind: VozKind) => void;
 }) {
   const key = chatKey(agencyId);
   const [chat, setChat] = useState<Chat>(() => loadChat(key));
@@ -124,6 +147,12 @@ function ProppiDrawer({
   const ask = useCallback(
     async (question: string) => {
       const q = question.trim();
+      const dictate = DICTATE_RE.exec(q);
+      if (dictate && !busy) {
+        setDraft("");
+        onDictate(dictate[1] ? "propiedad" : "busqueda");
+        return;
+      }
       if (!q || busy || !available) return;
       if (!consume()) {
         setChat((c) => ({
@@ -168,7 +197,7 @@ function ProppiDrawer({
       abortRef.current = null;
       input.current?.focus();
     },
-    [busy, available, consume, chat.history, settingsPayload, getData],
+    [busy, available, consume, chat.history, settingsPayload, getData, onDictate],
   );
 
   function reset() {
@@ -272,6 +301,21 @@ function ProppiDrawer({
         <p role="status" className="px-4 text-xs min-h-[20px] flex-shrink-0" style={{ color: "#7458C4", fontWeight: 600 }}>
           {busy && (status ? `Proppi está ${status}…` : streaming ? "" : "Proppi está pensando…")}
         </p>
+
+        <div className="px-3 pb-2 flex flex-wrap gap-2 flex-shrink-0" role="group" aria-label="Carga por voz">
+          {(["propiedad", "busqueda"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onDictate(k)}
+              className="flex items-center gap-1.5 min-h-[36px] px-3 rounded-xl text-xs border hover:border-violet-300"
+              style={{ borderColor: "#EDE9FE", color: "#6D28D9", background: "#F9F7FF", fontWeight: 600 }}
+            >
+              <MicIcon size={13} color="#6D28D9" />
+              {k === "propiedad" ? "Dictá una propiedad" : "Dictá una búsqueda"}
+            </button>
+          ))}
+        </div>
 
         <form
           className="border-t px-3 pt-2 pb-3 flex-shrink-0"
