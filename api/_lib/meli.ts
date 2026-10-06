@@ -1,6 +1,7 @@
 import { env } from "./env.js";
 import { decrypt, encrypt } from "./crypto.js";
 import { supabaseAdmin } from "./supabaseAdmin.js";
+import { recordConnectionCheck } from "./integrations/connections.js";
 
 export const MELI_AUTH_URL = "https://auth.mercadolibre.com.ar/authorization";
 export const MELI_API = "https://api.mercadolibre.com";
@@ -45,9 +46,12 @@ export interface MeliSession {
   token: string;
   /** id de usuario de Mercado Libre (seller_id). */
   userId: string;
+  /** id de la fila de agency_integrations (la "conexión"): se guarda en property_publications.connection_id. */
+  connectionId: string;
 }
 
 interface TokenRow {
+  id: string;
   access_token_enc: string | null;
   refresh_token_enc: string | null;
   expires_at: string | null;
@@ -74,7 +78,7 @@ export async function getMeliSession(agencyId: string): Promise<MeliSession> {
   const read = async () => {
     const { data, error } = await db
       .from("agency_integrations")
-      .select("access_token_enc, refresh_token_enc, expires_at, status, external_account_id")
+      .select("id, access_token_enc, refresh_token_enc, expires_at, status, external_account_id")
       .eq("agency_id", agencyId)
       .eq("provider", "mercadolibre")
       .maybeSingle();
@@ -86,7 +90,8 @@ export async function getMeliSession(agencyId: string): Promise<MeliSession> {
   if (row.status === "needs_reauth") throw new Error("meli_needs_reauth");
   if (!row.external_account_id || !row.access_token_enc) throw new Error("meli_not_connected");
   const userId = row.external_account_id;
-  if (fresh(row)) return { token: decrypt(row.access_token_enc), userId };
+  const connectionId = row.id;
+  if (fresh(row)) return { token: decrypt(row.access_token_enc), userId, connectionId };
   if (!row.refresh_token_enc) throw new Error("meli_needs_reauth");
 
   let t: MeliTokenResponse;
@@ -94,7 +99,7 @@ export async function getMeliSession(agencyId: string): Promise<MeliSession> {
     t = await meliTokenRequest({ grant_type: "refresh_token", refresh_token: decrypt(row.refresh_token_enc) });
   } catch (e) {
     const again = await read().catch(() => null);
-    if (again && fresh(again) && again.access_token_enc) return { token: decrypt(again.access_token_enc), userId };
+    if (again && fresh(again) && again.access_token_enc) return { token: decrypt(again.access_token_enc), userId, connectionId };
     const rejected = e instanceof MeliTokenError && (e.status === 400 || e.status === 401);
     if (rejected) {
       await db
@@ -103,6 +108,11 @@ export async function getMeliSession(agencyId: string): Promise<MeliSession> {
         .eq("agency_id", agencyId)
         .eq("provider", "mercadolibre")
         .eq("refresh_token_enc", row.refresh_token_enc);
+      await recordConnectionCheck(
+        agencyId,
+        "mercadolibre",
+        "Mercado Libre cerró la sesión de PropMatch (se cambió la contraseña, se quitó el permiso o pasó mucho tiempo sin uso). Hay que volver a conectar la cuenta.",
+      ).catch(() => undefined);
       throw new Error("meli_needs_reauth");
     }
     throw new Error("meli_unavailable");
@@ -122,7 +132,7 @@ export async function getMeliSession(agencyId: string): Promise<MeliSession> {
     .eq("provider", "mercadolibre")
     .eq("refresh_token_enc", row.refresh_token_enc);
   if (upErr) throw new Error("persist");
-  return { token: t.access_token, userId };
+  return { token: t.access_token, userId, connectionId };
 }
 
 /** Compatibilidad: solo el token. */
