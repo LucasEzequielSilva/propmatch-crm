@@ -9,6 +9,7 @@ import { ownerReport } from "@/lib/ownerReport";
 import { authorizationState } from "@/lib/authorization";
 import { isSample, isSamplePhone } from "@/lib/samples";
 import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
+import { useContactBlock } from "@/lib/marketing/block";
 
 /**
  * Mensaje de WhatsApp a un contacto.
@@ -96,6 +97,8 @@ export function WhatsAppModal({
   const number = sampleContact ? null : normalizeWhatsappNumber(contact.phone);
   const name = firstName(contact.full_name);
   const me = firstName(profile.full_name);
+  // Marketing: si pidió no recibir más mensajes por WhatsApp, el CRM no abre el chat.
+  const block = useContactBlock(agency.id, contact);
 
   // La ficha se arma de forma asíncrona (comprime), por eso el link llega después.
   useEffect(() => {
@@ -183,6 +186,7 @@ export function WhatsAppModal({
   const skippedPhotos = property && template === "propiedad" ? localOnlyPhotos(photos[property.id] ?? []) : 0;
 
   function send() {
+    if (block.whatsapp) return;
     window.open(whatsappLink(contact.phone, text), "_blank", "noopener");
     logActivity({
       type: "mensaje",
@@ -238,6 +242,16 @@ export function WhatsAppModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {block.whatsapp && (
+            <p
+              role="alert"
+              className="text-sm px-4 py-3 rounded-xl border"
+              style={{ background: "#FFF1F2", color: "#9F1239", borderColor: "#FECDD3", fontWeight: 600 }}
+            >
+              ⛔ {block.label}: {contact.full_name} pidió no recibir más mensajes. No se le puede escribir por WhatsApp desde el CRM
+              hasta que vuelva a dar su consentimiento (se registra en su ficha → Marketing).
+            </p>
+          )}
           {sampleContact && (
             <SampleNotice>
               Es un contacto de ejemplo: su teléfono es inventado. WhatsApp se va a abrir sin destinatario para que
@@ -345,7 +359,8 @@ export function WhatsAppModal({
           </button>
           <button
             onClick={send}
-            disabled={!text.trim() || waitingLink}
+            disabled={!text.trim() || waitingLink || block.whatsapp}
+            title={block.whatsapp ? "No contactar: pidió no recibir más mensajes" : undefined}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm text-[#063B2A] transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
             style={{ background: WA_GREEN, fontWeight: 700 }}
           >

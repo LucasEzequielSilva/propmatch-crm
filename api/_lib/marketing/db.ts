@@ -4,7 +4,7 @@
  * puede tener copia, pero el servidor vuelve a chequear antes de cada envío.
  */
 import { crmDb } from "../inbox/db.js";
-import type { MarketingChannel, UnsubscribeScope } from "../../../shared/marketing.js";
+import { normalizePhone, type MarketingChannel, type UnsubscribeScope } from "../../../shared/marketing.js";
 
 export type UnsubSource =
   | "link_email"
@@ -230,4 +230,43 @@ export async function sentCount(agencyId: string, sinceIso: string, campaignId?:
   const { count, error } = await q;
   if (error) throw new Error("db");
   return count ?? 0;
+}
+
+/**
+ * Para el inbox: ¿la plantilla es de MARKETING y el destino está dado de baja
+ * de WhatsApp? Si las tablas de marketing no existen, devuelve false (no
+ * bloquea el inbox).
+ */
+export async function isWhatsappUnsubscribed(
+  agencyId: string,
+  channelAccountId: string,
+  templateName: string,
+  language: string,
+  waId: string,
+): Promise<boolean> {
+  try {
+    const db = crmDb();
+    const { data: tpl } = await db
+      .from("message_templates")
+      .select("category")
+      .eq("channel_account_id", channelAccountId)
+      .eq("name", templateName)
+      .eq("language", language)
+      .maybeSingle();
+    if ((tpl?.category ?? "").toUpperCase() !== "MARKETING") return false;
+    const phone = normalizePhone(waId);
+    if (!phone) return false;
+    const { data, error } = await db
+      .from("marketing_unsubscribes")
+      .select("id")
+      .eq("agency_id", agencyId)
+      .eq("phone_norm", phone)
+      .is("revoked_at", null)
+      .in("scope", ["whatsapp", "all"])
+      .limit(1);
+    if (error) return false;
+    return (data?.length ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }

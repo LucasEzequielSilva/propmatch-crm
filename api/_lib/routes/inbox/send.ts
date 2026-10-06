@@ -7,6 +7,7 @@ import { accountById } from "../../inbox/accounts.js";
 import { GraphError } from "../../inbox/graph.js";
 import { waErrorCode, waSendTemplate, waSendText } from "../../inbox/whatsapp.js";
 import { metaSendText } from "../../inbox/meta.js";
+import { isWhatsappUnsubscribed } from "../../marketing/db.js";
 
 const H24 = 24 * 3600 * 1000;
 const D7 = 7 * 24 * 3600 * 1000;
@@ -68,6 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq("status", "APPROVED")
       .maybeSingle();
     if (!data) return fail(res, 400, "template_not_approved");
+    // Marketing: una plantilla de MARKETING no sale a quien pidió la baja de WhatsApp.
+    if (await isWhatsappUnsubscribed(ctx.agencyId, acc.id, name, language, conv.external_thread_id)) {
+      return fail(res, 409, "contact_unsubscribed");
+    }
     tplRow = data;
     params = Array.isArray(tpl.params) ? tpl.params.map((p) => (typeof p === "string" ? p : "")) : [];
     // WhatsApp rechaza parámetros vacíos, con saltos de línea, tabs o >4 espacios seguidos.

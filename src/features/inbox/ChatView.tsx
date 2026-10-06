@@ -5,6 +5,7 @@ import type { Match, Profile } from "@/types/db";
 import { CHANNEL_META, type Conversation } from "./conversations";
 import { Avatar } from "./ConversationList";
 import { useStore } from "@/data/store";
+import { InboxNoContactNotice } from "@/features/marketing/InboxNoContactNotice";
 import { isAutomaticMessage, summarizeHours } from "./automationEngine";
 import { useAutomationState } from "./automationState";
 import { buildTemplateContext, missingPropertyVars, renderTemplate } from "./templates";
@@ -242,6 +243,7 @@ ${t}` : t));
             );
           })}
         </div>
+        <InboxNoContactNotice contactId={conversation.contact?.id} />
         {error && (
           <p role="alert" className="text-xs mb-2" style={{ color: "#BE123C", fontWeight: 600 }}>
             {error}
