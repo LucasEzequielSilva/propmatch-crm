@@ -163,13 +163,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (b.action === "test") {
       if (!sendEnabled()) return fail(res, 409, "send_disabled");
       const { id: campaignId } = await upsertCampaign(ctx.agencyId, ctx.userId, camp);
-      const rec = parseRecipient(b.recipient, camp.channel);
-      if ("error" in rec) return fail(res, 400, rec.error);
+      const input: Record<string, unknown> = { ...((b.recipient && typeof b.recipient === "object" ? b.recipient : {}) as Record<string, unknown>), contactRef: null };
       if (camp.channel === "email") {
         const me = await userEmail(req);
         if (!me) return fail(res, 400, "sin_email_propio");
-        rec.email_norm = me; // la prueba va SIEMPRE al mail de quien la pide
+        input.email = me; // la prueba va SIEMPRE al mail de quien la pide
       }
+      const rec = parseRecipient(input, camp.channel);
+      if ("error" in rec) return fail(res, 400, rec.error);
       const { data: ins, error } = await db
         .from("marketing_recipients")
         .insert({ ...rec, agency_id: ctx.agencyId, campaign_id: campaignId, channel: camp.channel, is_test: true, status: "sending", attempts: 1 })

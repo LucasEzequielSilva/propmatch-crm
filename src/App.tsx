@@ -34,6 +34,10 @@ import DocumentoPage from "@/features/operaciones/DocumentoPage";
 // Web pública de la inmobiliaria: se carga aparte (los visitantes no necesitan el CRM).
 const SitioPage = lazy(() => import("@/features/sitio/SitioPage"));
 const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPage"));
+// Marketing: baja pública sin sesión y pantallas del CRM, cargadas aparte.
+const UnsubscribePage = lazy(() => import("@/features/marketing/UnsubscribePage"));
+const MarketingPage = lazy(() => import("@/features/marketing/MarketingPage"));
+const CampaignEditorPage = lazy(() => import("@/features/marketing/CampaignEditorPage"));
 
 /**
  * Navegación.
@@ -55,6 +59,8 @@ export default function App() {
           {/* Web pública de la inmobiliaria (canal "web"): sin sesión. */}
           <Route path="/sitio/:slug" element={<Suspense fallback={null}><SitioPage /></Suspense>} />
           <Route path="/sitio/:slug/p/:id" element={<Suspense fallback={null}><SitioPropiedadPage /></Suspense>} />
+          {/* Baja de marketing (link firmado del email): pública, sin sesión. */}
+          <Route path="/baja/:token" element={<Suspense fallback={null}><UnsubscribePage /></Suspense>} />
 
           <Route path="/login" element={<PublicOnly />}>
             <Route index element={<LoginPage />} />
@@ -95,6 +101,8 @@ export default function App() {
               <Route path="reportes" element={<ReportesPage />} />
               <Route path="configuracion" element={<ConfiguracionPage />} />
               <Route path="importar" element={<ImportarPage />} />
+              <Route path="marketing" element={<Suspense fallback={null}><MarketingPage /></Suspense>} />
+              <Route path="marketing/campanas/:campaignId" element={<Suspense fallback={null}><CampaignEditorPage /></Suspense>} />
             </Route>
           </Route>
 
