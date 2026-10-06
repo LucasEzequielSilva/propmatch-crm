@@ -8,6 +8,8 @@ import { Badge, Card } from "@/components/ui/Card";
 import { ScoreRing } from "@/components/ui/ScoreRing";
 import { EmptyState } from "@/components/ui/states";
 import { ContactFormModal } from "./ContactFormModal";
+import { useVozPrefill } from "@/features/voz/prefill";
+import type { VozData } from "../../../shared/voz";
 import {
   ContactsIcon,
   EditIcon,
@@ -68,6 +70,12 @@ export default function ContactosPage() {
   const [zone, setZone] = useState<string | null>(null);
   const [budget, setBudget] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  /** Búsqueda dictada desde Proppi: abre el alta precargada (sin guardar). */
+  const [vozPrefill, setVozPrefill] = useState<VozData | null>(null);
+  useVozPrefill("busqueda", (r) => {
+    setVozPrefill(r);
+    setCreating(true);
+  });
   const [editing, setEditing] = useState<Contact | null>(null);
 
   const rows = useMemo<Row[]>(() => {
@@ -276,7 +284,11 @@ export default function ContactosPage() {
 
       {creating && (
         <ContactFormModal
-          onClose={() => setCreating(false)}
+          vozPrefill={vozPrefill}
+          onClose={() => {
+            setCreating(false);
+            setVozPrefill(null);
+          }}
           onSaved={(id) => navigate(`/contactos/${id}`)}
         />
       )}

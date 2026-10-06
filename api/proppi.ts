@@ -5,6 +5,7 @@ import { allowMethod, fail } from "./_lib/http.js";
 import { buildSystem, sanitizeSettings } from "./_lib/proppi/prompt.js";
 import { PROPPI_TOOLS } from "./_lib/proppi/tools.js";
 import { EFFORT, MAX_TOKENS, modelCaps, proppiModel, type ProppiMode } from "./_lib/proppi/model.js";
+import { handleExtract, parseExtractBody } from "./_lib/proppi/extract.js";
 
 /**
  * POST /api/proppi — relay SIN ESTADO entre el CRM y la API de Claude.
@@ -24,6 +25,9 @@ import { EFFORT, MAX_TOKENS, modelCaps, proppiModel, type ProppiMode } from "./_
  *
  * Auth: JWT de Supabase + membresía de una inmobiliaria (mismo patrón que
  * api/meli/*). No hay modo demo: sin cuenta, 401.
+ *
+ * Con `mode: "extract"` es otra acción en la misma función (carga por voz):
+ * respuesta JSON sin streaming. Ver _lib/proppi/extract.ts.
  */
 
 const MAX_MESSAGES = 80;
@@ -101,6 +105,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return fail(res, 500, "server_error");
   }
   if (!ctx) return;
+
+  const rawBody = (typeof req.body === "string" ? safeJson(req.body) : req.body) as Record<string, unknown> | null;
+  if (rawBody && typeof rawBody === "object" && rawBody.mode === "extract") {
+    const extract = parseExtractBody(rawBody);
+    if (!extract) return fail(res, 400, "bad_request");
+    return handleExtract(res, extract, ctx.agencyId);
+  }
 
   const body = parseBody(req);
   if (!body) return fail(res, 400, "bad_request");
