@@ -289,7 +289,7 @@ const NOT_PLACES = new Set([
 /** Lugares nombrados con mayúscula que no están en el catálogo: van a notas. */
 function unknownPlaces(original: string, zones: string[], known: string[]): string[] {
   const out: string[] = [];
-  const re = /\b(?:barrio|zona|en)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)(?:\s+(?:de\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)*)/g;
+  const re = /\b(?:barrio|zona|en|o|u|y|e)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)(?:\s+(?:de\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)*)/g;
   for (const m of original.matchAll(re)) {
     const place = m[1].trim();
     const f = fold(place);

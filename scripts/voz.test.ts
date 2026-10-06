@@ -195,3 +195,9 @@ test("amenities: 'seguridad 24 horas' no suma también 'Seguridad'; orden de men
   const p = parsePropiedad("Departamento con ascensor, seguridad 24 horas, sum y gimnasio", catalog);
   assert.deepEqual(p.features, ["Ascensor", "Seguridad 24 hs", "SUM", "Gimnasio"]);
 });
+
+test("búsqueda: zona fuera de catálogo en una lista ('Gonnet o Palermo') va a notas", () => {
+  const b = parseBusqueda("Busca casa en Gonnet o Palermo, hasta 150 mil dólares", catalog);
+  assert.deepEqual(b.zones, ["Gonnet"]);
+  assert.ok(b.notes.some((n) => n.includes("Palermo")));
+});
