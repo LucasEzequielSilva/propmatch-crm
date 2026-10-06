@@ -16,19 +16,30 @@ import {
 } from "@/components/ui/icons";
 import { money } from "@/lib/format";
 import type { Property, PublicationChannel } from "@/types/db";
-import { EXTERNAL_CHANNELS, usePublications, type ChannelInfo, type ChannelState } from "./usePublications";
+import { EXTERNAL_CHANNELS, WEB_CHANNEL, usePublications, type ChannelInfo, type ChannelState } from "./usePublications";
 import { INTEGRATION_GUIDES } from "./integrationGuides";
 import { useMeliConnection } from "./useIntegrations";
 import { PlatformPublishPicker } from "./PlatformPublishPicker";
+import { useMetaConnection, type MetaConnection } from "./useMetaConnection";
+import { MetaConnectButton } from "./MetaConnectButton";
+import { WebPlatformCard } from "./WebPlatformCard";
 
-type ConnectionStatus = "not_connected" | "connected" | "error";
+type ConnectionStatus = "not_connected" | "connected" | "error" | "approval";
 
 type MeliConnection = ReturnType<typeof useMeliConnection>;
 
-/** Solo Mercado Libre tiene conector real por ahora; el resto sigue "sin conectar". */
-function connectionOf(channel: PublicationChannel, meli: MeliConnection): ConnectionStatus {
+const isMetaChannel = (c: PublicationChannel) => c === "facebook" || c === "instagram";
+
+/** Mercado Libre y Meta (Facebook + Instagram, una sola conexión) tienen conector real; el resto sigue "sin conectar". */
+function connectionOf(channel: PublicationChannel, meli: MeliConnection, meta: MetaConnection): ConnectionStatus {
     if (channel === "mercadolibre" && meli.connected) return "connected";
     if (channel === "mercadolibre" && meli.needsReauth) return "error";
+    if (isMetaChannel(channel)) {
+        if (meta.approvalPending) return "approval";
+        // Instagram necesita además una cuenta profesional vinculada a la Página.
+        if (meta.connected) return channel === "instagram" && !meta.hasInstagram ? "error" : "connected";
+        if (meta.needsReauth) return "error";
+    }
     return "not_connected";
 }
 
@@ -71,6 +82,7 @@ const CONNECTION_LABEL: Record<ConnectionStatus, { text: string; bg: string; fg:
     not_connected: { text: "Sin conectar", bg: "#F3F4F6", fg: "#4B5563" },
     connected: { text: "Conectado", bg: "#DCFCE7", fg: "#15803D" },
     error: { text: "Error de conexión", bg: "#FFE4E6", fg: "#BE123C" },
+    approval: { text: "Requiere aprobación de Meta", bg: "#FEF3C7", fg: "#92400E" },
 };
 
 type StatusFilter = "all" | "unpublished" | "queued" | "error" | "published";
@@ -105,6 +117,7 @@ export default function MultipublicadorPage() {
     const [filter, setFilter] = useState<StatusFilter>("all");
     const searchRef = useRef<HTMLInputElement>(null);
     const meli = useMeliConnection();
+    const meta = useMetaConnection();
     const meliNotice = useMeliReturnNotice(() => scrollToId("plataformas"));
     /** Plataforma desde la que se abrió «Publicar una propiedad». */
     const [picker, setPicker] = useState<ChannelInfo | null>(null);
@@ -122,7 +135,20 @@ export default function MultipublicadorPage() {
         return c;
     };
 
-    // La web es un canal propio y siempre está publicada: no cuenta para estos totales.
+    const webCounts = useMemo(() => {
+        const c = { visible: 0, hidden: 0, unavailable: 0, unsynced: 0 };
+        for (const p of properties) {
+            const st = statusIn(p, "web");
+            if (st === "published") c.visible++;
+            else if (st === "removed") c.hidden++;
+            else if (st === "paused") c.unavailable++;
+            else c.unsynced++;
+        }
+        return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [properties, channelsOf]);
+
+    // La web es un canal propio: no cuenta para estos totales de portales.
     const rows = useMemo(
         () =>
             properties.map(p => {
@@ -249,9 +275,9 @@ export default function MultipublicadorPage() {
                 <section id="plataformas" aria-labelledby="plataformas-h" className="mt-8 scroll-mt-4">
                     <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
                     <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
-                        {meli.connected
-                            ? "Mercado Libre está conectado: publicá desde su tarjeta o desde cada propiedad."
-                            : "Conectá Mercado Libre para publicar. El resto de los portales llega pronto."}
+                        {meli.connected || meta.connected
+                            ? "Publicá desde la tarjeta de cada plataforma conectada o desde cada propiedad."
+                            : "Conectá Mercado Libre, Facebook e Instagram para publicar. El resto de los portales llega pronto."}
                     </p>
                     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
                         {EXTERNAL_CHANNELS.map(info => (
@@ -259,6 +285,7 @@ export default function MultipublicadorPage() {
                                 key={info.channel}
                                 info={info}
                                 meli={meli}
+                                meta={meta}
                                 counts={countsIn(info.channel)}
                                 onPublish={() => setPicker(info)}
                                 onViewAds={() => {
@@ -268,6 +295,14 @@ export default function MultipublicadorPage() {
                                 }}
                             />
                         ))}
+                        <WebPlatformCard
+                            counts={webCounts}
+                            onViewAds={() => {
+                                setChannelFilter(WEB_CHANNEL);
+                                setFilter("all");
+                                scrollToId("listado-propiedades");
+                            }}
+                        />
                     </div>
                 </section>
 
@@ -446,21 +481,23 @@ type ChannelCounts = { published: number; paused: number; error: number };
 function PlatformCard({
     info,
     meli,
+    meta,
     counts,
     onPublish,
     onViewAds,
 }: {
     info: ChannelInfo;
     meli: MeliConnection;
+    meta: MetaConnection;
     counts: ChannelCounts;
     onPublish: () => void;
     onViewAds: () => void;
 }) {
-    const isConnected = connectionOf(info.channel, meli) === "connected";
+    const isConnected = connectionOf(info.channel, meli, meta) === "connected";
     const [open, setOpen] = useState(false);
     const panelId = useId();
     const guide = INTEGRATION_GUIDES[info.channel];
-    const conn = CONNECTION_LABEL[connectionOf(info.channel, meli)];
+    const conn = CONNECTION_LABEL[connectionOf(info.channel, meli, meta)];
     // Texto oscuro sobre amarillo (ML) para mantener contraste en el logo.
     const logoText = info.color === "#FFE600" ? "#1F2937" : "white";
 
@@ -484,6 +521,16 @@ function PlatformCard({
                 <Badge bg={conn.bg} text={conn.fg}>{conn.text}</Badge>
                 {/* Sin "dificultad" ni "en validación": son notas internas, no para la inmobiliaria. */}
             </div>
+            {info.channel === "instagram" && meta.connected && !meta.hasInstagram && (
+                <p className="text-xs mt-2" style={{ color: "#BE123C" }}>
+                    Tu Página no tiene una cuenta de Instagram profesional vinculada. Vinculala desde Instagram (Configuración → Cuenta → Compartir en otras apps) y volvé a conectar.
+                </p>
+            )}
+            {info.channel === "instagram" && isConnected && (
+                <p className="text-xs mt-2" style={{ color: "#4B5563" }}>
+                    Instagram no permite borrar publicaciones por API: si querés sacar una, borrala desde la app.
+                </p>
+            )}
             {guide.recommendation && !isConnected && <p className="text-xs mt-2" style={{ color: "#4B5563" }}>{guide.recommendation}</p>}
             {isConnected && (
                 <>
@@ -525,7 +572,7 @@ function PlatformCard({
                         <ChevronDownIcon size={16} color="#5B21B6" />
                     </span>
                 </button>
-                <ConnectButton info={info} meli={meli} />
+                {isMetaChannel(info.channel) ? <MetaConnectButton meta={meta} /> : <ConnectButton info={info} meli={meli} />}
             </div>
 
             <div id={panelId} hidden={!open} className="mt-4 text-sm" style={{ color: "#374151" }}>

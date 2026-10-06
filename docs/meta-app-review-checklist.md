@@ -329,3 +329,7 @@ Un video por permiso o uno solo con **marcadores de tiempo** en la descripción 
 - https://www.saurabhdhar.com/blog/6-meta-app-review-approvals-in-one-day-our-secrets
 - https://botsailor.com/blog/how-to-submit-for-instagram-app-permission-approval-for-botsailor-whitelabel-agency-users
 - https://docs.mixpost.app/services/social/facebook/app-review/
+
+## Publicar en Facebook e Instagram
+
+Los permisos de publicación (`pages_manage_posts`, `instagram_content_publish`, etc.), su configuración de Facebook Login for Business y el guion del video están en `docs/meta-publicaciones-y-web.md`.

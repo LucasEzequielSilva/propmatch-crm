@@ -15,6 +15,7 @@ import { useStore } from "@/data/store";
 import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSync";
 import type { Property, PropertyPublication, PublicationChannel, PublicationStatus } from "@/types/db";
 import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
+import { encodeExactGeo } from "../../../shared/publicSite";
 
 export interface ChannelInfo {
   channel: PublicationChannel;
@@ -34,7 +35,7 @@ export const EXTERNAL_CHANNELS: ChannelInfo[] = [
   { channel: "facebook", name: "Facebook", short: "f", color: "#1877F2" },
   { channel: "instagram", name: "Instagram", short: "IG", color: "#E1306C" },
 ];
-export const WEB_CHANNEL: ChannelInfo = { channel: "web", name: "Sitio web PropMatch", short: "W", color: "#7C3AED" };
+export const WEB_CHANNEL: ChannelInfo = { channel: "web", name: "Mi web", short: "W", color: "#7C3AED" };
 
 export interface ChannelState {
   info: ChannelInfo;
@@ -76,7 +77,23 @@ export function usePublications() {
     (p: Property): ChannelState[] =>
       [...EXTERNAL_CHANNELS, WEB_CHANNEL].map((info) => {
         if (info.channel === "web") {
-          return { info, status: "published", externalId: null, externalUrl: null, errorMessage: null, lastSyncedAt: null };
+          // Canal propio: aparece en la web si está sincronizada, disponible y no la ocultaron.
+          const row = isPersistent(p) ? remote!.find((r) => r.property_id === p.app_property_id && r.channel === "web") : undefined;
+          const status: PublicationStatus | null = !isPersistent(p)
+            ? null
+            : row?.status === "removed"
+              ? "removed"
+              : p.status !== "disponible"
+                ? "paused"
+                : "published";
+          return {
+            info,
+            status,
+            externalId: row?.external_id ?? null,
+            externalUrl: row?.external_url ?? null,
+            errorMessage: null,
+            lastSyncedAt: row?.last_synced_at ?? null,
+          };
         }
         if (isPersistent(p)) {
           const row = remote!.find((r) => r.property_id === p.app_property_id && r.channel === info.channel);
@@ -145,5 +162,36 @@ export function usePublications() {
     );
   }, []);
 
-  return { channelsOf, queue, applyRow, isPersistent, loading, error, persistentMode: remote !== null };
+  /**
+   * «Mostrar en mi web» y «Mostrar ubicación exacta» de una propiedad. Se guarda
+   * en la fila web de `property_publications`: status `removed` = oculta;
+   * `external_id = "geo:lat,lng"` = ubicación exacta autorizada (ver
+   * shared/publicSite.ts); `external_url` = link a la ficha pública.
+   */
+  const setWeb = useCallback(
+    async (p: Property, opts: { visible: boolean; exact: { lat: number; lng: number } | null; url: string | null }) => {
+      if (isSample(p)) {
+        setError(SAMPLE_PUBLISH_BLOCKED);
+        return false;
+      }
+      if (!isPersistent(p)) return false;
+      const { rows, error: err } = await upsertPublications([
+        {
+          agencyId: agency.id,
+          propertyId: p.app_property_id!,
+          channel: "web",
+          status: opts.visible ? "published" : "removed",
+          externalId: opts.exact ? encodeExactGeo(opts.exact.lat, opts.exact.lng) : null,
+          externalUrl: opts.url,
+        },
+      ]);
+      setError(err);
+      if (err) return false;
+      for (const r of rows) applyRow(r);
+      return true;
+    },
+    [agency.id, isPersistent, applyRow],
+  );
+
+  return { channelsOf, queue, applyRow, setWeb, isPersistent, loading, error, persistentMode: remote !== null };
 }

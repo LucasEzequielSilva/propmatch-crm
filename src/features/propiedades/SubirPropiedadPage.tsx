@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { CheckIcon } from "@/components/ui/icons";
 import { isLinkedAgencyId, useStore } from "@/data/store";
@@ -21,6 +21,9 @@ import { clearDraft, draftKey, loadDraft, saveDraft, type StoredDraft } from "./
 import { Chip, CounterHint, Field, FormSection, MoneyField, Stepper, Switch, inputClass, selectClass } from "./subir/ui";
 import { PhotoGallery } from "./subir/PhotoGallery";
 import { BuyersPanel, ChannelsPanel, QualityPanel, useCompatibleBuyers } from "./subir/SidePanels";
+import { LAYOUTS, ORIENTATIONS, editorFieldId as fid } from "./completar/fields";
+import { focusField } from "./completar/focusField";
+import { VozPropiedadEntry } from "@/features/voz/VozPropiedadEntry";
 
 const PROP_TYPES = Object.keys(PROPERTY_TYPE_LABEL) as PropertyType[];
 const STATUSES = Object.keys(PROPERTY_STATUS_LABEL) as PropertyStatus[];
@@ -37,22 +40,6 @@ const SUBTYPES: Record<PropertyType, string[]> = {
   local: ["Local a la calle", "Local en galería"],
   oficina: ["Oficina", "Consultorio", "Edificio de oficinas"],
 };
-const LAYOUTS: { value: PropertyLayout; label: string }[] = [
-  { value: "frente", label: "Frente" },
-  { value: "contrafrente", label: "Contrafrente" },
-  { value: "lateral", label: "Lateral" },
-  { value: "interno", label: "Interno" },
-];
-const ORIENTATIONS: { value: PropertyOrientation; label: string }[] = [
-  { value: "N", label: "Norte" },
-  { value: "NE", label: "Noreste" },
-  { value: "NO", label: "Noroeste" },
-  { value: "S", label: "Sur" },
-  { value: "SE", label: "Sudeste" },
-  { value: "SO", label: "Sudoeste" },
-  { value: "E", label: "Este" },
-  { value: "O", label: "Oeste" },
-];
 const SECTIONS = [
   { id: "galeria", label: "Galería" },
   { id: "informacion", label: "Información comercial" },
@@ -81,6 +68,9 @@ export default function SubirPropiedadPage() {
   const navigate = useNavigate();
   const { propertyId } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  /** Vino desde "Completar" del publicador: al guardar vuelve ahí. */
+  const backToPublisher = searchParams.get("volver") === "publicador";
   const { addProperty, savePropertyEdit, propertyById, photos: allPhotos, profiles, profile, contacts, addContact, agency } =
     useStore();
 
@@ -238,6 +228,21 @@ export default function SubirPropiedadPage() {
     el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   }
 
+  /** "Completar": lleva al campo exacto (o a la sección) y lo resalta. */
+  function fixField(id: string) {
+    if (!focusField(id)) jumpTo(id);
+  }
+
+  // Llegó con #campo-… (desde el publicador): foco directo en ese campo.
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.replace(/^#/, ""));
+    if (!id) return;
+    const t = setTimeout(() => fixField(id), 150);
+    return () => clearTimeout(t);
+    // Solo al llegar: después el hash no cambia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ── Ubicación ─────────────────────────────────────────────────────── */
 
   function applyMapsLink(text: string) {
@@ -298,6 +303,9 @@ export default function SubirPropiedadPage() {
       setSavedAt(null);
       if (mode === "publish") {
         setToast({ kind: "ok", text: "Cambios guardados. Ahora elegí dónde publicarla." });
+        setTimeout(() => navigate(`/publicador/${editing.id}`), 900);
+      } else if (backToPublisher) {
+        setToast({ kind: "ok", text: "Cambios guardados. Volvemos al multipublicador." });
         setTimeout(() => navigate(`/publicador/${editing.id}`), 900);
       } else {
         setToast({ kind: "ok", text: "Los cambios fueron guardados." });
@@ -393,6 +401,7 @@ export default function SubirPropiedadPage() {
                 Estado: {PROPERTY_STATUS_LABEL[form.status]}
               </button>
             )}
+            <VozPropiedadEntry isNew={!editing} setForm={setForm} />
             <HeaderButton
               variant="ghost"
               onClick={() =>
@@ -512,6 +521,7 @@ export default function SubirPropiedadPage() {
               {/* 1 · Galería */}
               <FormSection id="galeria" number={1} title="Galería" subtitle="La primera foto es la portada en todos los canales." done={done.galeria}>
                 <PhotoGallery
+                  selectId={fid("photos")}
                   photos={form.photos}
                   onChange={(next) => setForm((f) => ({ ...f, photos: typeof next === "function" ? next(f.photos) : next }))}
                   onError={(text) => setToast({ kind: "error", title: "Revisá las fotos", text })}
@@ -522,7 +532,7 @@ export default function SubirPropiedadPage() {
               <FormSection id="informacion" number={2} title="Información comercial" done={done.informacion}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Tipo de propiedad">
-                    <select value={form.type} onChange={(e) => set("type", e.target.value as PropertyType)} className={selectClass}>
+                    <select id={fid("type")} value={form.type} onChange={(e) => set("type", e.target.value as PropertyType)} className={selectClass}>
                       {PROP_TYPES.map((t) => (
                         <option key={t} value={t}>
                           {PROPERTY_TYPE_LABEL[t]}
@@ -586,6 +596,7 @@ export default function SubirPropiedadPage() {
                   }
                 >
                   <input
+                    id={fid("title")}
                     value={form.title}
                     onChange={(e) => set("title", e.target.value)}
                     placeholder="Casa moderna con jardín en City Bell"
@@ -605,6 +616,7 @@ export default function SubirPropiedadPage() {
                   }
                 >
                   <textarea
+                    id={fid("description")}
                     value={form.description}
                     onChange={(e) => set("description", e.target.value)}
                     rows={6}
@@ -639,6 +651,8 @@ export default function SubirPropiedadPage() {
               <FormSection id="precios" number={3} title="Precios" done={done.precios}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <MoneyField
+                    id={fid("price")}
+                    currencyId={fid("currency")}
                     label={form.operation === "venta" ? "Precio de venta" : "Precio mensual"}
                     value={form.price}
                     onValue={(v) => set("price", v)}
@@ -653,6 +667,7 @@ export default function SubirPropiedadPage() {
                     }
                   />
                   <MoneyField
+                    id={fid("expenses")}
                     label="Expensas"
                     value={form.expenses}
                     onValue={(v) => set("expenses", v)}
@@ -698,14 +713,15 @@ export default function SubirPropiedadPage() {
               {/* 4 · Superficies y ambientes */}
               <FormSection id="superficies" number={4} title="Superficies y ambientes" done={done.superficies}>
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
-                  <NumberField label="Total (m²)" value={form.surfaceTotal} onChange={(v) => set("surfaceTotal", v)} placeholder="220" />
-                  <NumberField label="Cubierta (m²)" value={form.surfaceCovered} onChange={(v) => set("surfaceCovered", v)} placeholder="180" />
+                  <NumberField id={fid("surface_total")} label="Total (m²)" value={form.surfaceTotal} onChange={(v) => set("surfaceTotal", v)} placeholder="220" />
+                  <NumberField id={fid("surface_covered")} label="Cubierta (m²)" value={form.surfaceCovered} onChange={(v) => set("surfaceCovered", v)} placeholder="180" />
                   <NumberField label="Semicubierta (m²)" value={form.surfaceSemicovered} onChange={(v) => set("surfaceSemicovered", v)} placeholder="15" />
                   <NumberField label="Descubierta (m²)" value={form.surfaceUncovered} onChange={(v) => set("surfaceUncovered", v)} placeholder="25" />
                 </div>
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-3">
                   <Field label="Ambientes" hint={!form.rooms ? <span style={{ color: "#7458C4" }}>Sugerido: dormitorios + 1</span> : undefined}>
                     <input
+                      id={fid("rooms")}
                       value={form.rooms}
                       onChange={(e) => set("rooms", e.target.value.replace(/[^\d]/g, ""))}
                       inputMode="numeric"
@@ -713,15 +729,15 @@ export default function SubirPropiedadPage() {
                       className={inputClass(false)}
                     />
                   </Field>
-                  <Stepper label="Dormitorios" value={form.bedrooms} onChange={(v) => set("bedrooms", v)} />
-                  <Stepper label="Baños" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} />
+                  <Stepper id={fid("bedrooms")} label="Dormitorios" value={form.bedrooms} onChange={(v) => set("bedrooms", v)} />
+                  <Stepper id={fid("bathrooms")} label="Baños" value={form.bathrooms} onChange={(v) => set("bathrooms", v)} />
                   <Stepper label="Toilettes" value={form.toilettes} onChange={(v) => set("toilettes", v)} />
-                  <Stepper label="Cocheras" value={form.garages} onChange={(v) => set("garages", v)} />
-                  <NumberField label="Antigüedad (años)" value={form.age} onChange={(v) => set("age", v)} placeholder="0 = a estrenar" />
+                  <Stepper id={fid("garages")} label="Cocheras" value={form.garages} onChange={(v) => set("garages", v)} />
+                  <NumberField id={fid("age_years")} label="Antigüedad (años)" value={form.age} onChange={(v) => set("age", v)} placeholder="0 = a estrenar" />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Disposición">
-                    <select value={form.layout} onChange={(e) => set("layout", e.target.value as PropertyLayout | "")} className={selectClass}>
+                    <select id={fid("layout")} value={form.layout} onChange={(e) => set("layout", e.target.value as PropertyLayout | "")} className={selectClass}>
                       <option value="">Sin especificar</option>
                       {LAYOUTS.map((l) => (
                         <option key={l.value} value={l.value}>
@@ -732,6 +748,7 @@ export default function SubirPropiedadPage() {
                   </Field>
                   <Field label="Orientación">
                     <select
+                      id={fid("orientation")}
                       value={form.orientation}
                       onChange={(e) => set("orientation", e.target.value as PropertyOrientation | "")}
                       className={selectClass}
@@ -752,7 +769,7 @@ export default function SubirPropiedadPage() {
                 <div className="grid gap-4 grid-cols-2 sm:grid-cols-6">
                   <div className="col-span-2 sm:col-span-3">
                     <Field label="Dirección" error={errors.street}>
-                      <input value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="Calle 13" className={inputClass(!!errors.street)} />
+                      <input id={fid("address")} value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="Calle 13" className={inputClass(!!errors.street)} />
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
@@ -785,6 +802,7 @@ export default function SubirPropiedadPage() {
                 <div className="rounded-xl p-4 space-y-3" style={{ background: "#FAFAFF", border: "1px solid #EDE9FE" }}>
                   <Field label="Pegá un link de Google Maps (opcional)">
                     <input
+                      id={fid("coords")}
                       value={mapsLink}
                       onChange={(e) => applyMapsLink(e.target.value)}
                       placeholder="https://www.google.com/maps/place/…/@-34.87,-58.04,17z"
@@ -837,7 +855,7 @@ export default function SubirPropiedadPage() {
 
               {/* 6 · Amenities */}
               <FormSection id="amenities" number={6} title="Amenities" subtitle="Se comparan con lo que busca cada contacto." done={done.amenities}>
-                <div className="flex flex-wrap gap-2">
+                <div id={fid("features")} role="group" aria-label="Amenities" className="flex flex-wrap gap-2">
                   {featureOptions.map((f) => (
                     <Chip
                       key={f}
@@ -953,6 +971,7 @@ export default function SubirPropiedadPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Autorización">
                     <select
+                      id={fid("authorization")}
                       value={form.authType}
                       onChange={(e) => {
                         const value = e.target.value as AuthorizationType | "";
@@ -1002,8 +1021,12 @@ export default function SubirPropiedadPage() {
 
             {/* Columna derecha (en celular queda abajo) */}
             <aside className="space-y-6 lg:col-span-4 lg:sticky lg:top-20" aria-label="Estado de la ficha">
-              <QualityPanel checks={checks} onJump={jumpTo} />
+              <QualityPanel checks={checks} draft={draftProperty} photoCount={form.photos.length} onFix={fixField} />
               <ChannelsPanel
+                draft={draftProperty}
+                photos={form.photos}
+                onFix={fixField}
+                onNavigate={leave}
                 saved={editing}
                 currency={form.currency}
                 status={form.status}
@@ -1152,11 +1175,13 @@ function HeaderButton({
 }
 
 function NumberField({
+  id,
   label,
   value,
   onChange,
   placeholder,
 }: {
+  id?: string;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -1165,6 +1190,7 @@ function NumberField({
   return (
     <Field label={label}>
       <input
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
         inputMode="numeric"

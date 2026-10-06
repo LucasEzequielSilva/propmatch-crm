@@ -391,6 +391,8 @@ export function mapMeliItemStatus(item: { status?: string; sub_status?: string[]
     case "closed": return { status: "removed", message: null };
     case "under_review": return { status: "pending", message: "Mercado Libre está revisando el aviso." };
     case "inactive": return { status: "error", message: "El aviso quedó inactivo en Mercado Libre." };
+    case "payment_required":
+      return { status: "error", message: "El aviso está pendiente de pago en Mercado Libre: falta cupo en un paquete de Inmuebles." };
     default: return { status: "pending", message: null };
   }
 }

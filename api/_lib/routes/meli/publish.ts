@@ -279,6 +279,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: buildMeliItem(listing, prep.photos, listingType, prep.allowed),
       timeoutMs: 25000,
     });
+    // 402 (pago requerido): ML igual CREA el aviso, pero lo deja pendiente de pago
+    // (sin cupo en un paquete de Inmuebles). Se guarda el id para no crear otro en
+    // cada reintento y se explica qué falta.
+    if (!created.ok && created.status === 402 && created.body?.id) {
+      const pendingItem = created.body;
+      console.warn("[meli/publish] creado pendiente de pago", pendingItem.id, pendingItem.status);
+      const row = await savePublication(db, key, {
+        status: "error",
+        external_id: pendingItem.id,
+        external_url: pendingItem.permalink ?? null,
+        error_message:
+          "Mercado Libre creó el aviso pero quedó pendiente de pago: tu cuenta no tiene cupo en un paquete de Inmuebles. Contratá o renová un paquete en Mercado Libre y después tocá «Actualizar estado».",
+      });
+      return json(res, 422, { error: "meli_payment_required", message: row?.error_message ?? null, row });
+    }
     if (!created.ok || !created.body?.id) {
       // Sin respuesta (timeout/red) no se sabe si el aviso se creó: se avisa para no duplicarlo.
       const message =

@@ -73,6 +73,12 @@ const STORAGE_KEY = "propmatch.store.v1";
 /** Datos de la demo (cuenta `u-1`, sin Supabase), separados de los reales. */
 const DEMO_STORAGE_KEY = "propmatch.store.demo.v1";
 const DEMO_USER_ID = "u-1";
+
+/** Campos de Property que también viven en la app: si cambian, se re-sincroniza. */
+const APP_SYNCED_FIELDS = new Set([
+  "title", "description", "type", "operation", "status", "street", "street_number",
+  "locality", "zone", "price", "currency", "rooms", "bedrooms", "features",
+]);
 const SESSION_KEY = "propmatch.session.v1";
 
 export interface StoreData {
@@ -918,6 +924,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   /** Última versión de las propiedades, para leer `app_property_id` desde acciones con deps `[]`. */
   const propertiesRef = useRef(data.properties);
   propertiesRef.current = data.properties;
+  const photosRef = useRef(data.photos);
+  photosRef.current = data.photos;
   const dealsRef = useRef(data.deals);
   dealsRef.current = data.deals;
   const appOffersRef = useRef(data.appOffers);
@@ -1048,6 +1056,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         p.id === id ? { ...p, ...patch, updated_at: new Date().toISOString() } : p,
       ),
     }));
+    // Si cambia algo que también tiene la app (p. ej. al completar un dato desde
+    // el publicador), se vuelve a sincronizar como al guardar desde el editor.
+    const current = propertiesRef.current.find((p) => p.id === id);
+    const touchesApp = Object.keys(patch).some((k) => APP_SYNCED_FIELDS.has(k));
+    if (touchesApp && current?.app_property_id && !isSample(current) && agencyContextRef.current) {
+      const merged = { ...current, ...patch };
+      if (canPublishToApp(merged)) {
+        const input = { ...merged, photos: photosRef.current[id] ?? [] } as unknown as NewPropertyInput;
+        void syncPropertyToApp(id, input, agencyContextRef.current, current.app_property_id);
+        return;
+      }
+    }
     if (patch.status) {
       const current = propertiesRef.current.find((p) => p.id === id);
       if (current?.app_property_id && !isSample(current)) {
@@ -1056,7 +1076,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         );
       }
     }
-  }, []);
+  }, [syncPropertyToApp]);
 
   const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>(
     (id, input) => {

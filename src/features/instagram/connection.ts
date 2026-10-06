@@ -1,2 +1,6 @@
-/** Todavía no hay conexión con Meta. Cuando exista, esto sale del estado de la integración. */
-export const INSTAGRAM_CONNECTED = false;
+/**
+ * Conexión con Instagram: es la misma conexión de Meta del multipublicador
+ * (Página de Facebook + su Instagram profesional vinculado). Ver
+ * src/features/propiedades/useMetaConnection.ts y docs/meta-publicaciones-y-web.md.
+ */
+export { useMetaConnection as useInstagramConnection } from "@/features/propiedades/useMetaConnection";

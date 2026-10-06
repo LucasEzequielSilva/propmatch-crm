@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, Badge } from "@/components/ui/Card";
 import { AlertTriangleIcon, CheckIcon, DownloadIcon } from "@/components/ui/icons";
 import { countHashtags, hasPlaceholders, joinCaption, slugify } from "./caption";
-import { INSTAGRAM_CONNECTED } from "./connection";
+import { ApiPublishCard } from "./ApiPublishCard";
 import { downloadBlob, exportEditedJpeg } from "./exportImages";
 import { checkPhoto, checkVideo, getFormat, getPostKind, IG_LIMITS, type CheckLevel } from "./imageSpecs";
 import { factsFor } from "./MediaStep";
@@ -250,18 +250,7 @@ export function PublishStep({ post, urls, stampName, safeMargin, onPatch }: Prop
         </ol>
       </Card>
 
-      <Card>
-        <div className="px-5 py-4 border-b flex items-center gap-2 flex-wrap" style={{ borderColor: "#F3F0FF" }}>
-          <h3 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>Publicar en Instagram</h3>
-          <Badge bg="#FEF3C7" text="#92400E" size="xs">Requiere conexión</Badge>
-        </div>
-        <div className="p-5 flex flex-wrap items-center gap-3">
-          <button type="button" disabled={!INSTAGRAM_CONNECTED} aria-describedby="ig-api-why" className="px-5 min-h-11 rounded-xl text-sm text-white opacity-40 cursor-not-allowed" style={{ background: "var(--gradient-brand)", fontWeight: 700 }}>
-            Publicar en Instagram
-          </button>
-          <span id="ig-api-why" className="text-xs" style={{ color: "#6B5A8A" }}>Disponible al conectar Instagram</span>
-        </div>
-      </Card>
+      <ApiPublishCard post={post} urls={urls} stampName={stampName} safeMargin={safeMargin} blocking={blocking} onPatch={onPatch} />
     </div>
   );
 }

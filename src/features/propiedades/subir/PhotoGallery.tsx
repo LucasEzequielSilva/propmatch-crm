@@ -22,10 +22,13 @@ export function PhotoGallery({
   photos,
   onChange,
   onError,
+  selectId,
 }: {
   photos: string[];
   onChange: (next: string[] | ((prev: string[]) => string[])) => void;
   onError: (text: string) => void;
+  /** id del botón "Seleccionar archivos" (lo usa "Completar" para llevar el foco). */
+  selectId?: string;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragOverZone, setDragOverZone] = useState(false);
@@ -125,6 +128,7 @@ export function PhotoGallery({
           Arrastrá las fotos acá
         </p>
         <button
+          id={selectId}
           type="button"
           onClick={() => fileInput.current?.click()}
           className="mt-2 px-4 min-h-11 rounded-xl text-sm border transition-all hover:bg-violet-50"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { AppHeader } from "@/components/layout/AppHeader";
@@ -6,7 +6,6 @@ import { Card, Badge } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/states";
 import {
   HomeIcon,
-  CheckIcon,
   CheckCircleIcon,
   AlertTriangleIcon,
   ClockIcon,
@@ -22,7 +21,13 @@ import { usePublications, type ChannelState } from "./usePublications";
 import { useMeliConnection } from "./useIntegrations";
 import { MeliPublishPanel } from "./MeliPublishPanel";
 import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
+import { metaEnv } from "@/lib/inbox/metaSdk";
+import { useMetaConnection } from "./useMetaConnection";
+import { MetaPublishPanel } from "./MetaPublishPanel";
+import { WebChannelPanel } from "./WebChannelPanel";
 import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
+import { FixList, type Fix, type FixItem } from "./completar/InlineFix";
+import { FIX_LABEL, editorHref, fixesForCheck, isFieldKey, optionalMissing, shortMissingForCheck, type FixKey, type LinkKey } from "./completar/fields";
 
 const initialsOf = (name: string) =>
   name
@@ -62,10 +67,16 @@ function ChannelRow({
   const isWeb = info.channel === "web";
   // Mercado Libre se publica de verdad desde su panel, no por la cola.
   const isMeli = info.channel === "mercadolibre";
-  const selectable = !isWeb && !isMeli && status === null;
+  // Con la publicación de Meta habilitada, Facebook/Instagram se publican desde su panel (no por la cola).
+  const isMeta = metaEnv.publishEnabled && (info.channel === "facebook" || info.channel === "instagram");
+  const selectable = !isWeb && !isMeli && !isMeta && status === null;
 
   let line: { text: string; color: string; icon: React.ReactNode };
-  if (isWeb) line = { text: "Publicada · canal propio", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
+  if (isWeb)
+    line =
+      status === "published"
+        ? { text: "En tu web", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> }
+        : { text: status === "removed" ? "Oculta en tu web" : status === "paused" ? "No disponible" : "Sin sincronizar", color: "#6B7280", icon: null };
   else if (status === "published") line = { text: "Publicada", color: "#15803D", icon: <CheckCircleIcon size={14} color="#16A34A" /> };
   else if (status === "pending")
     line = isMeli
@@ -130,9 +141,9 @@ function ChannelRow({
             Ver ficha
           </a>
         )}
-        {isMeli && (
+        {(isMeli || isMeta || isWeb) && (
           <a
-            href="#mercadolibre"
+            href={isMeli ? "#mercadolibre" : isWeb ? "#web" : "#meta"}
             className="px-3 py-1.5 rounded-lg text-xs border hover:bg-violet-50"
             style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 700 }}
           >
@@ -167,9 +178,12 @@ export default function MultipublicadorVivoPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
   const navigate = useNavigate();
   const { properties, photos, matches, contactById, profileById, coverPhoto } = useStore();
-  const { channelsOf, queue, applyRow, loading, error } = usePublications();
+  const { channelsOf, queue, applyRow, setWeb, loading, error } = usePublications();
   const meli = useMeliConnection();
+  const meta = useMetaConnection();
   const [selected, setSelected] = useState<PublicationChannel[]>([]);
+  /** Una vez que hubo opcionales, la lista queda visible (para ver los ✓ de lo que se completó). */
+  const hadOptional = useRef(false);
 
   const property = properties.find((p) => p.id === propertyId);
 
@@ -213,8 +227,34 @@ export default function MultipublicadorVivoPage() {
   const meliChannel = channels.find((c) => c.info.channel === "mercadolibre")!;
   const involved = channels.filter((c) => c.status !== null).length;
 
+  const sample = isSample(property);
   const checks = diagnose(property, photoList.length);
   const validPct = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
+
+  // Cada check que no pasa trae su arreglo: inline si es un dato, botón directo si no.
+  const LINK_LABEL: Partial<Record<FixKey, string>> = { photos: "Subir fotos", authorization: "Cargar autorización" };
+  const checkItems: FixItem[] = checks.map((c) => ({
+    id: c.id,
+    title: c.label,
+    // "Superficie, ambientes y baños" es un check compuesto: se dice qué parte falta.
+    detail: c.id === "size" && !c.ok ? `Falta: ${shortMissingForCheck(c, property, photoList.length).join(", ")}.` : c.detail,
+    tone: c.ok ? "ok" : "warn",
+    fixes: fixesForCheck(c, property).map(
+      (k): Fix =>
+        isFieldKey(k)
+          ? { kind: "field", key: k }
+          : { kind: "link", key: k, label: LINK_LABEL[k] ?? `Completar ${FIX_LABEL[k].toLowerCase()}`, to: editorHref(property.id, k as LinkKey) },
+    ),
+  }));
+  const requiredKeys = checks.flatMap((c) => fixesForCheck(c, property));
+  const optionalItems: FixItem[] = optionalMissing(property, requiredKeys).map((k) => ({
+    id: `opt-${k}`,
+    title: FIX_LABEL[k],
+    tone: "optional",
+    fixes: [{ kind: "field", key: k }],
+  }));
+  const synced = !!property.app_property_id && !sample;
+  if (optionalItems.length > 0) hadOptional.current = true;
 
   const agent = profileById(property.owner_agent_id)?.full_name;
   const address = [
@@ -227,7 +267,6 @@ export default function MultipublicadorVivoPage() {
 
   const toggle = (c: PublicationChannel) =>
     setSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
-  const sample = isSample(property);
   const publish = () => {
     if (sample) return;
     void queue(property, selected);
@@ -410,6 +449,21 @@ export default function MultipublicadorVivoPage() {
                 onRow={applyRow}
               />
             </div>
+
+            <div id="meta" className="scroll-mt-6">
+              <MetaPublishPanel
+                property={property}
+                photos={photoList}
+                facebook={channels.find((c) => c.info.channel === "facebook")!}
+                instagram={channels.find((c) => c.info.channel === "instagram")!}
+                meta={meta}
+                onRow={applyRow}
+              />
+            </div>
+
+            <div id="web" className="scroll-mt-6">
+              <WebChannelPanel property={property} web={channels.find((c) => c.info.channel === "web")!} setWeb={setWeb} />
+            </div>
           </div>
 
           {/* Columna lateral */}
@@ -427,22 +481,35 @@ export default function MultipublicadorVivoPage() {
                   {validPct}% VÁLIDO
                 </Badge>
               </div>
-              <ul>
-                {checks.map((c) => (
-                  <li key={c.id} className="flex items-start gap-3 px-5 py-3 border-b last:border-b-0" style={{ borderColor: "#F9F7FF" }}>
-                    <span
-                      className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ background: c.ok ? "#DCFCE7" : "#FEF3C7" }}
-                    >
-                      {c.ok ? <CheckIcon size={11} color="#16A34A" /> : <AlertTriangleIcon size={11} color="#D97706" />}
+              <div className="px-5">
+                <FixList property={property} items={checkItems} dense />
+              </div>
+              {(sample || synced) && (
+                <p className="mx-5 mb-3 text-xs px-3 py-2 rounded-lg bg-lavender text-lilac-text">
+                  {sample
+                    ? "Es una propiedad de ejemplo: lo que completes acá queda solo en este navegador."
+                    : "Lo que completes acá se guarda en el CRM al instante. Para que también llegue a la app, abrí el editor y tocá «Guardar cambios»."}
+                </p>
+              )}
+              {hadOptional.current && (
+                <details className="border-t border-divider group">
+                  <summary className="px-5 min-h-11 flex items-center justify-between gap-2 cursor-pointer text-sm text-ink list-none [&::-webkit-details-marker]:hidden" style={{ fontWeight: 700 }}>
+                    <span>
+                      También conviene completar{" "}
+                      {optionalItems.length > 0 && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-lavender" style={{ color: "#7C3AED" }}>
+                          {optionalItems.length}
+                        </span>
+                      )}
                     </span>
-                    <div className="min-w-0">
-                      <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>{c.label}</p>
-                      <p className="text-xs mt-0.5" style={{ color: c.ok ? "#7C6A99" : "#B45309" }}>{c.detail}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    <span aria-hidden="true" className="text-lilac-text transition-transform group-open:rotate-180">▾</span>
+                  </summary>
+                  <div className="px-5 pb-2">
+                    <p className="text-xs text-ink-soft">No frena ninguna publicación, pero mejora la ficha y el matching.</p>
+                    <FixList property={property} items={optionalItems} dense />
+                  </div>
+                </details>
+              )}
             </Card>
 
             <Card>
