@@ -9,6 +9,9 @@
     },
     "api/integrations.ts": {
       "maxDuration": 60
+    },
+    "api/marketing.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
@@ -31,6 +34,10 @@
     {
       "source": "/api/integrations/:action",
       "destination": "/api/integrations?action=:action"
+    },
+    {
+      "source": "/api/marketing/:action",
+      "destination": "/api/marketing?action=:action"
     },
     {
       "source": "/api/web/:action",

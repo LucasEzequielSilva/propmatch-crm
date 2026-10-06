@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { SampleBadge } from "@/components/ui/SampleBadge";
+import { ContactNoContactBadge } from "@/features/marketing/ContactNoContactBadge";
 import { useNavigate } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -332,7 +333,7 @@ function ContactRow({
           </div>
           <div className="min-w-0">
             <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-              {contact.full_name} <SampleBadge record={contact} />
+              {contact.full_name} <SampleBadge record={contact} /> <ContactNoContactBadge contact={contact} size="xs" />
             </p>
             <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
               {requirement?.zones[0] ?? contact.email ?? "—"}
@@ -586,7 +587,7 @@ function ContactCardMobile({ row, onOpen }: { row: Row; onOpen: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-            {contact.full_name} <SampleBadge record={contact} />
+            {contact.full_name} <SampleBadge record={contact} /> <ContactNoContactBadge contact={contact} size="xs" />
           </p>
           <span
             className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0"

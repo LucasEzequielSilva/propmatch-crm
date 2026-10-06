@@ -36,6 +36,8 @@ import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorizatio
 import { lastTouch, touchLabel } from "@/lib/followups";
 import { useFollowUps } from "@/data/useFollowUps";
 import { ChatPanel } from "./ChatPanel";
+import { MarketingContactCard } from "@/features/marketing/MarketingContactCard";
+import { ContactNoContactBadge } from "@/features/marketing/ContactNoContactBadge";
 
 /**
  * Ficha del contacto: todo lo que el agente necesita ver antes de llamarlo.
@@ -212,6 +214,7 @@ export default function ContactoDetallePage() {
                   {contact.full_name}
                 </h2>
                 <SampleBadge record={contact} size="sm" />
+                <ContactNoContactBadge contact={contact} />
                 <Badge bg={statusStyle.bg} text={statusStyle.text} border={statusStyle.border}>
                   {CONTACT_STATUS_LABEL[contact.status]}
                 </Badge>
@@ -478,6 +481,8 @@ export default function ContactoDetallePage() {
 
           {/* Columna derecha */}
           <div className="space-y-6">
+            {/* Marketing: No contactar, consentimiento y etiquetas. */}
+            <MarketingContactCard contact={contact} />
             {ownedProperties.length > 0 && (
               <Card>
                 <SectionHeader

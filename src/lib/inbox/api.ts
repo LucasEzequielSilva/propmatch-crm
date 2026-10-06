@@ -125,6 +125,8 @@ export function sendErrorText(code: string | null): string {
       return "Esa plantilla no está aprobada por Meta.";
     case "template_params":
       return "Completá todas las variables de la plantilla (sin saltos de línea).";
+    case "contact_unsubscribed":
+      return "Este contacto pidió no recibir más mensajes de marketing por WhatsApp: no se le pueden mandar plantillas de MARKETING.";
     case "too_long":
       return "El mensaje es demasiado largo para este canal.";
     case "needs_reauth":
