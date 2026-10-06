@@ -31,6 +31,7 @@ import MercadoPage from "@/features/mercado/MercadoPage";
 import OperacionesPage from "@/features/operaciones/OperacionesPage";
 import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
 import DocumentoPage from "@/features/operaciones/DocumentoPage";
+import IntegracionesPage from "@/features/integraciones/IntegracionesPage";
 
 // Web pública de la inmobiliaria: se carga aparte (los visitantes no necesitan el CRM).
 const SitioPage = lazy(() => import("@/features/sitio/SitioPage"));
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="agenda" element={<AgendaPage />} />
               <Route path="reportes" element={<ReportesPage />} />
               <Route path="configuracion" element={<ConfiguracionPage />} />
+              <Route path="configuracion/integraciones" element={<IntegracionesPage />} />
               <Route path="importar" element={<ImportarPage />} />
             </Route>
           </Route>

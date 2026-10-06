@@ -5,6 +5,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MELI_API } from "./meli.js";
+import { withOptionalColumns } from "./integrations/dbCompat.js";
 
 export interface MeliResponse<T = unknown> {
   ok: boolean;
@@ -110,7 +111,7 @@ export async function readPublication(db: SupabaseClient, propertyId: string): P
 /** Crea o actualiza la fila de Mercado Libre de la propiedad y la devuelve. */
 export async function savePublication(
   db: SupabaseClient,
-  key: { agencyId: string; propertyId: string; userId: string; isNew: boolean },
+  key: { agencyId: string; propertyId: string; userId: string; isNew: boolean; connectionId?: string | null },
   patch: Partial<Pick<PublicationRow, "status" | "external_id" | "external_url" | "error_message" | "published_at">>,
 ): Promise<PublicationRow | null> {
   const row: Record<string, unknown> = {
@@ -121,11 +122,11 @@ export async function savePublication(
     ...patch,
   };
   if (key.isNew) row.created_by = key.userId;
-  const { data, error } = await db
-    .from("property_publications")
-    .upsert(row, { onConflict: "property_id,channel" })
-    .select(PUBLICATION_COLUMNS)
-    .single();
+  // Conexión con la que se publicó (migración 20261006120000; sin ella se omite).
+  if (key.connectionId) row.connection_id = key.connectionId;
+  const { data, error } = await withOptionalColumns("publication", row, (r) =>
+    db.from("property_publications").upsert(r, { onConflict: "property_id,channel" }).select(PUBLICATION_COLUMNS).single(),
+  );
   if (error) return null;
   return data as PublicationRow;
 }

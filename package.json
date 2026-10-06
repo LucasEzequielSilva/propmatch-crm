@@ -11,7 +11,8 @@
     "test:meli": "node --test scripts/meliListing.test.ts",
     "test:meta": "node --test scripts/metaWeb.test.ts",
     "test:voz": "node --test scripts/voz.test.ts",
-    "test:brand": "node --test scripts/brand.test.ts"
+    "test:brand": "node --test scripts/brand.test.ts",
+    "test:integraciones": "node --test scripts/integraciones.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
