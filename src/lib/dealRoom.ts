@@ -8,6 +8,7 @@
  * a la base después sea copiar campos, no rediseñar.
  */
 
+import { isPaymentPaid, salePlan } from "./refuerzos";
 import type {
   Contact,
   ContactSource,
@@ -378,19 +379,25 @@ export interface FinanceSummary {
   splits: { user_id: string; share_pct: number; amount: number }[];
   /** Pagos en otra moneda: no se suman (no hay tipo de cambio). */
   otherCurrency: DealPayment[];
+  /** Refuerzos de reserva (en la moneda de la operación): total y lo ya pagado. */
+  refuerzosTotal: number;
+  refuerzosPaid: number;
 }
 
 export function financeSummary(deal: Deal, property: Property | undefined): FinanceSummary {
-  const sameCur = deal.payments.filter((p) => p.currency === deal.currency);
-  const otherCurrency = deal.payments.filter((p) => p.currency !== deal.currency);
+  // Los programados (refuerzos a futuro, `paid: false`) no suman a lo pagado.
+  const paidPayments = deal.payments.filter(isPaymentPaid);
+  const sameCur = paidPayments.filter((p) => p.currency === deal.currency);
+  const otherCurrency = paidPayments.filter((p) => p.currency !== deal.currency);
   const sum = (xs: DealPayment[]) => xs.reduce((a, p) => a + (p.amount || 0), 0);
   const paidByClient = sum(sameCur.filter((p) => p.concept !== "comision"));
   const commissionCollected = sum(sameCur.filter((p) => p.concept === "comision"));
 
   const isSale = deal.kind === "venta";
-  const advancePct = deal.boleto_advance_pct ?? 30;
-  const advanceTotal = isSale && deal.price !== null ? (deal.price * advancePct) / 100 : null;
-  const balanceAtDeed = isSale && deal.price !== null && advanceTotal !== null ? deal.price - advanceTotal : null;
+  // Con refuerzos, el anticipo total nunca es menor que reserva + refuerzos (ver src/lib/refuerzos.ts).
+  const plan = salePlan(deal);
+  const advanceTotal = isSale ? plan.advanceTotal : null;
+  const balanceAtDeed = isSale ? plan.balance : null;
   const pendingPrice = isSale && deal.price !== null ? Math.max(deal.price - paidByClient, 0) : null;
   const surface = property?.surface_covered || property?.surface_total || null;
   const pricePerM2 = isSale && deal.price !== null && surface ? deal.price / surface : null;
@@ -416,6 +423,8 @@ export function financeSummary(deal: Deal, property: Property | undefined): Fina
     netAgency,
     splits: c.splits.map((s) => ({ ...s, amount: (netAgency * s.share_pct) / 100 })),
     otherCurrency,
+    refuerzosTotal: plan.refuerzos,
+    refuerzosPaid: plan.refuerzosPaid,
   };
 }
 

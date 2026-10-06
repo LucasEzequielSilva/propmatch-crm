@@ -12,6 +12,8 @@ import type { CurrencyCode, DealCommission, DealPayment, DealPaymentConcept } fr
 import { Field, NumberInput, inputClass } from "../ui";
 import { Btn, Modal, Restricted, RoomCard, Stat } from "./primitives";
 import type { Room } from "./room";
+import { RefuerzosSection } from "./RefuerzosSection";
+import { isPaymentPaid } from "@/lib/refuerzos";
 
 /** Control financiero: visible solo para administración o el responsable (gating visual). */
 export function FinanceCard({ room, onRegisterPayment }: { room: Room; onRegisterPayment: () => void }) {
@@ -41,16 +43,22 @@ export function FinanceCard({ room, onRegisterPayment }: { room: Room; onRegiste
         {isSale && <Stat label={`${cur}/m²`} value={f.pricePerM2 ? money(f.pricePerM2, cur) : "—"} hint={!f.pricePerM2 ? "Falta la superficie" : undefined} />}
         {isSale && <Stat label={`Anticipo (${deal.boleto_advance_pct ?? 30}%)`} value={money(f.advanceTotal, cur)} />}
         {isSale && <Stat label="Saldo a la escritura" value={money(f.balanceAtDeed, cur)} />}
+        {f.refuerzosTotal > 0 && (
+          <Stat label="Refuerzos" value={money(f.refuerzosTotal, cur)} hint={f.refuerzosPaid < f.refuerzosTotal ? `Pagado: ${money(f.refuerzosPaid, cur)}` : "Todos pagados"} />
+        )}
         <Stat label="Pagado por el cliente" value={money(f.paidByClient, cur)} />
         {isSale && <Stat label="Saldo pendiente" value={money(f.pendingPrice, cur)} />}
       </div>
 
+      <RefuerzosSection room={room} />
+
       <h3 className="text-xs uppercase tracking-[0.1em] text-brand-purple font-bold mt-5 mb-2">Pagos registrados</h3>
-      {deal.payments.length === 0 ? (
+      {/* Los refuerzos programados (sin pagar) se ven arriba, en «Refuerzos de reserva». */}
+      {deal.payments.filter(isPaymentPaid).length === 0 ? (
         <p className="text-xs text-ink-soft">Sin pagos registrados.</p>
       ) : (
         <ul className="divide-y divide-divider">
-          {deal.payments.map((p) => (
+          {deal.payments.filter(isPaymentPaid).map((p) => (
             <li key={p.id} className="py-2 flex items-start gap-2">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-ink font-semibold">
