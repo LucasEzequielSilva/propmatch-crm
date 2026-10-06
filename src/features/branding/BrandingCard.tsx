@@ -180,10 +180,11 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
             onChange={(v) => set("secondary", v)}
           />
           <div className="sm:col-span-2 rounded-xl p-3 text-xs grid gap-1" style={{ background: "#FAFAFF", color: INK }}>
-            <ContrastLine ok={btn.aa} warn={!btn.aa && btn.aaLarge} text={`Texto de los botones sobre el principal: ${btn.ratio}:1`} />
+            <ContrastLine ok={btn.aa} warn={btn.aaLarge} text={`Texto de los botones sobre el principal: ${btn.ratio}:1`} />
             <ContrastLine
               ok={primaryText.aa}
-              warn={!primaryText.aa}
+              warn={primaryText.aaLarge}
+              adjusted
               text={
                 primaryText.aa
                   ? `Principal sobre blanco: ${primaryText.ratio}:1`
@@ -192,7 +193,8 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
             />
             <ContrastLine
               ok={secondaryText.aa}
-              warn={!secondaryText.aa}
+              warn={secondaryText.aaLarge}
+              adjusted
               text={
                 secondaryText.aa
                   ? `Secundario sobre blanco: ${secondaryText.ratio}:1`
@@ -270,12 +272,12 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
   );
 }
 
-function ContrastLine({ ok, warn, text }: { ok: boolean; warn: boolean; text: string }) {
+function ContrastLine({ ok, warn, adjusted, text }: { ok: boolean; warn: boolean; adjusted?: boolean; text: string }) {
   return (
-    <p className="flex items-start gap-1.5" style={{ color: ok ? "#15803D" : warn ? "#B45309" : "#BE123C", fontWeight: 600 }}>
+    <p className="flex items-start gap-1.5" style={{ color: ok ? "#15803D" : warn || adjusted ? "#B45309" : "#BE123C", fontWeight: 600 }}>
       <span aria-hidden="true">{ok ? "✓" : "!"}</span>
       <span>
-        {ok ? "AA · " : warn ? "Solo texto grande · " : "No llega a AA · "}
+        {ok ? "AA · " : adjusted ? "Ajustado · " : warn ? "Solo texto grande · " : "No llega a AA · "}
         {text}
       </span>
     </p>
