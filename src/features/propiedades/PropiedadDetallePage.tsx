@@ -31,6 +31,7 @@ import { AUTHORIZATION_TONE_STYLE, authorizationState } from "@/lib/authorizatio
 import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
 import { DiagnosticoSection } from "./diagnostico/DiagnosticoSection";
+import { PublishToPortalsDialog } from "@/features/integraciones/PublishToPortalsDialog";
 
 const OPERATION_LABEL: Record<string, string> = {
   venta: "Venta",
@@ -70,7 +71,8 @@ export default function PropiedadDetallePage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [respondingOfferId, setRespondingOfferId] = useState<string | null>(null);
 
-  const { channelsOf, loading: publicationsLoading } = usePublications();
+  const { channelsOf, applyRow, loading: publicationsLoading } = usePublications();
+  const [publishing, setPublishing] = useState(false);
   // Solo los canales donde ya se intentó publicar (y la web, que es propia y siempre está).
   const publications = property ? channelsOf(property).filter((c) => c.status !== null) : [];
   const externalPublished = publicationsLoading
@@ -178,6 +180,15 @@ export default function PropiedadDetallePage() {
         </select>
       </AppHeader>
 
+      {publishing && (
+        <PublishToPortalsDialog
+          property={property}
+          photos={photos[property.id] ?? []}
+          channels={channelsOf(property).map((c) => ({ channel: c.info.channel, status: c.status, externalId: c.externalId }))}
+          onRow={applyRow}
+          onClose={() => setPublishing(false)}
+        />
+      )}
       {sharing && (
         <ShareListingModal
           property={property}
@@ -443,6 +454,16 @@ export default function PropiedadDetallePage() {
                 subtitle={`${publications.filter((c) => c.status === "published").length} canales publicados`}
                 action={{ label: "Gestionar publicaciones", onClick: () => navigate(`/publicador/${property.id}`) }}
               />
+              <div className="px-4 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setPublishing(true)}
+                  className="min-h-[44px] px-4 rounded-xl text-sm text-white transition-all hover:opacity-90"
+                  style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+                >
+                  Publicar en portales
+                </button>
+              </div>
               <div className="w-full text-left text-sm" style={{ borderTop: "1px solid #F3F0FF" }}>
                 <div className="grid grid-cols-4 px-4 py-3 text-xs font-bold text-[#7458C4] border-b" style={{ borderColor: "#F3F0FF" }}>
                   <div>Canal</div>

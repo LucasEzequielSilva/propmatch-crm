@@ -6,6 +6,7 @@ import { avatarGradient, initials } from "@/lib/format";
 import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
 import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
 import { SampleDataCard } from "./SampleDataCard";
+import { IntegracionesLinkCard } from "@/features/integraciones/IntegracionesLinkCard";
 import { SampleBadge } from "@/components/ui/SampleBadge";
 
 /**
@@ -93,6 +94,7 @@ export default function ConfiguracionPage() {
             </p>
           </Card>
 
+          <IntegracionesLinkCard />
           <ChannelsSettings />
           <SampleDataCard onDone={setToast} />
 

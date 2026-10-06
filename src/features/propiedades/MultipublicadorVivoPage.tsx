@@ -27,6 +27,7 @@ import { MetaPublishPanel } from "./MetaPublishPanel";
 import { WebChannelPanel } from "./WebChannelPanel";
 import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 import { FixList, type Fix, type FixItem } from "./completar/InlineFix";
+import { PublishToPortalsDialog } from "@/features/integraciones/PublishToPortalsDialog";
 import { FIX_LABEL, editorHref, fixesForCheck, isFieldKey, optionalMissing, shortMissingForCheck, type FixKey, type LinkKey } from "./completar/fields";
 
 const initialsOf = (name: string) =>
@@ -182,6 +183,7 @@ export default function MultipublicadorVivoPage() {
   const meli = useMeliConnection();
   const meta = useMetaConnection();
   const [selected, setSelected] = useState<PublicationChannel[]>([]);
+  const [portalsOpen, setPortalsOpen] = useState(false);
   /** Una vez que hubo opcionales, la lista queda visible (para ver los ✓ de lo que se completó). */
   const hadOptional = useRef(false);
 
@@ -412,6 +414,14 @@ export default function MultipublicadorVivoPage() {
               <div className="px-5 py-4 border-t flex flex-col gap-3" style={{ borderColor: "#F3F0FF" }}>
                 <div className="flex flex-wrap gap-3">
                   <button
+                    type="button"
+                    onClick={() => setPortalsOpen(true)}
+                    className="px-5 py-2.5 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
+                    style={{ background: "#7C3AED", fontWeight: 700 }}
+                  >
+                    Publicar en portales
+                  </button>
+                  <button
                     onClick={publish}
                     disabled={selected.length === 0 || sample}
                     title={sample ? SAMPLE_PUBLISH_BLOCKED : undefined}
@@ -565,6 +575,15 @@ export default function MultipublicadorVivoPage() {
           </div>
         </div>
       </div>
+      {portalsOpen && (
+        <PublishToPortalsDialog
+          property={property}
+          photos={photoList}
+          channels={channels.map((c) => ({ channel: c.info.channel, status: c.status, externalId: c.externalId }))}
+          onRow={applyRow}
+          onClose={() => setPortalsOpen(false)}
+        />
+      )}
     </>
   );
 }

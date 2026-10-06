@@ -273,7 +273,16 @@ export default function MultipublicadorPage() {
 
                 {/* Plataformas */}
                 <section id="plataformas" aria-labelledby="plataformas-h" className="mt-8 scroll-mt-4">
-                    <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 id="plataformas-h" className="text-xl tracking-tight" style={{ color: INK, fontWeight: 800 }}>Plataformas</h2>
+                        <Link
+                            to="/configuracion/integraciones"
+                            className="inline-flex items-center min-h-[44px] px-4 rounded-xl text-sm border bg-white"
+                            style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+                        >
+                            Administrar conexiones
+                        </Link>
+                    </div>
                     <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
                         {meli.connected || meta.connected
                             ? "Publicá desde la tarjeta de cada plataforma conectada o desde cada propiedad."
