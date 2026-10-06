@@ -1,5 +1,7 @@
 /** Tipos del dominio. Espejo del esquema en supabase/migrations. */
 
+import type { AgencyBrand } from "../../shared/brand";
+
 export type UserRole = "owner" | "admin" | "agente";
 export type OperationType = "venta" | "alquiler" | "alquiler_temporal";
 export type PropertyType = "casa" | "departamento" | "ph" | "terreno" | "local" | "oficina";
@@ -57,6 +59,25 @@ export interface Agency {
   city: string | null;
   province: string | null;
   created_at: string;
+  /** Marca de la inmobiliaria (logo, colores, contacto). Ver shared/brand.ts y src/lib/branding.ts. */
+  branding?: AgencyBrand | null;
+  /** Plantillas de documentos propias de la inmobiliaria. Ver src/lib/docTemplates.ts. */
+  doc_templates?: DocTemplate[];
+}
+
+/** Plantilla de documento guardada por la inmobiliaria: texto con variables ({{precio_letras}}), no valores. */
+export interface DocTemplate {
+  id: string;
+  /** "reserva" | "boleto_compraventa" | "contrato_alquiler" (DocumentKind de src/lib/deals.ts). */
+  kind: "reserva" | "boleto_compraventa" | "contrato_alquiler";
+  name: string;
+  /** Solo para la reserva: si vale para ventas, alquileres o las dos (`null`). */
+  deal_kind: DealKind | null;
+  text: string;
+  /** La que se usa por defecto para ese tipo de documento. */
+  is_default: boolean;
+  updated_at: string;
+  updated_by: string | null;
 }
 
 export interface Profile {
@@ -522,6 +543,10 @@ export interface DealPayment {
   currency: CurrencyCode;
   /** `YYYY-MM-DD` */
   paid_at: string | null;
+  /** `YYYY-MM-DD`. Fecha prevista (refuerzos y pagos programados). */
+  due_date?: string | null;
+  /** `false` = programado, todavía no se pagó (no suma a lo pagado). Sin el campo = pagado (datos viejos). */
+  paid?: boolean;
   receipt_text: string;
   notes: string;
   created_by: string | null;
