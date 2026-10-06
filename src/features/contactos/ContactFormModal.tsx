@@ -4,6 +4,9 @@ import { FEATURE_CHIPS, ZONES } from "@/data/seed";
 import { CheckIcon, ContactsIcon, MatchesSolidIcon } from "@/components/ui/icons";
 import { computeMatch, MATCH_THRESHOLD } from "@/lib/matching";
 import { CONTACT_STATUS_LABEL, PROPERTY_TYPE_LABEL } from "@/lib/format";
+import { DictarButton } from "@/features/voz/DictarButton";
+import { applyBusquedaToRequirement, busquedaNotes } from "@/lib/voz/apply";
+import type { VozData } from "../../../shared/voz";
 import type {
   ClientProfile,
   Contact,
@@ -66,11 +69,14 @@ export function ContactFormModal({
   contact,
   onClose,
   onSaved,
+  vozPrefill,
 }: {
   /** `undefined` = alta. Con contacto = edición. */
   contact?: Contact;
   onClose: () => void;
   onSaved?: (contactId: string) => void;
+  /** Búsqueda dictada (carga por voz) para precargar. No guarda: se revisa y se guarda acá. */
+  vozPrefill?: VozData | null;
 }) {
   const { addContact, updateContact, saveRequirement, requirementOf, properties, profiles } =
     useStore();
@@ -106,6 +112,24 @@ export function ContactFormModal({
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /** Carga por voz: completa lo detectado; nombre y teléfono solo si estaban vacíos. */
+  function applyVoz(r: VozData) {
+    if (r.kind !== "busqueda") return;
+    const d = r.data;
+    if (d.contact_name) setFullName((v) => (v.trim() ? v : d.contact_name!));
+    if (d.contact_phone) setPhone((v) => (v.trim() ? v : d.contact_phone!));
+    if (!contact && d.operation && d.operation !== "venta") setKind((k) => (k === "comprador" ? "inquilino" : k));
+    setReq((prev) => applyBusquedaToRequirement(prev, d));
+    const extra = busquedaNotes(d);
+    if (extra) setNotes((n) => (n.includes(extra) ? n : n.trim() ? `${n.trim()}\n${extra}` : extra));
+  }
+
+  useEffect(() => {
+    if (vozPrefill) applyVoz(vozPrefill);
+    // Solo al abrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cerrar con Escape, como cualquier modal.
   useEffect(() => {
@@ -231,6 +255,7 @@ export function ContactFormModal({
               Cargá quién es y qué busca. Con eso el sistema le encuentra propiedades solo.
             </p>
           </div>
+          <DictarButton kind="busqueda" onApply={applyVoz} />
           <button
             onClick={onClose}
             aria-label="Cerrar"
