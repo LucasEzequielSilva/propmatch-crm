@@ -21,6 +21,7 @@ import {
 import { useStore, STAGE_LABEL } from "@/data/store";
 import { ContactFormModal } from "./ContactFormModal";
 import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal";
+import { SendMyWebButton } from "@/features/branding/SendMyWeb";
 import {
   CONTACT_STATUS_LABEL,
   CONTACT_STATUS_STYLE,
@@ -246,6 +247,7 @@ export default function ContactoDetallePage() {
 
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 <WhatsAppButton onClick={() => setWhatsapp(true)} />
+                <SendMyWebButton contact={contact} />
                 {contact.phone && (
                   <a
                     href={`tel:${contact.phone}`}

@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { customDomainSlug } from "@/features/sitio/customDomain";
 
 import LoginPage from "@/features/auth/LoginPage";
 import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
@@ -34,6 +35,8 @@ import DocumentoPage from "@/features/operaciones/DocumentoPage";
 // Web pública de la inmobiliaria: se carga aparte (los visitantes no necesitan el CRM).
 const SitioPage = lazy(() => import("@/features/sitio/SitioPage"));
 const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPage"));
+// Dominio propio de una inmobiliaria: solo su web, en la raíz (ver docs/web-dominio-propio.md).
+const CustomDomainApp = lazy(() => import("@/features/sitio/CustomDomainApp"));
 
 /**
  * Navegación.
@@ -45,6 +48,7 @@ const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPag
  * directo y no toca el diseño.
  */
 export default function App() {
+  if (customDomainSlug()) return <Suspense fallback={null}><CustomDomainApp /></Suspense>;
   return (
     <StoreProvider>
       <PasswordRecovery />

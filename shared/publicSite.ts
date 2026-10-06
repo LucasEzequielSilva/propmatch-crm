@@ -19,6 +19,8 @@
  * almacenamiento provisorio hasta tener una columna propia (mismo borrador).
  */
 
+import type { AgencyBrand } from "./brand.js";
+
 export type PublicOperation = "venta" | "alquiler" | "temporario";
 export type PublicPropertyType = "depto" | "casa" | "loft" | "monoambiente" | "ph" | "terreno" | "local" | "oficina";
 
@@ -28,6 +30,8 @@ export interface PublicAgency {
   /** Contacto de la cuenta de la inmobiliaria en la app. Puede faltar. */
   whatsapp: string | null;
   email: string | null;
+  /** Marca publicada (logo, colores, contacto). Ver shared/brand.ts. Puede faltar. */
+  brand?: AgencyBrand | null;
 }
 
 /** Lista blanca de lo que sale a internet. Nada de dueño, DNI, precio mínimo ni dirección exacta. */

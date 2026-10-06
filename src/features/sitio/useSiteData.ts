@@ -83,11 +83,13 @@ function usePreviewSite(enabled: boolean): SiteState {
       list.push(toPublic(p, photos[p.id] ?? [], web?.externalId ?? null));
     }
     const owner = profiles.find((x) => x.role === "admin") ?? profiles[0];
+    const brand = agency.branding ?? null;
     const a: PublicAgency = {
-      name: agency.name,
+      name: brand?.displayName || agency.name,
       slug: PREVIEW_SLUG,
-      whatsapp: agency.phone ?? owner?.phone ?? null,
-      email: agency.email ?? owner?.email ?? null,
+      whatsapp: brand?.whatsapp ?? brand?.phone ?? agency.phone ?? owner?.phone ?? null,
+      email: brand?.email ?? agency.email ?? owner?.email ?? null,
+      brand,
     };
     return { kind: "ok", site: { agency: a, properties: list, generatedAt: new Date().toISOString() }, preview: true, notPublished };
   }, [enabled, sessionLoading, loading, currentUserId, properties, photos, channelsOf, agency, profiles]);

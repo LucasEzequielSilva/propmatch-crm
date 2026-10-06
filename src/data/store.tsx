@@ -271,7 +271,8 @@ export interface LogActivityInput {
   property_id: string | null;
 }
 
-export type AgencyInput = Pick<Agency, "name" | "phone" | "email" | "city" | "province">;
+export type AgencyInput = Pick<Agency, "name" | "phone" | "email" | "city" | "province"> &
+  Partial<Pick<Agency, "branding" | "doc_templates">>;
 export type ProfileInput = Pick<Profile, "full_name" | "email" | "phone">;
 
 export interface NewTaskInput {

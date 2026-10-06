@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from "react";
+import { customDomainSlug } from "./customDomain";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { HomeIcon, MapPinIcon } from "@/components/ui/icons";
 import {
@@ -48,7 +49,8 @@ function useFiltersInUrl(): [SiteFilters, (f: SiteFilters) => void] {
 }
 
 export default function SitioPage() {
-  const { slug = "" } = useParams<{ slug: string }>();
+  const { slug: routeSlug = "" } = useParams<{ slug: string }>();
+  const slug = routeSlug || customDomainSlug() || "";
   const state = useSiteData(slug);
   const [filters, setFilters] = useFiltersInUrl();
   const site = state.kind === "ok" ? state.site : null;
@@ -70,7 +72,7 @@ export default function SitioPage() {
   if (state.kind === "needs_session")
     return (
       <SiteShell agency={null}>
-        <SiteMessage title="Vista previa de tu web" text="Entrá a PropMatch en este navegador para ver cómo queda tu web con tus propiedades." action={<Link to="/login" className="underline" style={{ color: "#5B21B6" }}>Ir a iniciar sesión</Link>} />
+        <SiteMessage title="Vista previa de tu web" text="Entrá a PropMatch en este navegador para ver cómo queda tu web con tus propiedades." action={<Link to="/login" className="underline" style={{ color: "var(--brand-accent, #5B21B6)" }}>Ir a iniciar sesión</Link>} />
       </SiteShell>
     );
   if (state.kind === "not_found")
@@ -114,7 +116,7 @@ export default function SitioPage() {
             title="No hay propiedades con esos filtros"
             text="Probá ampliando la búsqueda."
             action={
-              <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="min-h-11 px-5 rounded-xl border" style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}>
+              <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="min-h-11 px-5 rounded-xl border" style={{ borderColor: "var(--brand-border, #DDD6FE)", color: "var(--brand-accent, #5B21B6)", fontWeight: 700 }}>
                 Ver todas
               </button>
             }
@@ -145,7 +147,7 @@ function Field({ label, children, htmlFor }: { label: string; children: ReactNod
 }
 
 const control = "w-full min-h-11 px-3 rounded-xl border bg-white text-sm";
-const controlStyle = { borderColor: "#DDD6FE", color: INK };
+const controlStyle = { borderColor: "var(--brand-border, #DDD6FE)", color: INK };
 
 function FilterBar({ value, onChange, ops, types }: { value: SiteFilters; onChange: (f: SiteFilters) => void; ops: PublicOperation[]; types: PublicPropertyType[] }) {
   const set = (part: Partial<SiteFilters>) => onChange({ ...value, ...part });
@@ -187,7 +189,7 @@ function FilterBar({ value, onChange, ops, types }: { value: SiteFilters; onChan
       </Field>
       {active && (
         <div className="col-span-2 md:col-span-3 lg:col-span-6">
-          <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="min-h-11 px-4 rounded-xl text-sm underline" style={{ color: "#5B21B6", fontWeight: 700 }}>
+          <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="min-h-11 px-4 rounded-xl text-sm underline" style={{ color: "var(--brand-accent, #5B21B6)", fontWeight: 700 }}>
             Limpiar filtros
           </button>
         </div>
@@ -204,7 +206,7 @@ function PropertyCard({ p, slug, eager, notPublished }: { p: PublicProperty; slu
       className="group block rounded-2xl border bg-white overflow-hidden h-full transition-shadow hover:shadow-lg focus-visible:shadow-lg"
       style={{ borderColor: "#EDE9FE", boxShadow: "var(--shadow-card)" }}
     >
-      <div className="relative aspect-[4/3]" style={{ background: "#F5F3FF" }}>
+      <div className="relative aspect-[4/3]" style={{ background: "var(--brand-soft, #F5F3FF)" }}>
         {p.photos[0] ? (
           <img src={p.photos[0]} alt="" loading={eager ? "eager" : "lazy"} decoding="async" className="w-full h-full object-cover" />
         ) : (
@@ -212,7 +214,7 @@ function PropertyCard({ p, slug, eager, notPublished }: { p: PublicProperty; slu
             <HomeIcon size={32} color="#C4B5FD" />
           </div>
         )}
-        <span className="absolute top-3 left-3 text-xs px-2.5 py-1 rounded-full bg-white" style={{ color: "#5B21B6", fontWeight: 800 }}>
+        <span className="absolute top-3 left-3 text-xs px-2.5 py-1 rounded-full bg-white" style={{ color: "var(--brand-accent, #5B21B6)", fontWeight: 800 }}>
           {OPERATION_LABEL[p.operation]}
         </span>
         {notPublished && (
@@ -245,14 +247,14 @@ function PropertyCard({ p, slug, eager, notPublished }: { p: PublicProperty; slu
 function LoadingGrid() {
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-10" aria-busy="true" aria-label="Cargando propiedades">
-      <div className="h-9 w-2/3 rounded-lg animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+      <div className="h-9 w-2/3 rounded-lg animate-pulse motion-reduce:animate-none" style={{ background: "var(--brand-soft, #F5F3FF)" }} />
       <ul className="mt-8 grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <li key={i} className="rounded-2xl overflow-hidden border" style={{ borderColor: "#EDE9FE" }}>
-            <div className="aspect-[4/3] animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+            <div className="aspect-[4/3] animate-pulse motion-reduce:animate-none" style={{ background: "var(--brand-soft, #F5F3FF)" }} />
             <div className="p-4 space-y-2">
-              <div className="h-5 w-1/2 rounded animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
-              <div className="h-4 w-3/4 rounded animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+              <div className="h-5 w-1/2 rounded animate-pulse motion-reduce:animate-none" style={{ background: "var(--brand-soft, #F5F3FF)" }} />
+              <div className="h-4 w-3/4 rounded animate-pulse motion-reduce:animate-none" style={{ background: "var(--brand-soft, #F5F3FF)" }} />
             </div>
           </li>
         ))}

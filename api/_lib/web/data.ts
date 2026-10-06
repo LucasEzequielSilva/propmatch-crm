@@ -23,6 +23,7 @@ import {
   type PublicProperty,
   type PublicPropertyType,
 } from "../../../shared/publicSite.js";
+import { BRAND_BUCKET, brandLogoPrefix, brandObjectPath, decodeBrandPng, sanitizeBrand, type AgencyBrand } from "../../../shared/brand.js";
 
 const PROPERTY_COLUMNS =
   "id, title, description, photos, barrio, type, operation_type, rooms, amenities, price_usd_month, price_usd_sale, updated_at";
@@ -78,9 +79,43 @@ async function agencyContact(ownerUserId: string | null): Promise<{ phone: strin
   return { phone: (data?.phone as string | null) ?? null, email: (data?.email as string | null) ?? null };
 }
 
+/**
+ * Marca publicada de la agencia. Primero la columna `agencies.branding`
+ * (supabase/drafts/agencies_branding.sql, SIN aplicar: si no existe, Postgres
+ * responde 42703 y se sigue), después `property-photos/<id>/branding/brand.png`
+ * (ver shared/brand.ts). Siempre pasa por la lista blanca y el logo tiene que
+ * estar en la carpeta de la agencia.
+ */
+export async function agencyBrand(agencyId: string): Promise<AgencyBrand | null> {
+  const db = supabaseAdmin();
+  const logoPrefix = brandLogoPrefix(process.env.SUPABASE_URL ?? "", agencyId);
+  try {
+    const col = await db.from("agencies").select("branding").eq("id", agencyId).maybeSingle();
+    const value = !col.error ? (col.data as { branding?: unknown } | null)?.branding : null;
+    if (value) return sanitizeBrand(value, { logoPrefix });
+  } catch {
+    /* sin columna: sigue con el Storage */
+  }
+  try {
+    const { data, error } = await db.storage.from(BRAND_BUCKET).download(brandObjectPath(agencyId));
+    if (error || !data) return null;
+    const text = decodeBrandPng(new Uint8Array(await data.arrayBuffer()));
+    return text ? sanitizeBrand(JSON.parse(text), { logoPrefix }) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function publicAgency(row: AgencyRow, canonical: string): Promise<PublicAgency> {
-  const c = await agencyContact(row.owner_user_id);
-  return { name: row.name, slug: canonical, whatsapp: c.phone, email: c.email };
+  const [c, brand] = await Promise.all([agencyContact(row.owner_user_id), agencyBrand(row.id)]);
+  return {
+    // El nombre comercial de la marca, si lo cargaron, es el que ve el público.
+    name: brand?.displayName || row.name,
+    slug: canonical,
+    whatsapp: brand?.whatsapp ?? brand?.phone ?? c.phone,
+    email: brand?.email ?? c.email,
+    brand,
+  };
 }
 
 interface PropertyRow {
