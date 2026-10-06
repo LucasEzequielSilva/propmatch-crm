@@ -3,6 +3,20 @@ import { agencyBySlug, publicAgency, publicProperties, publicProperty } from "..
 import { CACHE_OK, q, siteOrigin, webConfigured } from "../../web/http.js";
 import { formatUsd, isUuid, metaDescription, OPERATION_LABEL, TYPE_LABEL } from "../../../../shared/publicSite.js";
 
+/**
+ * Dominio propio (docs/web-dominio-propio.md): sin `slug`, se busca el host en
+ * CUSTOM_DOMAINS ("dominio=slug,otro=slug"), la misma lista que
+ * VITE_CUSTOM_DOMAINS del front.
+ */
+function customDomainSlug(req: VercelRequest): string {
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").toLowerCase().split(":")[0];
+  for (const pair of (process.env.CUSTOM_DOMAINS ?? process.env.VITE_CUSTOM_DOMAINS ?? "").split(",")) {
+    const [h, s] = pair.split("=").map((x) => x?.trim().toLowerCase());
+    if (h && s && h === host) return s;
+  }
+  return "";
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /**
@@ -16,12 +30,14 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = siteOrigin(req);
-  const slug = q(req, "slug");
+  const slug = q(req, "slug") || customDomainSlug(req);
   const id = q(req, "id");
   let title = "PropMatch";
   let description = "Propiedades en venta y alquiler.";
   let image: string | null = null;
-  let url = `${origin}/sitio/${slug}`;
+  // En un dominio propio la web vive en la raíz.
+  const onCustomDomain = !q(req, "slug") && !!slug;
+  let url = onCustomDomain ? origin : `${origin}/sitio/${slug}`;
   let status = 200;
 
   try {
@@ -31,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       title = "Inmobiliaria no encontrada";
     } else {
       const agency = await publicAgency(found.row, found.canonical);
-      url = `${origin}/sitio/${agency.slug}`;
+      url = onCustomDomain ? origin : `${origin}/sitio/${agency.slug}`;
       if (id && isUuid(id)) {
         const p = await publicProperty(found.row.id, id);
         if (p) {

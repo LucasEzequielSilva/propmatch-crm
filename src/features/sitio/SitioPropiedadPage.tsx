@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { customDomainSlug } from "./customDomain";
 import { Link, useParams } from "react-router-dom";
 import { ChevronLeftIcon, HomeIcon, MapPinIcon } from "@/components/ui/icons";
 import { formatUsd, mapsLink, metaDescription, OPERATION_LABEL, TYPE_LABEL, type PublicProperty } from "../../../shared/publicSite";
@@ -13,7 +14,8 @@ import { ContactButtons, INK, SiteMessage, SiteShell, SOFT, useEmbed, useSiteHre
  * integradores.
  */
 export default function SitioPropiedadPage() {
-  const { slug = "", id = "" } = useParams<{ slug: string; id: string }>();
+  const { slug: routeSlug = "", id = "" } = useParams<{ slug: string; id: string }>();
+  const slug = routeSlug || customDomainSlug() || "";
   const state = useSiteData(slug);
   const href = useSiteHref();
   const embed = useEmbed();
@@ -31,7 +33,7 @@ export default function SitioPropiedadPage() {
     return (
       <SiteShell agency={null}>
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-10" aria-busy="true" aria-label="Cargando propiedad">
-          <div className="aspect-[16/9] rounded-2xl animate-pulse motion-reduce:animate-none" style={{ background: "#F5F3FF" }} />
+          <div className="aspect-[16/9] rounded-2xl animate-pulse motion-reduce:animate-none" style={{ background: "var(--brand-soft, #F5F3FF)" }} />
         </div>
       </SiteShell>
     );
@@ -53,7 +55,7 @@ export default function SitioPropiedadPage() {
           title="Esta propiedad ya no está disponible"
           text="Puede que se haya vendido o alquilado. Mirá las otras propiedades disponibles."
           action={
-            <Link to={href(`/sitio/${site.agency.slug}`)} className="min-h-11 px-5 inline-flex items-center rounded-xl text-white" style={{ background: "var(--gradient-brand)", fontWeight: 700 }}>
+            <Link to={href(`/sitio/${site.agency.slug}`)} className="min-h-11 px-5 inline-flex items-center rounded-xl" style={{ background: "var(--brand-primary, #7C3AED)", color: "var(--brand-on-primary, #FFFFFF)", fontWeight: 700 }}>
               Ver propiedades
             </Link>
           }
@@ -69,7 +71,7 @@ export default function SitioPropiedadPage() {
   return (
     <SiteShell agency={site.agency} preview={state.kind === "ok" && state.preview}>
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-6">
-        <Link to={href(`/sitio/${site.agency.slug}`)} className="inline-flex items-center gap-1 min-h-11 text-sm" style={{ color: "#5B21B6", fontWeight: 700 }}>
+        <Link to={href(`/sitio/${site.agency.slug}`)} className="inline-flex items-center gap-1 min-h-11 text-sm" style={{ color: "var(--brand-accent, #5B21B6)", fontWeight: 700 }}>
           <ChevronLeftIcon size={14} /> Todas las propiedades
         </Link>
 
@@ -93,7 +95,7 @@ export default function SitioPropiedadPage() {
                 </h2>
                 <ul className="mt-3 flex flex-wrap gap-2">
                   {p.amenities.map((a) => (
-                    <li key={a} className="text-sm px-3 py-1.5 rounded-full" style={{ background: "#F5F3FF", color: "#5B21B6", fontWeight: 600 }}>
+                    <li key={a} className="text-sm px-3 py-1.5 rounded-full" style={{ background: "var(--brand-soft, #F5F3FF)", color: "var(--brand-accent, #5B21B6)", fontWeight: 600 }}>
                       {a}
                     </li>
                   ))}
@@ -106,7 +108,7 @@ export default function SitioPropiedadPage() {
 
           <aside className="lg:sticky lg:top-6 rounded-2xl border bg-white p-5" style={{ borderColor: "#EDE9FE", boxShadow: "var(--shadow-card)" }}>
             <div className="flex flex-wrap gap-2">
-              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#F5F3FF", color: "#5B21B6", fontWeight: 800 }}>
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "var(--brand-soft, #F5F3FF)", color: "var(--brand-accent, #5B21B6)", fontWeight: 800 }}>
                 {OPERATION_LABEL[p.operation]}
               </span>
               <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#F3F4F6", color: "#374151", fontWeight: 700 }}>
@@ -165,7 +167,7 @@ function Gallery({ p }: { p: PublicProperty }) {
   const n = p.photos.length;
   if (n === 0) {
     return (
-      <div className="aspect-[16/10] rounded-2xl flex items-center justify-center" style={{ background: "#F5F3FF" }}>
+      <div className="aspect-[16/10] rounded-2xl flex items-center justify-center" style={{ background: "var(--brand-soft, #F5F3FF)" }}>
         <HomeIcon size={40} color="#C4B5FD" />
       </div>
     );
@@ -199,7 +201,7 @@ function Gallery({ p }: { p: PublicProperty }) {
                 aria-label={`Ver foto ${k + 1}`}
                 aria-current={k === i}
                 className="block w-20 h-16 rounded-lg overflow-hidden border-2"
-                style={{ borderColor: k === i ? "#7C3AED" : "transparent" }}
+                style={{ borderColor: k === i ? "var(--brand-primary, #7C3AED)" : "transparent" }}
               >
                 <img src={u} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
               </button>
@@ -230,7 +232,7 @@ function Location({ p }: { p: PublicProperty }) {
       {osm && (
         <iframe title={`Mapa de ${p.title}`} src={osm} loading="lazy" className="mt-3 w-full h-64 rounded-2xl border" style={{ borderColor: "#EDE9FE" }} />
       )}
-      <a href={link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 min-h-11 px-4 rounded-xl border bg-white" style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}>
+      <a href={link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 min-h-11 px-4 rounded-xl border bg-white" style={{ borderColor: "var(--brand-border, #DDD6FE)", color: "var(--brand-accent, #5B21B6)", fontWeight: 700 }}>
         <MapPinIcon size={16} color="#5B21B6" /> {e ? "Abrir en Google Maps" : "Ver la zona en Google Maps"}
         <span className="sr-only"> (se abre en otra pestaña)</span>
       </a>
