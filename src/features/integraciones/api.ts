@@ -5,6 +5,7 @@
  * funciones), se informa tal cual, sin datos simulados.
  */
 import { supabase } from "@/lib/supabase";
+import { isDemoActive } from "@/lib/demo";
 import type { PortalAuthMethod, PortalId } from "@/lib/integrations/registry";
 import type { PropertyPublication } from "@/types/db";
 
@@ -70,6 +71,9 @@ type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; error: 
 
 async function call<T>(action: string, init: { method: "GET" | "POST"; body?: unknown }): Promise<ApiResult<T>> {
   try {
+    if (isDemoActive()) {
+      return { ok: false, status: 403, error: "demo", message: "En la demo no se conectan portales. Creá tu cuenta para conectar los de tu inmobiliaria." };
+    }
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return { ok: false, status: 401, error: "unauthorized", message: GENERIC.unauthorized };
