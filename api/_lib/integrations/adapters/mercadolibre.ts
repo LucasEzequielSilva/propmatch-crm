@@ -16,10 +16,13 @@ import { decrypt, encrypt, safeEqual } from "../../crypto.js";
 import { appUrl, env, isConfigured } from "../../env.js";
 import { MELI_API, MELI_AUTH_URL, getMeliSession, meliTokenRequest, type MeliSession } from "../../meli.js";
 import {
+  adoptCrmPublication,
   categoryAttributes,
   isPubliclyReachable,
   meliFetch,
+  readCrmPublication,
   readPublication,
+  saveCrmPublication,
   savePublication,
   type MeliItem,
   type PublicationRow,
@@ -40,12 +43,11 @@ import {
   type MeliIssue,
   type MeliListingInput,
   type MeliListingType,
-  type MeliOperation,
-  type MeliPropertyType,
 } from "../../../../shared/meliListing.js";
 import { readConnection, recordConnectionCheck, toConnectionStatus } from "../connections.js";
 import { withOptionalColumns } from "../dbCompat.js";
 import { meliOutcome, type MeliActionResponse } from "../meliOutcome.js";
+import { ITEM_ID, filterCrmPhotos, parseListing, parsePrevious, parseTarget, type MeliTarget } from "../meliRequest.js";
 import { buildReturnUrl, parseReturnTarget, type ReturnTarget } from "../returnTo.js";
 import type { AgencyScope, Availability, PortalAdapter, PublishRequest } from "../types.js";
 
@@ -248,53 +250,20 @@ export async function meliDisconnect(scope: AgencyScope): Promise<void> {
 export const MELI_ACTIONS = ["check", "publish", "update", "pause", "activate", "close", "sync"] as const;
 export type MeliAction = (typeof MELI_ACTIONS)[number];
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ITEM_ID = /^MLA\d{6,15}$/;
-const TYPES: MeliPropertyType[] = ["casa", "departamento", "ph", "terreno", "local", "oficina"];
-const OPERATIONS: MeliOperation[] = ["venta", "alquiler", "alquiler_temporal"];
+/** Compatibilidad: la lista blanca de la ficha vive en meliRequest.ts (se prueba sin red). */
+export { parseListing };
 
-const numOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const strOrNull = (v: unknown, max = 500) => (typeof v === "string" ? v.slice(0, max) : null);
-
-/** Normaliza lo que manda el cliente: nunca se confía en tipos ni largos. */
-export function parseListing(raw: unknown): MeliListingInput | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  if (!TYPES.includes(r.type as MeliPropertyType) || !OPERATIONS.includes(r.operation as MeliOperation)) return null;
-  const loc = (r.location && typeof r.location === "object" ? r.location : null) as Record<string, unknown> | null;
-  return {
-    type: r.type as MeliPropertyType,
-    operation: r.operation as MeliOperation,
-    title: strOrNull(r.title, 300) ?? "",
-    description: strOrNull(r.description, 60000),
-    price: numOrNull(r.price),
-    currency: strOrNull(r.currency, 5) ?? "",
-    expenses: numOrNull(r.expenses),
-    surfaceTotal: numOrNull(r.surfaceTotal),
-    surfaceCovered: numOrNull(r.surfaceCovered),
-    rooms: numOrNull(r.rooms),
-    bedrooms: numOrNull(r.bedrooms),
-    bathrooms: numOrNull(r.bathrooms),
-    garages: numOrNull(r.garages),
-    ageYears: numOrNull(r.ageYears),
-    features: Array.isArray(r.features) ? r.features.filter((f): f is string => typeof f === "string").slice(0, 50) : [],
-    street: strOrNull(r.street, 200),
-    streetNumber: strOrNull(r.streetNumber, 20),
-    lat: numOrNull(r.lat),
-    lng: numOrNull(r.lng),
-    propertyCode: strOrNull(r.propertyCode, 60),
-    location: loc ? { neighborhoodId: strOrNull(loc.neighborhoodId, 80), cityId: strOrNull(loc.cityId, 80) } : null,
-    guests: numOrNull(r.guests),
-    landAccess: strOrNull(r.landAccess, 20),
-  };
-}
-
-/** Solo URLs del Storage público del propio proyecto de Supabase. */
-function publicPhotos(photos: unknown): string[] {
+/** Fotos de la fila de la app: Storage público del propio proyecto, o fotos que el aviso ya tiene en ML. */
+function publicPhotos(photos: unknown, existing: string[] = []): string[] {
   if (!Array.isArray(photos)) return [];
   const prefix = `${env("SUPABASE_URL").replace(/\/+$/, "")}/storage/v1/object/public/`;
-  return photos.filter((u): u is string => typeof u === "string" && u.startsWith(prefix));
+  const known = new Set(existing);
+  return photos.filter((u): u is string => typeof u === "string" && (u.startsWith(prefix) || known.has(u)));
 }
+
+/** URLs de las fotos que el aviso ya tiene en Mercado Libre. */
+const itemPictureUrls = (item: MeliItem | null | undefined) =>
+  (item?.pictures ?? []).flatMap((p) => [p.secure_url, p.url]).filter((u): u is string => !!u);
 
 interface Prepared {
   issues: MeliIssue[];
@@ -335,25 +304,96 @@ async function putDescription(session: MeliSession, itemId: string, text: string
   return r.ok ? null : `El aviso quedó publicado pero la descripción no se cargó: ${readableMeliError(r.status, r.body)}`;
 }
 
+type PubPatch = Parameters<typeof savePublication>[2];
+
+/** Dónde se lee y guarda la publicación según el destino (app o solo-CRM). */
+interface PublicationStore {
+  read(): Promise<PublicationRow | null>;
+  save(patch: PubPatch): Promise<PublicationRow | null>;
+  /** false = la base no tiene la migración de solo-CRM: la fila vuelve al navegador. */
+  persisted: boolean;
+}
+
+async function openStore(
+  db: ReturnType<typeof supabaseAdmin>,
+  scope: AgencyScope,
+  target: MeliTarget,
+  connectionId: string,
+): Promise<PublicationStore> {
+  if (target.kind === "app") {
+    const key = { agencyId: scope.agencyId, propertyId: target.propertyId, userId: scope.userId, isNew: true, connectionId };
+    return {
+      persisted: true,
+      async read() {
+        let row = await readPublication(db, target.propertyId);
+        // Publicada como solo-CRM antes de sincronizarse con la app: se adopta esa fila.
+        if (!row && target.crmPropertyId) row = await adoptCrmPublication(db, scope.agencyId, target.crmPropertyId, target.propertyId);
+        key.isNew = !row;
+        return row;
+      },
+      async save(patch) {
+        const row = await savePublication(db, key, patch);
+        key.isNew = false;
+        return row;
+      },
+    };
+  }
+  const first = await readCrmPublication(db, scope.agencyId, target.crmPropertyId);
+  let base = first.row;
+  let isNew = !base;
+  const store: PublicationStore = {
+    persisted: first.available,
+    async read() {
+      return base;
+    },
+    async save(patch) {
+      const row = await saveCrmPublication(
+        db,
+        { agencyId: scope.agencyId, crmPropertyId: target.crmPropertyId, userId: scope.userId, isNew, connectionId },
+        patch,
+        base,
+      );
+      isNew = false;
+      base = row;
+      store.persisted = !(row as { local_only?: boolean }).local_only;
+      return row;
+    },
+  };
+  return store;
+}
+
 /**
  * Una acción sobre el aviso de Mercado Libre de una propiedad de la agencia.
  * Devuelve EXACTAMENTE el status HTTP y el cuerpo que respondía
  * POST /api/meli/publish (el handler lo pasa tal cual). Agrega solo
- * `updatedExisting` cuando "publicar" terminó actualizando un aviso vivo.
+ * `updatedExisting` cuando "publicar" terminó actualizando un aviso vivo, y
+ * `storedOnServer` (false = la publicación quedó solo en el navegador).
+ *
+ * Destinos (ver meliRequest.ts):
+ *  - `propertyId` (uuid de la app): como siempre; fotos de `properties.photos`.
+ *  - `crmPropertyId` (solo CRM: pesos o sin sincronizar): ficha + `photos`
+ *    del cliente, solo del bucket y carpeta de la agencia.
+ *  - `previous: { externalId }`: aviso que el navegador recuerda (sin
+ *    migración). Se usa SOLO si el aviso es de la cuenta conectada de la agencia.
  */
 export async function runMeliAction(scope: AgencyScope, b: Record<string, unknown>): Promise<MeliActionResponse> {
   const out = (http: number, body: Record<string, unknown>): MeliActionResponse => ({ http, body });
   const action = b.action as MeliAction;
-  const propertyId = typeof b.propertyId === "string" ? b.propertyId : "";
-  if (!MELI_ACTIONS.includes(action) || !UUID.test(propertyId)) return out(400, { error: "bad_request" });
+  const target = parseTarget(b);
+  if (!MELI_ACTIONS.includes(action) || !target) return out(400, { error: "bad_request" });
+  if (b.isSample === true) return out(422, { error: "sample", message: "Es una propiedad de ejemplo: no se publica en ningún portal." });
   if (action === "close" && scope.role !== "admin") {
     return out(403, { error: "forbidden", message: "Solo un administrador puede finalizar un aviso (no se puede deshacer)." });
   }
 
   const db = supabaseAdmin();
-  const { data: prop } = await db.from("properties").select("id, agency_id, photos").eq("id", propertyId).maybeSingle();
-  if (!prop || prop.agency_id !== scope.agencyId) {
-    return out(404, { error: "property_not_found", message: "La propiedad no está sincronizada con la app o no es de tu inmobiliaria." });
+  let appPhotos: unknown = null;
+  if (target.kind === "app") {
+    const { data: prop } = await db.from("properties").select("id, agency_id, photos").eq("id", target.propertyId).maybeSingle();
+    if (!prop || prop.agency_id !== scope.agencyId) {
+      return out(404, { error: "property_not_found", message: "La propiedad no está sincronizada con la app o no es de tu inmobiliaria." });
+    }
+    appPhotos = prop.photos;
   }
 
   let session: MeliSession;
@@ -370,10 +410,40 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
     return out(409, { error: code || "meli_not_connected", message });
   }
 
-  const existing = await readPublication(db, propertyId);
-  const key = { agencyId: scope.agencyId, propertyId, userId: scope.userId, isNew: !existing, connectionId: session.connectionId };
-  const itemId = existing?.external_id && ITEM_ID.test(existing.external_id) ? existing.external_id : null;
-  const done = (row: PublicationRow | null, extra: Record<string, unknown> = {}) => out(200, { row, ...extra });
+  const store = await openStore(db, scope, target, session.connectionId);
+  let existing = await store.read();
+  let itemId = existing?.external_id && ITEM_ID.test(existing.external_id) ? existing.external_id : null;
+
+  // El aviso actual en ML (fotos ya cargadas, si sigue vivo y de quién es).
+  let current: MeliItem | null = null;
+  let currentStatus = 0;
+  const previous = itemId ? null : parsePrevious(b.previous);
+  const lookup = itemId ?? previous?.externalId ?? null;
+  if (lookup) {
+    const r = await readItem(session, lookup);
+    currentStatus = r.status;
+    current = r.ok ? r.body : null;
+  }
+  if (!itemId && previous) {
+    // Pista del navegador: solo vale si el aviso es de la cuenta conectada de ESTA agencia.
+    if (current && String(current.seller_id ?? "") === session.userId) {
+      itemId = previous.externalId;
+      const mapped = mapMeliItemStatus(current);
+      existing = {
+        ...(existing ?? ({} as PublicationRow)),
+        status: mapped.status,
+        external_id: itemId,
+        external_url: current.permalink ?? null,
+        error_message: mapped.message,
+      } as PublicationRow;
+    } else {
+      current = null;
+      currentStatus = 0;
+    }
+  }
+
+  const done = (row: PublicationRow | null, extra: Record<string, unknown> = {}) =>
+    out(200, { row, storedOnServer: store.persisted, ...extra });
 
   /* ── acciones sobre un aviso existente ─────────────────────────────── */
   if (action === "sync" || action === "pause" || action === "activate" || action === "close") {
@@ -383,12 +453,13 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
       const r = await meliFetch(session.token, `/items/${itemId}`, { method: "PUT", body: { status } });
       if (!r.ok) return out(422, { error: "meli_rejected", message: readableMeliError(r.status, r.body), row: existing });
     }
-    const item = await readItem(session, itemId);
+    const item = action === "sync" && current ? { ok: true, status: 200, body: current } : await readItem(session, itemId);
     if (!item.ok || !item.body) return out(502, { error: "meli_unavailable", message: readableMeliError(item.status, item.body), row: existing });
     const mapped = mapMeliItemStatus(item.body);
-    const row = await savePublication(db, key, {
+    const row = await store.save({
       status: mapped.status,
       error_message: mapped.message,
+      external_id: itemId,
       external_url: item.body.permalink ?? existing?.external_url ?? null,
     });
     return done(row);
@@ -397,16 +468,34 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
   /* ── check / publish / update: hace falta la ficha ─────────────────── */
   const listing = parseListing(b.listing);
   if (!listing) return out(400, { error: "bad_listing" });
-  const prep = await prepare(listing, publicPhotos(prop.photos));
+  const known = itemPictureUrls(current);
+  let photos: string[];
+  let rejectedPhotos = 0;
+  if (target.kind === "app") photos = publicPhotos(appPhotos, known);
+  else {
+    const f = filterCrmPhotos(b.photos, {
+      supabaseUrl: env("SUPABASE_URL"),
+      agencyId: scope.agencyId,
+      crmPropertyId: target.crmPropertyId,
+      existing: known,
+    });
+    photos = f.photos;
+    rejectedPhotos = f.rejected;
+  }
+  const prep = await prepare(listing, photos);
+  if (rejectedPhotos > 0) {
+    prep.issues.push({
+      field: "pictures",
+      blocking: false,
+      message: `${rejectedPhotos} foto(s) no se mandan: solo se aceptan las subidas a la carpeta de tu inmobiliaria.`,
+    });
+  }
   const wanted: MeliListingType = MELI_LISTING_TYPES.some((t) => t.id === b.listingType) ? (b.listingType as MeliListingType) : "silver";
 
   // Si ya hay un aviso vivo, "publicar" es actualizarlo (no se duplica). Se mira el estado
   // real en Mercado Libre: un aviso cerrado (finalizado o sin cupo) no se puede editar.
   let live = !!itemId && existing?.status !== "removed";
-  if (live && action === "publish") {
-    const current = await readItem(session, itemId!);
-    if (current.status === 404 || current.body?.status === "closed") live = false;
-  }
+  if (live && action === "publish" && (currentStatus === 404 || current?.status === "closed")) live = false;
   const mode: MeliAction = action === "publish" && live ? "update" : action;
 
   if (mode === "update" && !itemId) return out(409, { error: "not_published", message: "Esta propiedad todavía no tiene aviso en Mercado Libre." });
@@ -437,6 +526,7 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
       listingType,
       packNote,
       row: existing,
+      storedOnServer: store.persisted,
     });
   }
 
@@ -445,18 +535,19 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
   if (mode === "update") {
     const r = await meliFetch(session.token, `/items/${itemId}`, {
       method: "PUT",
-      body: buildMeliUpdate(listing, prep.photos, prep.allowed),
+      body: buildMeliUpdate(listing, prep.photos, prep.allowed, current?.pictures),
     });
     if (!r.ok) {
       const message = readableMeliError(r.status, r.body);
-      const row = await savePublication(db, key, { error_message: message });
-      return out(422, { error: "meli_rejected", message, row });
+      const row = await store.save({ error_message: message, external_id: itemId });
+      return out(422, { error: "meli_rejected", message, row, storedOnServer: store.persisted });
     }
     const descWarning = await putDescription(session, itemId!, description, false);
     const item = await readItem(session, itemId!);
     const mapped = item.body ? mapMeliItemStatus(item.body) : null;
-    const row = await savePublication(db, key, {
+    const row = await store.save({
       ...(mapped ? { status: mapped.status } : {}),
+      external_id: itemId,
       error_message: descWarning ?? mapped?.message ?? null,
       external_url: item.body?.permalink ?? existing?.external_url ?? null,
     });
@@ -464,11 +555,10 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
   }
 
   // publish (aviso nuevo). Evita duplicados por doble clic: si hay un intento en curso reciente, no se repite.
-  if (existing?.status === "pending" && !itemId && Date.now() - new Date(existing.updated_at).getTime() < 2 * 60 * 1000) {
+  if (existing?.status === "pending" && !itemId && existing.updated_at && Date.now() - new Date(existing.updated_at).getTime() < 2 * 60 * 1000) {
     return out(409, { error: "in_progress", message: "Ya hay una publicación en curso para esta propiedad. Esperá unos segundos." });
   }
-  await savePublication(db, key, { status: "pending", error_message: null, external_id: null, external_url: null });
-  key.isNew = false;
+  await store.save({ status: "pending", error_message: null, external_id: null, external_url: null });
 
   const created = await meliFetch<MeliItem>(session.token, "/items", {
     method: "POST",
@@ -481,14 +571,14 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
   if (!created.ok && created.status === 402 && created.body?.id) {
     const pendingItem = created.body;
     console.warn("[meli/publish] creado pendiente de pago", pendingItem.id, pendingItem.status);
-    const row = await savePublication(db, key, {
+    const row = await store.save({
       status: "error",
       external_id: pendingItem.id,
       external_url: pendingItem.permalink ?? null,
       error_message:
         "Mercado Libre creó el aviso pero quedó pendiente de pago: tu cuenta no tiene cupo en un paquete de Inmuebles. Contratá o renová un paquete en Mercado Libre y después tocá «Actualizar estado».",
     });
-    return out(422, { error: "meli_payment_required", message: row?.error_message ?? null, row });
+    return out(422, { error: "meli_payment_required", message: row?.error_message ?? null, row, storedOnServer: store.persisted });
   }
   if (!created.ok || !created.body?.id) {
     // Sin respuesta (timeout/red) no se sabe si el aviso se creó: se avisa para no duplicarlo.
@@ -498,14 +588,14 @@ export async function runMeliAction(scope: AgencyScope, b: Record<string, unknow
         : readableMeliError(created.status, created.body);
     // Para diagnosticar desde los logs de Vercel: estado + error/causas de ML (sin tokens ni datos personales).
     console.warn("[meli/publish] rechazo", created.status, JSON.stringify(created.body ?? null).slice(0, 1500));
-    const row = await savePublication(db, key, { status: "error", error_message: message });
-    return out(422, { error: "meli_rejected", message, row });
+    const row = await store.save({ status: "error", error_message: message });
+    return out(422, { error: "meli_rejected", message, row, storedOnServer: store.persisted });
   }
 
   const item = created.body;
   const descWarning = await putDescription(session, item.id, description, true);
   const mapped = mapMeliItemStatus(item);
-  const row = await savePublication(db, key, {
+  const row = await store.save({
     status: mapped.status,
     external_id: item.id,
     external_url: item.permalink ?? null,
@@ -526,9 +616,13 @@ function availability(): Availability {
 
 const body = (req: PublishRequest, action: MeliAction) => ({
   action,
-  propertyId: req.propertyId,
+  ...(req.propertyId ? { propertyId: req.propertyId } : {}),
+  crmPropertyId: req.crmPropertyId ?? undefined,
   listing: req.input.listing,
   listingType: req.input.listingType,
+  // Solo-CRM: fotos (se filtran a la carpeta de la agencia) y aviso que recuerda el navegador.
+  photos: req.input.photos,
+  previous: req.input.previous,
 });
 
 export const MercadoLibreAdapter: PortalAdapter = {
@@ -536,6 +630,7 @@ export const MercadoLibreAdapter: PortalAdapter = {
   name: "Mercado Libre Inmuebles",
   authMethod: "oauth",
   channels: ["mercadolibre"],
+  supportsCrmOnly: true,
   availability,
 
   async status(scope) {
@@ -561,7 +656,7 @@ export const MercadoLibreAdapter: PortalAdapter = {
     return meliOutcome(await runMeliAction(req.scope, body(req, "update")), "update");
   },
   async lifecycle(req, action) {
-    return meliOutcome(await runMeliAction(req.scope, { action, propertyId: req.propertyId }), "lifecycle");
+    return meliOutcome(await runMeliAction(req.scope, { ...body(req, action), listing: undefined }), "lifecycle");
   },
   mapStatus(raw) {
     return mapMeliItemStatus(raw as MeliItem);

@@ -16,6 +16,12 @@ import { fetchAgencyPublications, upsertPublications } from "@/lib/publicationSy
 import type { Property, PropertyPublication, PublicationChannel, PublicationStatus } from "@/types/db";
 import { isSample, SAMPLE_PUBLISH_BLOCKED } from "@/lib/samples";
 import { encodeExactGeo } from "../../../shared/publicSite";
+import { CRM_PUBLICATIONS_EVENT, loadCrmPublications } from "@/lib/crmPublications";
+
+/** Misma publicación (para reemplazarla): por propiedad de la app o, si no tiene, por id del CRM. */
+const samePublication = (a: PropertyPublication, b: PropertyPublication) =>
+  a.channel === b.channel &&
+  (a.property_id ? a.property_id === b.property_id : !b.property_id && !!a.crm_property_id && a.crm_property_id === b.crm_property_id);
 
 export interface ChannelInfo {
   channel: PublicationChannel;
@@ -54,6 +60,35 @@ export function usePublications() {
   const [loading, setLoading] = useState(true);
   const [local, setLocal] = useState<Record<string, Partial<Record<PublicationChannel, PublicationStatus>>>>({});
   const [error, setError] = useState<string | null>(null);
+  /** Publicaciones de ML de propiedades solo-CRM recordadas en este navegador (ver crmPublications.ts). */
+  const [crmLocal, setCrmLocal] = useState(() => loadCrmPublications(agency.id));
+
+  useEffect(() => {
+    const reload = () => setCrmLocal(loadCrmPublications(agency.id));
+    reload();
+    window.addEventListener(CRM_PUBLICATIONS_EVENT, reload);
+    window.addEventListener("storage", reload);
+    return () => {
+      window.removeEventListener(CRM_PUBLICATIONS_EVENT, reload);
+      window.removeEventListener("storage", reload);
+    };
+  }, [agency.id]);
+
+  /**
+   * Publicación de Mercado Libre de una propiedad: la de la app (property_id),
+   * si no la de solo-CRM en la base (crm_property_id) y, si no, la que recuerda
+   * este navegador. Así un aviso publicado o importado antes de sincronizar no se pierde.
+   */
+  const meliRowOf = useCallback(
+    (p: Property): PropertyPublication | null => {
+      if (isSample(p)) return null;
+      const byApp = p.app_property_id ? remote?.find((r) => r.property_id === p.app_property_id && r.channel === "mercadolibre") : undefined;
+      if (byApp) return byApp;
+      const byCrm = remote?.find((r) => r.crm_property_id === p.id && r.channel === "mercadolibre");
+      return byCrm ?? crmLocal[p.id] ?? null;
+    },
+    [remote, crmLocal],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +130,19 @@ export function usePublications() {
             lastSyncedAt: row?.last_synced_at ?? null,
           };
         }
+        if (info.channel === "mercadolibre") {
+          const row = meliRowOf(p);
+          if (row || !isPersistent(p)) {
+            return {
+              info,
+              status: row?.status ?? local[p.id]?.[info.channel] ?? null,
+              externalId: row?.external_id ?? null,
+              externalUrl: row?.external_url ?? null,
+              errorMessage: row?.error_message ?? null,
+              lastSyncedAt: row?.last_synced_at ?? null,
+            };
+          }
+        }
         if (isPersistent(p)) {
           const row = remote!.find((r) => r.property_id === p.app_property_id && r.channel === info.channel);
           return {
@@ -115,7 +163,7 @@ export function usePublications() {
           lastSyncedAt: null,
         };
       }),
-    [isPersistent, remote, local],
+    [isPersistent, remote, local, meliRowOf],
   );
 
   /** Deja los canales indicados en cola (o los re-encola si estaban en error). */
@@ -145,7 +193,7 @@ export function usePublications() {
       setError(err);
       if (!err) {
         setRemote((prev) => [
-          ...(prev ?? []).filter((r) => !rows.some((n) => n.property_id === r.property_id && n.channel === r.channel)),
+          ...(prev ?? []).filter((r) => !rows.some((n) => samePublication(n, r))),
           ...rows,
         ]);
       }
@@ -155,12 +203,13 @@ export function usePublications() {
 
   /** Reemplaza (o agrega) una fila que ya guardó el servidor. */
   const applyRow = useCallback((row: PropertyPublication) => {
-    setRemote((prev) =>
-      prev === null
-        ? [row]
-        : [...prev.filter((r) => !(r.property_id === row.property_id && r.channel === row.channel)), row],
-    );
-  }, []);
+    // Las filas que viven solo en el navegador (sin migración) las lleva crmPublications.ts.
+    if (row.local_only) {
+      setCrmLocal(loadCrmPublications(agency.id));
+      return;
+    }
+    setRemote((prev) => (prev === null ? [row] : [...prev.filter((r) => !samePublication(r, row)), row]));
+  }, [agency.id]);
 
   /**
    * «Mostrar en mi web» y «Mostrar ubicación exacta» de una propiedad. Se guarda
@@ -193,5 +242,5 @@ export function usePublications() {
     [agency.id, isPersistent, applyRow],
   );
 
-  return { channelsOf, queue, applyRow, setWeb, isPersistent, loading, error, persistentMode: remote !== null };
+  return { channelsOf, meliRowOf, queue, applyRow, setWeb, isPersistent, loading, error, persistentMode: remote !== null };
 }

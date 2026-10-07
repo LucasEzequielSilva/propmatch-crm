@@ -221,7 +221,7 @@ export function fixForMeliField(field: string): FixKey | null {
 /** Faltante corto de un issue bloqueante de Mercado Libre, para "Falta: …". */
 export function shortMissingForMeli(field: string): string {
   const k = fixForMeliField(field);
-  if (k === "photos") return "fotos sincronizadas con la app";
+  if (k === "photos") return "al menos una foto";
   if (k === "type") return "tipo u operación que acepte Mercado Libre";
   if (k === "price" && field === "currency") return "moneda ARS o USD";
   return k ? lc(FIX_LABEL[k]) : field;

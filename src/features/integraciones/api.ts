@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { isDemoActive } from "@/lib/demo";
 import type { PortalAuthMethod, PortalId } from "@/lib/integrations/registry";
 import type { PropertyPublication } from "@/types/db";
+import type { ImportedPropertyDraft } from "../../../shared/meliImport";
 
 export type ConnectionState = "connected" | "not_connected" | "error" | "needs_reauth" | "unavailable";
 
@@ -109,10 +110,56 @@ export const integrationsApi = {
     call<{ ok: true }>("credentials", { method: "POST", body: { portal, credentials } }),
   check: (body: EngineBody) => call<{ results: PortalResult[] }>("check", { method: "POST", body }),
   publish: (body: EngineBody) => call<{ results: PortalResult[] }>("publish", { method: "POST", body }),
+  /** Una página de avisos de la cuenta de ML conectada (repetir con `next` hasta null). */
+  meliImportList: (cursor: ImportCursor | null) =>
+    call<{ candidates: ImportCandidate[]; skipped: number; next: ImportCursor | null; total: number | null }>("import", {
+      method: "POST",
+      body: { portal: "mercadolibre", cursor },
+    }),
+  /** Detalle (con descripción) de hasta 20 avisos. */
+  meliImportDetails: (ids: string[]) =>
+    call<{ candidates: ImportCandidate[] }>("import-details", { method: "POST", body: { portal: "mercadolibre", ids } }),
+  /** Vincula propiedades del CRM con su aviso (hasta 20). */
+  meliImportLink: (links: { crmPropertyId: string; externalId: string; propertyId: string | null }[]) =>
+    call<{ results: ImportLinkResult[] }>("import-link", { method: "POST", body: { portal: "mercadolibre", links } }),
 };
 
+export interface ImportCursor {
+  status: "active" | "paused";
+  scrollId: string | null;
+}
+
+/** Aviso de ML listo para revisar (ver api/_lib/integrations/adapters/mercadolibreImport.ts). */
+export interface ImportCandidate {
+  externalId: string;
+  title: string;
+  price: number | null;
+  currency: string | null;
+  meliStatus: string | null;
+  publication: { status: PropertyPublication["status"]; message: string | null };
+  permalink: string | null;
+  thumbnail: string | null;
+  ok: boolean;
+  reason?: string;
+  draft?: ImportedPropertyDraft;
+  unmapped?: string[];
+  meliLocation?: { stateId: string | null; cityId: string | null; neighborhoodId: string | null } | null;
+  hasDescription?: boolean;
+}
+
+export interface ImportLinkResult {
+  crmPropertyId: string;
+  externalId: string;
+  ok: boolean;
+  message: string | null;
+  row: PropertyPublication | null;
+  storedOnServer: boolean;
+}
+
 export interface EngineBody {
-  propertyId: string;
+  /** uuid de la app. Sin él, `crmPropertyId` (propiedad solo-CRM: pesos o sin sincronizar). */
+  propertyId?: string;
+  crmPropertyId?: string;
   portals: PortalId[];
   inputs: Partial<Record<PortalId, Record<string, unknown>>>;
   isSample?: boolean;

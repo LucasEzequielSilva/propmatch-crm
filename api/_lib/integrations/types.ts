@@ -97,8 +97,10 @@ export type LifecycleAction = "pause" | "activate" | "close" | "sync";
 
 export interface PublishRequest {
   scope: AgencyScope;
-  /** uuid de `properties` (Property.app_property_id del CRM). */
+  /** uuid de `properties` (Property.app_property_id del CRM). "" si la propiedad solo vive en el CRM. */
   propertyId: string;
+  /** Id local del CRM. Solo, cuando la propiedad no está en la app (pesos o sin sincronizar). */
+  crmPropertyId?: string | null;
   input: PortalInput;
 }
 
@@ -117,6 +119,11 @@ export interface PortalAdapter {
   authMethod: AuthMethod;
   /** Canales de property_publications que escribe (Meta escribe facebook e instagram). */
   channels: string[];
+  /**
+   * Puede publicar propiedades que no están en la app (solo CRM): recibe la
+   * ficha y las fotos del cliente y las valida (hoy, solo Mercado Libre).
+   */
+  supportsCrmOnly?: boolean;
   availability(): Availability;
 
   /* ── conexión ─────────────────────────────────────────────────────── */
