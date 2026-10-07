@@ -12,6 +12,7 @@ import type {
 } from "@/types/db";
 import { computeMatch } from "@/lib/matching";
 import { computeDiagnostic } from "@/lib/propertyDiagnostic";
+import { contactBlock } from "@/lib/marketing/block";
 import { computeFollowUps } from "@/lib/followups";
 import { fetchAgencyMatches, fetchMatchMessages, fetchMessagesForMatches, type MatchRow } from "@/lib/leadSync";
 
@@ -81,8 +82,16 @@ function propertyShort(p: Property) {
   };
 }
 
+/** Marketing: pidió no recibir más mensajes. Proppi no sugiere escribirle. */
+let currentAgencyId = "";
+function noContact(c: Pick<Contact, "id" | "email" | "phone"> | undefined) {
+  const b = c ? contactBlock(currentAgencyId, c) : null;
+  return b?.any ? { no_contactar: b.label } : {};
+}
+
 function contactShort(c: Contact, lastActivity: string | null) {
   return {
+    ...noContact(c),
     id: c.id,
     nombre: c.full_name,
     tipo: c.kind,
@@ -293,6 +302,7 @@ const HANDLERS: Record<string, Handler> = {
           razones: m.reasons,
           presupuesto: [r.budget_min, r.budget_max, r.currency],
           tiene_oportunidad: d.opportunities.some((o) => o.contact_id === r.contact_id && o.property_id === p.id),
+          ...noContact(c),
           ...(isSample(c) ? { is_sample: true } : {}),
         };
       }),
@@ -346,6 +356,8 @@ const HANDLERS: Record<string, Handler> = {
       properties: d.properties,
       snoozes: d.followUpSnoozes,
     })
+      // Marketing: a quien pidió no recibir mensajes no se le sugiere escribir.
+      .filter((f) => !contactBlock(d.agencyId, f.contact).any)
       .slice(0, 10)
       .map((f) => ({
         contacto_id: f.contact.id,
@@ -439,6 +451,7 @@ export const TOOL_STATUS: Record<string, string> = {
 
 export async function runTool(name: string, input: unknown, d: ToolData): Promise<{ content: string; isError: boolean }> {
   const h = HANDLERS[name];
+  currentAgencyId = d.agencyId;
   if (!h) return { content: `La herramienta ${name} no existe.`, isError: true };
   try {
     const result = await h((input && typeof input === "object" ? input : {}) as Input, d);

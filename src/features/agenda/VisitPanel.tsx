@@ -6,6 +6,7 @@ import { CheckIcon, ClockIcon, EditIcon, EventTypeIcon, MapPinIcon, PhoneIcon, W
 import type { Template } from "@/components/share/WhatsAppModal";
 import { avatarGradient, initials, money, PROPERTY_TYPE_LABEL } from "@/lib/format";
 import { firstName, whatsappLink } from "@/lib/whatsapp";
+import { contactBlock } from "@/lib/marketing/block";
 import type {
   CalendarEvent,
   Contact,
@@ -85,7 +86,7 @@ export function VisitPanel({
   onSchedule: (defaults: ScheduleDefaults) => void;
 }) {
   const navigate = useNavigate();
-  const { contactById, propertyById, coverPhoto, matches, updateProperty, patchEvent, patchAppVisitChecklist, logActivity } =
+  const { agency, contactById, propertyById, coverPhoto, matches, updateProperty, patchEvent, patchAppVisitChecklist, logActivity } =
     useStore();
 
   if (!item) {
@@ -131,6 +132,11 @@ export function VisitPanel({
 
   const sendReminder = () => {
     if (!contact) return;
+    // Marketing: pidió no recibir más mensajes por WhatsApp.
+    if (contactBlock(agency.id, contact).whatsapp) {
+      window.alert(`${contact.full_name} pidió no recibir más mensajes por WhatsApp (No contactar). Avisale por otra vía si hace falta.`);
+      return;
+    }
     const day = item.start.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
     const address = propertyAddress(property);
     const text = `Hola ${firstName(contact.full_name)}! Te recuerdo la visita${property ? ` a ${property.title}` : ""} el ${day} a las ${fmtHour(item.start)} h${address ? ` (${address})` : ""}. Cualquier cambio avisame por acá. ¡Nos vemos!`;
@@ -148,6 +154,11 @@ export function VisitPanel({
   const mapsUrl = mapsSearchUrl(property);
   const sendLocation = () => {
     if (!contact || !mapsUrl) return;
+    // Marketing: pidió no recibir más mensajes por WhatsApp.
+    if (contactBlock(agency.id, contact).whatsapp) {
+      window.alert(`${contact.full_name} pidió no recibir más mensajes por WhatsApp (No contactar). Avisale por otra vía si hace falta.`);
+      return;
+    }
     const text = `Hola ${firstName(contact.full_name)}! Te paso la ubicación${property ? ` de ${property.title}` : ""}: ${mapsUrl}`;
     window.open(whatsappLink(contact.phone, text), "_blank", "noopener");
     logActivity({

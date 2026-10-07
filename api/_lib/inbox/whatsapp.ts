@@ -10,6 +10,7 @@ import { accountByExternal, markNeedsReauth, tokenOf, type AccountRow } from "./
 import { applyStatus, crmDb, ingestMessage } from "./db.js";
 import { graph, GraphError, isAuthError } from "./graph.js";
 import { ienv } from "./env.js";
+import { marketingOnInbound, marketingOnStatus, marketingOnUserPreferences } from "../marketing/whatsappHooks.js";
 
 // ── Tipos del payload (solo lo que usamos) ─────────────────────────────────
 
@@ -178,6 +179,8 @@ export async function processWaEntry(entry: WaEntry): Promise<{ handled: number;
       for (const m of v.messages ?? []) {
         if (!m.from) continue;
         await ingestWa(acc, m, { direction: "in", thread: m.from, name: names.get(m.from) });
+        // Marketing: "BAJA" / botón de baja, o respuesta a una campaña.
+        await marketingOnInbound(acc, m);
         handled++;
       }
       for (const s of v.statuses ?? []) {
@@ -186,8 +189,15 @@ export async function processWaEntry(entry: WaEntry): Promise<{ handled: number;
         if (st !== "sent" && st !== "delivered" && st !== "read" && st !== "failed") continue;
         const err = s.errors?.[0];
         await applyStatus(s.id, st, tsToIso(s.timestamp), err?.code != null ? String(err.code) : null, err?.title ?? null);
+        await marketingOnStatus(s.id, st, err?.code != null ? String(err.code) : null);
         handled++;
       }
+      continue;
+    }
+
+    // Marketing: el usuario frenó las promociones desde WhatsApp.
+    if (field === "user_preferences") {
+      handled += await marketingOnUserPreferences(acc, v);
       continue;
     }
 

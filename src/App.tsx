@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { StoreProvider, useStore } from "@/data/store";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { customDomainSlug } from "@/features/sitio/customDomain";
 
 import LoginPage from "@/features/auth/LoginPage";
 import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
@@ -30,10 +31,17 @@ import MercadoPage from "@/features/mercado/MercadoPage";
 import OperacionesPage from "@/features/operaciones/OperacionesPage";
 import OperacionDetallePage from "@/features/operaciones/OperacionDetallePage";
 import DocumentoPage from "@/features/operaciones/DocumentoPage";
+import IntegracionesPage from "@/features/integraciones/IntegracionesPage";
 
 // Web pública de la inmobiliaria: se carga aparte (los visitantes no necesitan el CRM).
 const SitioPage = lazy(() => import("@/features/sitio/SitioPage"));
 const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPage"));
+// Dominio propio de una inmobiliaria: solo su web, en la raíz (ver docs/web-dominio-propio.md).
+const CustomDomainApp = lazy(() => import("@/features/sitio/CustomDomainApp"));
+// Marketing: baja pública sin sesión y pantallas del CRM, cargadas aparte.
+const UnsubscribePage = lazy(() => import("@/features/marketing/UnsubscribePage"));
+const MarketingPage = lazy(() => import("@/features/marketing/MarketingPage"));
+const CampaignEditorPage = lazy(() => import("@/features/marketing/CampaignEditorPage"));
 
 /**
  * Navegación.
@@ -45,6 +53,7 @@ const SitioPropiedadPage = lazy(() => import("@/features/sitio/SitioPropiedadPag
  * directo y no toca el diseño.
  */
 export default function App() {
+  if (customDomainSlug()) return <Suspense fallback={null}><CustomDomainApp /></Suspense>;
   return (
     <StoreProvider>
       <PasswordRecovery />
@@ -55,6 +64,8 @@ export default function App() {
           {/* Web pública de la inmobiliaria (canal "web"): sin sesión. */}
           <Route path="/sitio/:slug" element={<Suspense fallback={null}><SitioPage /></Suspense>} />
           <Route path="/sitio/:slug/p/:id" element={<Suspense fallback={null}><SitioPropiedadPage /></Suspense>} />
+          {/* Baja de marketing (link firmado del email): pública, sin sesión. */}
+          <Route path="/baja/:token" element={<Suspense fallback={null}><UnsubscribePage /></Suspense>} />
 
           <Route path="/login" element={<PublicOnly />}>
             <Route index element={<LoginPage />} />
@@ -94,7 +105,10 @@ export default function App() {
               <Route path="agenda" element={<AgendaPage />} />
               <Route path="reportes" element={<ReportesPage />} />
               <Route path="configuracion" element={<ConfiguracionPage />} />
+              <Route path="configuracion/integraciones" element={<IntegracionesPage />} />
               <Route path="importar" element={<ImportarPage />} />
+              <Route path="marketing" element={<Suspense fallback={null}><MarketingPage /></Suspense>} />
+              <Route path="marketing/campanas/:campaignId" element={<Suspense fallback={null}><CampaignEditorPage /></Suspense>} />
             </Route>
           </Route>
 

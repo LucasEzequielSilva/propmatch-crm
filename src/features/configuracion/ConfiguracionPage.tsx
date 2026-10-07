@@ -6,7 +6,10 @@ import { avatarGradient, initials } from "@/lib/format";
 import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
 import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
 import { SampleDataCard } from "./SampleDataCard";
+import { IntegracionesLinkCard } from "@/features/integraciones/IntegracionesLinkCard";
 import { SampleBadge } from "@/components/ui/SampleBadge";
+import { BrandingCard } from "@/features/branding/BrandingCard";
+import { DocTemplatesCard } from "@/features/branding/DocTemplatesCard";
 
 /**
  * Configuración.
@@ -44,6 +47,9 @@ export default function ConfiguracionPage() {
               setToast("Datos de la inmobiliaria guardados");
             }}
           />
+
+          <BrandingCard key={`brand-${agency.id}`} onSaved={setToast} />
+          <DocTemplatesCard key={`docs-${agency.id}`} onSaved={setToast} />
 
           <ProfileCard
             key={`profile-${profile.id}-${profile.full_name}-${profile.email}-${profile.phone}`}
@@ -93,6 +99,7 @@ export default function ConfiguracionPage() {
             </p>
           </Card>
 
+          <IntegracionesLinkCard />
           <ChannelsSettings />
           <SampleDataCard onDone={setToast} />
 

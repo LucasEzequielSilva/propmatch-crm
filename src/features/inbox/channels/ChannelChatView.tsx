@@ -9,6 +9,7 @@ import { useChannelMessages } from "./useChannelMessages";
 import { useStore } from "@/data/store";
 import { InboxAssist } from "@/features/proppi/InboxAssist";
 import { toAssistConversation, toAssistMessages } from "./proppiAdapter";
+import { InboxNoContactNotice } from "@/features/marketing/InboxNoContactNotice";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -254,6 +255,7 @@ export function ChannelChatView({
             {error}
           </p>
         )}
+        <InboxNoContactNotice contactId={conversation.crm_contact_id} phone={conversation.contact_phone} />
         {win.open && (
           <InboxAssist
             conversation={assistConv}

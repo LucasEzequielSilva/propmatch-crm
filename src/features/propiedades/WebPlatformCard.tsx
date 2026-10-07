@@ -3,6 +3,7 @@ import { useStore } from "@/data/store";
 import { Card, Badge } from "@/components/ui/Card";
 import { embedCode, previewUrl, siteUrl } from "@/features/sitio/siteUrl";
 import { WEB_CHANNEL } from "./usePublications";
+import { SendMyWebButton } from "@/features/branding/SendMyWeb";
 
 const INK = "#1F0A3C";
 
@@ -84,6 +85,9 @@ export function WebPlatformCard({
         >
           Ver mis avisos
         </button>
+      </div>
+      <div className="flex mt-2">
+        <SendMyWebButton variant="primary" />
       </div>
 
       {url && (

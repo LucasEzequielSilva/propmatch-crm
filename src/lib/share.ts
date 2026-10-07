@@ -12,6 +12,8 @@
  * reemplaza por `/ficha/:id` con las fotos del Storage.
  */
 
+import { compactBrand, type AgencyBrand } from "../../shared/brand";
+import { isUuid } from "../../shared/publicSite";
 import type { Agency, CurrencyCode, OperationType, Profile, Property, PropertyType } from "@/types/db";
 
 export interface SharedListing {
@@ -39,6 +41,13 @@ export interface SharedListing {
   photos: string[];
   agency: { name: string; phone: string | null; email: string | null };
   agent: { name: string; phone: string | null } | null;
+  /**
+   * Marca de la inmobiliaria al momento de compartir (sin logos en data URL,
+   * que harían el link enorme). Opcional: los links viejos no la tienen.
+   */
+  brand?: AgencyBrand | null;
+  /** id de la agencia (solo si es real): la ficha trae la marca publicada más nueva. */
+  ag?: string;
 }
 
 const MAX_PHOTOS = 8;
@@ -73,6 +82,8 @@ export function buildSharedListing(
     photos: photos.filter((u) => /^https?:\/\//.test(u)).slice(0, MAX_PHOTOS),
     agency: { name: agency.name, phone: agency.phone, email: agency.email },
     agent: agent ? { name: agent.full_name, phone: agent.phone } : null,
+    brand: compactBrand(agency.branding),
+    ...(isUuid(agency.id) ? { ag: agency.id } : {}),
   };
 }
 
