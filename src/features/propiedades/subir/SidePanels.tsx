@@ -15,6 +15,7 @@ import { INTEGRATION_GUIDES } from "../integrationGuides";
 import { EXTERNAL_CHANNELS, WEB_CHANNEL, usePublications } from "../usePublications";
 import { useMeliConnection } from "../useIntegrations";
 import { loadExtras } from "../MeliPublishPanel";
+import { photosForValidation } from "../meliTarget";
 import { toMeliListing } from "../useMeliPublish";
 import { validateMeliListing } from "../../../../shared/meliListing";
 import {
@@ -211,7 +212,8 @@ export function ChannelsPanel({
     const loc = extras?.location;
     const location = loc?.neighborhoodId ? { neighborhoodId: loc.neighborhoodId } : loc?.cityId ? { cityId: loc.cityId } : null;
     const listing = toMeliListing(draft, { location, guests: extras?.guests ?? null, landAccess: extras?.landAccess ?? null });
-    const publicPhotos = photos.filter((u) => /^https:\/\//.test(u));
+    // App: solo fotos con URL pública; solo-CRM (pesos o sin sincronizar): las locales se suben al publicar.
+    const publicPhotos = photosForValidation(draft, photos);
     const out: Missing[] = [];
     for (const i of validateMeliListing(listing, publicPhotos)) {
       if (!i.blocking) continue;

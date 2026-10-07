@@ -6,7 +6,10 @@
  */
 import { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useStore } from "@/data/store";
+import { saveCrmPublication } from "@/lib/crmPublications";
 import type { Property, PropertyPublication } from "@/types/db";
+import type { MeliTargetBody } from "./meliTarget";
 import type { MeliIssue, MeliListingInput, MeliListingType } from "../../../shared/meliListing";
 
 export type MeliAction = "check" | "publish" | "update" | "pause" | "activate" | "close" | "sync";
@@ -26,6 +29,7 @@ export function toMeliListing(p: Property, extras: MeliExtras): MeliListingInput
     price: p.price,
     currency: p.currency,
     expenses: p.expenses,
+    expensesCurrency: p.expenses_currency ?? "ARS",
     surfaceTotal: p.surface_total,
     surfaceCovered: p.surface_covered,
     rooms: p.rooms,
@@ -54,6 +58,8 @@ export interface MeliResult {
   message: string | null;
   warnings: string[];
   listingType?: MeliListingType;
+  /** false = la publicación quedó solo en este navegador (falta la migración de solo-CRM). */
+  storedOnServer?: boolean;
 }
 
 const GENERIC: Record<string, string> = {
@@ -62,28 +68,39 @@ const GENERIC: Record<string, string> = {
   forbidden: "No tenés permiso para esta acción.",
   bad_request: "El pedido no es válido.",
   bad_listing: "Faltan datos básicos de la propiedad (tipo u operación).",
+  sample: "Es una propiedad de ejemplo: no se publica en ningún portal.",
   server_error: "Algo falló de nuestro lado. Probá de nuevo en un rato.",
 };
 
 export function useMeliPublish(onRow: (row: PropertyPublication) => void) {
   const [busy, setBusy] = useState<MeliAction | null>(null);
+  const { agency } = useStore();
+  const agencyId = agency.id;
 
   const run = useCallback(
     async (
       action: MeliAction,
-      propertyId: string,
+      target: MeliTargetBody,
       listing?: MeliListingInput,
       listingType?: MeliListingType,
+      /** Para marcar el botón ocupado mientras se suben fotos antes de llamar. */
+      before?: () => Promise<Partial<MeliTargetBody> | string>,
     ): Promise<MeliResult> => {
       setBusy(action);
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) return { ok: false, row: null, issues: [], message: GENERIC.unauthorized, warnings: [] };
+        let extra: Partial<MeliTargetBody> = {};
+        if (before) {
+          const b = await before();
+          if (typeof b === "string") return { ok: false, row: null, issues: [], message: b, warnings: [] };
+          extra = b;
+        }
         const r = await fetch("/api/meli/publish", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ action, propertyId, listing, listingType }),
+          body: JSON.stringify({ action, ...target, ...extra, listing, listingType }),
         });
         const isJson = r.headers.get("content-type")?.includes("application/json");
         if (!isJson) {
@@ -97,8 +114,13 @@ export function useMeliPublish(onRow: (row: PropertyPublication) => void) {
           warnings?: string[];
           listingType?: MeliListingType;
           packNote?: string | null;
+          storedOnServer?: boolean;
         };
-        if (j.row) onRow(j.row);
+        if (j.row) {
+          // Propiedad solo-CRM: se recuerda en el navegador (sin la migración es la única copia).
+          if (!target.propertyId || j.row.local_only) saveCrmPublication(agencyId, target.crmPropertyId, j.row);
+          onRow(j.row);
+        }
         const warnings = [...(j.warnings ?? []), ...(j.packNote ? [j.packNote] : [])];
         return {
           ok: r.ok,
@@ -107,6 +129,7 @@ export function useMeliPublish(onRow: (row: PropertyPublication) => void) {
           message: r.ok ? null : j.message ?? GENERIC[j.error ?? ""] ?? "No se pudo completar la acción.",
           warnings,
           listingType: j.listingType,
+          storedOnServer: j.storedOnServer,
         };
       } catch {
         return { ok: false, row: null, issues: [], message: "No hay conexión con el servidor. Probá de nuevo.", warnings: [] };
@@ -114,7 +137,7 @@ export function useMeliPublish(onRow: (row: PropertyPublication) => void) {
         setBusy(null);
       }
     },
-    [onRow],
+    [onRow, agencyId],
   );
 
   return { run, busy };

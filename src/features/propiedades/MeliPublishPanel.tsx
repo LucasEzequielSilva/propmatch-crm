@@ -3,6 +3,10 @@
  * validación previa (qué falta), ubicación de Mercado Libre, publicar,
  * actualizar, pausar, reactivar, finalizar y releer el estado. Todo contra
  * api/meli/publish; nada simulado.
+ *
+ * Funciona también con propiedades que NO están en la app (precio en pesos o
+ * sin sincronizar): las fotos se suben a la carpeta de la agencia y el
+ * servidor valida la ficha (ver meliTarget.ts).
  */
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -28,6 +32,16 @@ import { SampleNotice } from "@/components/ui/SampleBadge";
 import { FixList, type Fix, type FixItem } from "./completar/InlineFix";
 import { FIX_LABEL, MELI_EXTRA_ID, editorHref, fixForMeliField, isFieldKey, type MeliExtraKey } from "./completar/fields";
 import { focusField } from "./completar/focusField";
+import { useStore } from "@/data/store";
+import {
+  CRM_PHOTO_UPLOAD_ERROR,
+  LOCAL_ONLY_NOTICE,
+  meliBlockReason,
+  meliTargetBody,
+  meliTargetKind,
+  photosForValidation,
+  prepareCrmPhotos,
+} from "./meliTarget";
 
 type MeliConnection = ReturnType<typeof useMeliConnection>;
 
@@ -51,7 +65,7 @@ export function loadExtras(propertyId: string): Extras {
   }
 }
 
-function saveExtras(propertyId: string, e: Extras) {
+export function saveExtras(propertyId: string, e: Extras) {
   try {
     window.localStorage.setItem(storageKey(propertyId), JSON.stringify(e));
   } catch {
@@ -81,6 +95,7 @@ export function MeliPublishPanel({
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const { run, busy } = useMeliPublish(onRow);
+  const { agency, replacePropertyPhotos } = useStore();
 
   const update = (patch: Partial<Extras>) => {
     setServerIssues(null);
@@ -100,8 +115,8 @@ export function MeliPublishPanel({
       : null;
   const listing = toMeliListing(property, { location: effectiveLocation, guests: extras.guests, landAccess: extras.landAccess });
 
-  // Solo URLs públicas (las data: locales no le sirven a Mercado Libre).
-  const publicPhotos = useMemo(() => photos.filter((u) => /^https:\/\//.test(u)), [photos]);
+  // App: solo URLs públicas. Solo-CRM: también las locales (se suben al publicar).
+  const publicPhotos = useMemo(() => photosForValidation(property, photos), [property, photos]);
   // Mensaje de ubicación más preciso que el genérico de la validación.
   const locationMessage = !loc?.cityId
     ? "Elegí la ciudad de Mercado Libre donde está la propiedad."
@@ -117,7 +132,10 @@ export function MeliPublishPanel({
 
   // Seguridad: una propiedad de ejemplo nunca llega a Mercado Libre.
   const sample = isSample(property);
-  const synced = !!property.app_property_id && !sample;
+  const kind = meliTargetKind(property);
+  const blockReason = meliBlockReason(property, agency.id);
+  // Se puede operar (app o solo-CRM) salvo ejemplo o cuenta sin inmobiliaria.
+  const synced = !blockReason;
   const status = channel.status;
   // Con error, el aviso puede haber quedado cerrado (p. ej. sin cupo): se ofrece publicar de nuevo
   // y el servidor decide si actualiza o crea uno nuevo según el estado real en Mercado Libre.
@@ -125,14 +143,25 @@ export function MeliPublishPanel({
 
   const act = useCallback(
     async (action: MeliAction) => {
-      if (!property.app_property_id || sample) return;
+      if (blockReason) return;
       if (action === "close" && !window.confirm("¿Finalizar el aviso en Mercado Libre? No se puede reactivar: habría que publicarlo de nuevo.")) return;
       setMessage(null);
       setWarnings([]);
       const needsListing = action === "publish" || action === "update" || action === "check";
-      const res = await run(action, property.app_property_id, needsListing ? listing : undefined, extras.listingType);
+      // Solo-CRM: antes de validar o publicar se suben las fotos locales a la carpeta de la agencia.
+      const before =
+        kind === "crm" && needsListing
+          ? async () => {
+              try {
+                return { photos: await prepareCrmPhotos(property, agency.id, photos, replacePropertyPhotos) };
+              } catch {
+                return CRM_PHOTO_UPLOAD_ERROR;
+              }
+            }
+          : undefined;
+      const res = await run(action, meliTargetBody(property, agency.id), needsListing ? listing : undefined, extras.listingType, before);
       setServerIssues(res.issues.length ? res.issues : null);
-      setWarnings(res.warnings);
+      setWarnings(res.storedOnServer === false && res.row ? [...res.warnings, LOCAL_ONLY_NOTICE] : res.warnings);
       if (!res.ok) setMessage({ ok: false, text: res.message ?? "No se pudo completar la acción." });
       else if (action === "check") setMessage({ ok: isPublishable(res.issues), text: isPublishable(res.issues) ? "Todo listo para publicar." : "Hay datos para completar." });
       else
@@ -147,7 +176,7 @@ export function MeliPublishPanel({
             : "Estado actualizado.",
         });
     },
-    [extras.listingType, listing, property.app_property_id, run],
+    [agency.id, blockReason, extras.listingType, kind, listing, photos, property, replacePropertyPhotos, run],
   );
 
   const btn = "min-h-[44px] px-4 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed";
@@ -220,10 +249,15 @@ export function MeliPublishPanel({
           </p>
         )}
         {sample && <SampleNotice>{SAMPLE_PUBLISH_BLOCKED} en Mercado Libre.</SampleNotice>}
-        {!synced && !sample && (
+        {blockReason && !sample && (
           <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
-            Esta propiedad todavía no está sincronizada con la app, así que no hay fotos con URL pública ni dónde guardar
-            la publicación. Hoy solo se sincronizan las propiedades con precio en USD.
+            {blockReason}
+          </p>
+        )}
+        {!blockReason && kind === "crm" && (
+          <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#F5F3FF", color: "#5B21B6" }}>
+            {property.currency === "ARS" ? "Precio en pesos: " : ""}esta propiedad no está en la app de PropMatch, pero se
+            publica igual en Mercado Libre. Las fotos se suben a la carpeta de tu inmobiliaria y Mercado Libre las toma de ahí.
           </p>
         )}
 

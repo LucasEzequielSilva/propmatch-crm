@@ -337,6 +337,12 @@ interface StoreValue extends StoreData {
   updateProperty: (id: string, patch: Partial<Property>) => void;
   /** Guarda una propiedad editada desde el formulario completo, fotos incluidas. */
   savePropertyEdit: (id: string, input: NewPropertyInput) => void;
+  /**
+   * Reemplaza las fotos guardadas por sus URLs públicas ya subidas (mismo orden),
+   * sin volver a sincronizar con la app. Lo usa Mercado Libre al publicar una
+   * propiedad que no está en la app, para no subir las mismas fotos dos veces.
+   */
+  replacePropertyPhotos: (id: string, photos: string[]) => void;
   addContact: (input: NewContactInput) => Contact;
   updateContact: (id: string, patch: Partial<Contact>) => void;
   /** Crea o reemplaza la búsqueda activa de un contacto. */
@@ -1078,6 +1084,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [syncPropertyToApp]);
+
+  const replacePropertyPhotos = useCallback<StoreValue["replacePropertyPhotos"]>((id, next) => {
+    setData((d) => (d.photos[id] ? { ...d, photos: { ...d.photos, [id]: next } } : d));
+  }, []);
 
   const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>(
     (id, input) => {
@@ -1915,6 +1925,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addProperty,
       updateProperty,
       savePropertyEdit,
+      replacePropertyPhotos,
       addContact,
       updateContact,
       saveRequirement,
@@ -1969,6 +1980,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addProperty,
     updateProperty,
     savePropertyEdit,
+    replacePropertyPhotos,
     addContact,
     updateContact,
     saveRequirement,

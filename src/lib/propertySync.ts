@@ -95,7 +95,7 @@ export function roomsOf(input: { rooms?: number | null; bedrooms: number }): num
   return input.rooms !== undefined ? input.rooms : input.bedrooms + 1;
 }
 
-function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
+export function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
   const [header, base64] = dataUrl.split(",");
   const mime = header.match(/data:(.*?);base64/)?.[1] ?? "image/webp";
   const binary = atob(base64);
@@ -131,6 +131,31 @@ export async function uploadPropertyPhotos(
     if (error) throw error;
     const { data } = supabase.storage.from("property-photos").getPublicUrl(path);
     urls.push(data.publicUrl);
+  }
+  return urls;
+}
+
+/**
+ * Fotos de una propiedad que NO está en la app (pesos o sin sincronizar), para
+ * publicarla en Mercado Libre: las nuevas (data URLs) se suben al bucket
+ * público `property-photos` bajo `{agencyId}/crm/{crmPropertyId}/` — dentro
+ * de la carpeta de la agencia, la misma que ya usan propertySync, Instagram y
+ * branding — y el servidor solo acepta URLs de esa carpeta. Las que ya son URL
+ * (subidas antes, o importadas de Mercado Libre) se dejan igual.
+ */
+export async function uploadCrmPhotos(agencyId: string, crmPropertyId: string, photos: string[]): Promise<string[]> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(crmPropertyId)) throw new Error("crm_id");
+  const urls: string[] = [];
+  for (const photo of photos) {
+    if (!photo.startsWith("data:")) {
+      urls.push(photo);
+      continue;
+    }
+    const { blob, ext } = dataUrlToBlob(photo);
+    const path = `${agencyId}/crm/${crmPropertyId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("property-photos").upload(path, blob, { contentType: blob.type, upsert: false });
+    if (error) throw error;
+    urls.push(supabase.storage.from("property-photos").getPublicUrl(path).data.publicUrl);
   }
   return urls;
 }

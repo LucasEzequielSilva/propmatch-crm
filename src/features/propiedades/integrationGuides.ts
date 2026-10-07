@@ -28,7 +28,7 @@ export const INTEGRATION_GUIDES: Record<PublicationChannel, IntegrationGuide> = 
     needs: [
       "Una cuenta de Mercado Libre a nombre de la inmobiliaria, habilitada como inmobiliaria (si no lo está, se pide a Mercado Libre desde su formulario de soporte).",
       "Un paquete de publicación de Inmuebles con cupo disponible (tipo Plata; Oro y Oro Premium son destaques).",
-      "Que la propiedad esté sincronizada con la app: las fotos tienen que tener una URL pública.",
+      "Que tu cuenta esté vinculada a la inmobiliaria. Las propiedades en pesos o que no están en la app también se publican: las fotos se suben a la carpeta de tu inmobiliaria.",
     ],
     steps: [
       "Verificá en tu cuenta de Mercado Libre qué paquete de Inmuebles tenés y cuánto cupo te queda.",

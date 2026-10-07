@@ -112,7 +112,9 @@ export const integrationsApi = {
 };
 
 export interface EngineBody {
-  propertyId: string;
+  /** uuid de la app. Sin él, `crmPropertyId` (propiedad solo-CRM: pesos o sin sincronizar). */
+  propertyId?: string;
+  crmPropertyId?: string;
   portals: PortalId[];
   inputs: Partial<Record<PortalId, Record<string, unknown>>>;
   isSample?: boolean;

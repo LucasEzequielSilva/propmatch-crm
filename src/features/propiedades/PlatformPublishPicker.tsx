@@ -6,6 +6,7 @@ import { isSample } from "@/lib/samples";
 import { SampleBadge } from "@/components/ui/SampleBadge";
 import type { Property, PublicationChannel } from "@/types/db";
 import type { ChannelInfo } from "./usePublications";
+import { meliBlockReason } from "./meliTarget";
 
 const STATUS_TEXT: Record<string, string> = {
   published: "Publicada",
@@ -18,13 +19,17 @@ const STATUS_TEXT: Record<string, string> = {
 
 /**
  * Por qué una propiedad todavía no se puede publicar en el canal (`null` = lista).
- * Los canales con conector real (Mercado Libre, Facebook, Instagram) necesitan
- * la propiedad sincronizada con la app (fotos con URL pública), y la app solo toma USD.
+ * Mercado Libre publica también propiedades que no están en la app (precio en
+ * pesos o sin sincronizar): sube las fotos a la carpeta de la agencia (ver
+ * meliTarget.ts); solo necesita que la cuenta esté vinculada a una inmobiliaria.
+ * Facebook e Instagram siguen necesitando la propiedad en la app (fotos con
+ * URL pública), y la app solo toma USD.
  */
-export function publishBlockReason(p: Property, channel: PublicationChannel): string | null {
+export function publishBlockReason(p: Property, channel: PublicationChannel, agencyId?: string): string | null {
   if (isSample(p)) return "Es una propiedad de ejemplo: no se publica.";
-  // Mercado Libre, Facebook e Instagram toman las fotos de su URL pública en la app.
-  if ((channel === "mercadolibre" || channel === "facebook" || channel === "instagram") && !p.app_property_id) {
+  if (channel === "mercadolibre") return agencyId ? meliBlockReason(p, agencyId) : null;
+  // Facebook e Instagram toman las fotos de su URL pública en la app.
+  if ((channel === "facebook" || channel === "instagram") && !p.app_property_id) {
     return p.currency !== "USD"
       ? "Precio en pesos: por ahora solo se publican propiedades en USD."
       : "Todavía no está sincronizada con la app (guardala de nuevo con tu cuenta de la inmobiliaria).";
@@ -49,7 +54,7 @@ export function PlatformPublishPicker({
   statusOf: (p: Property) => string | null;
   onClose: () => void;
 }) {
-  const { properties } = useStore();
+  const { properties, agency } = useStore();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,12 +74,12 @@ export function PlatformPublishPicker({
     const ready: Property[] = [];
     const blocked: { p: Property; reason: string }[] = [];
     for (const p of list) {
-      const reason = publishBlockReason(p, info.channel);
+      const reason = publishBlockReason(p, info.channel, agency.id);
       if (reason) blocked.push({ p, reason });
       else ready.push(p);
     }
     return { ready, blocked };
-  }, [properties, query, info.channel]);
+  }, [properties, query, info.channel, agency.id]);
 
   const go = (p: Property) => {
     onClose();
