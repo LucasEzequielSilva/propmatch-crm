@@ -46,6 +46,7 @@ import {
   parsePrevious,
   parseTarget,
 } from "../api/_lib/integrations/meliRequest.ts";
+import { draftToPropertyInput, importNote, linkedPublicationRow } from "../src/features/integraciones/meliImportPlan.ts";
 
 const DOC_ITEM = JSON.parse(readFileSync(new URL("./fixtures/meli-item-list-properties.json", import.meta.url), "utf8")) as MeliImportItem;
 const DEPTO_VENTA: CategoryPath = [
@@ -392,4 +393,47 @@ test("lotes de 20 y validación de ids y vínculos", () => {
   assert.equal(parseItemIds(["MLA1234567", "x"]), null);
   assert.deepEqual(parseImportLinks([{ crmPropertyId: "p_1", externalId: "MLA1234567" }]), [{ crmPropertyId: "p_1", externalId: "MLA1234567", propertyId: null }]);
   assert.equal(parseImportLinks([{ crmPropertyId: "p_1", externalId: "MLA1234567", propertyId: "x" }]), null);
+});
+
+/* ───────────────── del aviso al CRM (plan de importación) ───────────── */
+
+
+test("ficha para addProperty: no inventa ceros ni datos confidenciales", () => {
+  const r = mapMeliItemToProperty({ ...CASA, attributes: [] }, CASA_ALQUILER, "Texto");
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  const input = draftToPropertyInput(r.draft, "u_1");
+  assert.equal(input.bedrooms, null);
+  assert.equal(input.bathrooms, null);
+  assert.equal(input.garages, null);
+  assert.equal(input.owner_agent_id, "u_1");
+  assert.equal(input.reserve_min_price, undefined);
+  assert.equal(input.commission_pct, null);
+  assert.deepEqual(input.photos, ["https://http2.mlstatic.com/D_1-O.jpg"]);
+  assert.equal(input.currency, "ARS");
+});
+
+test("reimportar no duplica: el vínculo guardado hace que el aviso figure como ya importado", () => {
+  const r = mapMeliItemToProperty(CASA, CASA_ALQUILER, null);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  const row = linkedPublicationRow("ag", "p-nueva", { externalId: CASA.id, permalink: null, publication: { status: "paused", message: null } }, "2026-10-07T00:00:00.000Z");
+  assert.equal(row.external_id, CASA.id);
+  assert.equal(row.crm_property_id, "p-nueva");
+  assert.equal(row.property_id, null);
+  assert.equal(row.channel, "mercadolibre");
+  const after = [...props, { id: "p-nueva", title: "otro título", price: 1, currency: "ARS", street: null, street_number: null }];
+  const dup = findImportDuplicate(
+    { externalId: CASA.id, title: r.draft.title, price: r.draft.price, currency: r.draft.currency, street: r.draft.street, street_number: r.draft.street_number },
+    after,
+    [{ crmPropertyId: row.crm_property_id!, externalId: row.external_id! }],
+  );
+  assert.deepEqual(dup, { kind: "linked", propertyId: "p-nueva" });
+});
+
+test("nota de importación con lo que no tiene lugar en la ficha", () => {
+  assert.equal(importNote("MLA1", [], true), "Importada del aviso MLA1 de Mercado Libre.");
+  const n = importNote("MLA1", ["Bauleras: 1", "Calefacción: Sí"], false);
+  assert.match(n, /descripción/);
+  assert.match(n, /Bauleras: 1; Calefacción: Sí/);
 });
