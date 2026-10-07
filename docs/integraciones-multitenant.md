@@ -210,6 +210,19 @@ Todo **sin aplicar**. Requiere aprobación de Lucas: la base es compartida y tie
    create index if not exists property_publications_connection_idx on public.property_publications (connection_id) where connection_id is not null;
    -- trigger property_publications_connection_guard: la conexión tiene que ser de la misma agencia
    ```
+5. `20261007120000_publications_crm_property.sql` (nueva, **sin aplicar**): publicaciones de propiedades que solo viven en el CRM (pesos o sin sincronizar) y avisos importados. Aditiva; ver la sección 11.
+   ```sql
+   alter table public.property_publications alter column property_id drop not null;
+   alter table public.property_publications add column if not exists crm_property_id text;
+   alter table public.property_publications add constraint property_publications_target_check
+     check (property_id is not null
+            or (crm_property_id is not null and crm_property_id ~ '^[A-Za-z0-9_-]{1,64}$'));
+   create unique index if not exists property_publications_agency_crm_channel_key
+     on public.property_publications (agency_id, crm_property_id, channel);
+   create index if not exists property_publications_external_idx
+     on public.property_publications (agency_id, channel, external_id) where external_id is not null;
+   ```
+   No toca la policy: el navegador sigue escribiendo solo filas de propiedades de la app; las filas solo-CRM las escribe únicamente el servidor (service role). El trigger de guarda de `connection_id` aplica igual.
 
 ## 9. Variables de entorno
 
@@ -217,3 +230,36 @@ No se cargó ninguna.
 
 - `ARGENPROP_CREDENTIALS_ENABLED=1` (opcional): habilita el formulario de Argenprop. Recién tiene sentido con el alta de integrador.
 - Las de Mercado Libre y Meta, sin cambios.
+
+## 10. Importar mis avisos de Mercado Libre
+
+Dónde: **Configuración → Integraciones** (tarjeta de Mercado Libre, cuando está conectada) y **Propiedades** (botón junto a «Importar Excel»). Cualquier miembro de la inmobiliaria puede importar: solo se leen avisos de la cuenta conectada de SU agencia.
+
+Flujo:
+
+1. `POST /api/integrations/import { portal: "mercadolibre", cursor }`: una página de avisos. El servidor usa `GET /users/{id}/items/search?search_type=scan&status=active|paused&limit=100` (con `scroll_id`; primero activos, después pausados), trae el detalle con multiget en lotes de 20 (`/items/bulk?ids=`, con caída a `/items?ids=` mientras convivan) y la categoría (`/categories/{id}` → `path_from_root`). Solo quedan los descendientes de **MLA1459 (Inmuebles)**; los demás se cuentan y no se muestran. El cliente repite con `next` hasta que venga `null` (tope de 1000 avisos por sesión).
+2. Pantalla de revisión: foto, título, precio, estado, link al aviso y si ya está en el CRM. Dedupe (`findImportDuplicate`, shared/meliImport.ts): primero por `external_id` de las publicaciones de ML (base o navegador) → «Ya está en el CRM» (no se ofrece); después por título + precio + moneda + dirección normalizados → «Parece la misma que…»: si se marca, se **vincula** con esa propiedad, no se crea otra. Los datos de ejemplo nunca cuentan.
+3. «Importar seleccionados»: `import-details` (hasta 20 ids: detalle + `GET /items/{id}/description`) → se crea cada propiedad con `addProperty` (igual que una carga manual; si es USD y la cuenta está vinculada, se sincroniza con la app por el flujo normal), se guarda la ubicación de ML del aviso (el panel no la vuelve a pedir) y una **nota** en el historial con lo que no mapea.
+4. `import-link`: el servidor verifica que cada aviso sea de la cuenta conectada y guarda la publicación (`external_id`, permalink, estado con `mapMeliItemStatus`, `connection_id`). Si la propiedad ya tiene OTRO aviso vivo, no lo pisa. Así «Actualizar aviso» edita ESE aviso.
+
+Mapeo (`mapMeliItemToProperty`): tipo por la hija de MLA1459 (Casas, Departamentos, PH, Terrenos y Lotes, Locales, Oficinas; Cocheras, Quintas, Campos, etc. no se importan y se explica por qué) o, si no se pudo leer la categoría, por `PROPERTY_TYPE`; operación por el nombre del nivel 2 (Venta / Alquiler / Alquiler Temporario) u `OPERATION`; superficies (m², hectáreas → m²), ambientes, dormitorios, baños, cocheras, antigüedad, expensas con su moneda (ARS/USD; UVA va a notas), disposición, orientación, piso, unidad, dirección (`street_name`/`street_number` o la altura al final del `address_line`), barrio → localidad, provincia, lat/lng (0,0 se descarta), booleanos `HAS_*` → chips del catálogo (los mismos que se mandan al publicar), fotos por URL (https). Lo que no tiene lugar (bauleras, calefacción, código postal, ciudad cuando hay barrio…) va a la nota; dormitorios/baños que el aviso no informa quedan vacíos, no en 0.
+
+Idempotente: reimportar no duplica (el vínculo hace que el aviso figure como «Ya está en el CRM»; y si se elige uno «parecido», se vincula).
+
+Rate limits: una página de búsqueda por llamada, multiget de a 20 en serie, descripciones de a 4. Si ML responde 429 se avisa y se puede seguir.
+
+## 11. Publicar propiedades solo-CRM o en pesos
+
+Antes, Mercado Libre solo publicaba propiedades sincronizadas con la app (la app solo modela USD y las fotos públicas salían de `properties.photos`). Ahora:
+
+- **Fotos**: el navegador sube las fotos locales (data URLs) al bucket público `property-photos` bajo `<agency_id>/crm/<crm_property_id>/` (`uploadCrmPhotos`, src/lib/propertySync.ts) y reemplaza las fotos guardadas por esas URLs (no se suben dos veces). El servidor solo acepta URLs de ese bucket **y de esa carpeta** (un nivel, nombre simple, sin query; `filterCrmPhotos`), o las fotos que el aviso ya tiene en ML (leídas del propio aviso con el token de la agencia). Cualquier otra URL se descarta y se informa.
+  - Policy de Storage: **no está versionada** en ningún repo (lo advierte la migración `20260526211200` de la app). El CRM ya sube a `<agency_id>/...` (propiedades, Instagram, branding) asumiendo que la policy habilita la carpeta de la agencia a sus miembros; `crm/` es una subcarpeta de esa misma carpeta. **No confirmado contra la base**: verificar con `select policyname, cmd, roles, qual, with_check from pg_policies where schemaname = 'storage' and tablename = 'objects';` que el insert en `property-photos` mire `(storage.foldername(name))[1]` = agencia del miembro (y no, por ejemplo, el `owner_id` de una fila de `properties`). Si no lo permite, la subida falla con un mensaje claro y no se publica nada.
+- **Ficha**: el cliente manda la ficha (`toMeliListing`) y el servidor la pasa por la lista blanca `parseListing` (api/_lib/integrations/meliRequest.ts): solo los campos del aviso, largos y números acotados. Nada confidencial (precio mínimo de reserva, comisión, propietario) tiene por dónde entrar. Después valida igual que siempre (`validateMeliListing` + atributos en vivo + foto descargable + cupo).
+- **Moneda**: Inmuebles en MLA acepta `ARS` y `USD` (`settings.currencies` de MLA1459 y de cada hoja); el CRM usa los mismos códigos (`meliCurrency`). Las expensas viajan con su moneda (`MAINTENANCE_FEE` acepta ARS, USD y UVA).
+- **Destino** (`/api/meli/publish` y el motor): `propertyId` (uuid de la app) como siempre, o `crmPropertyId` si la propiedad no está en la app. En el motor, solo los adapters con `supportsCrmOnly` (hoy ML) atienden solo-CRM; el resto responde «necesita la propiedad en la app».
+- **Registro**:
+  - **Con la migración 20261007120000 aplicada**: fila en `property_publications` con `property_id = null`, `crm_property_id`, `connection_id` (respeta el trigger de guarda). Se comparte entre equipos; las notificaciones de ML la actualizan por `external_id`. Si la propiedad después se sincroniza con la app (p. ej. pasa a USD), la fila se **adopta** (`property_id` = uuid de la app) en la próxima acción, sin crear otro aviso.
+  - **Sin la migración (hoy)**: el servidor devuelve la fila con `local_only: true` y `storedOnServer: false`; el navegador la guarda (`src/lib/crmPublications.ts`) y muestra el aviso. En cada acción manda `previous: { externalId }` y el servidor lo usa **solo si el aviso es de la cuenta conectada de la agencia** (lo lee de ML). La pantalla avisa que la sincronización de estado entre equipos requiere la migración.
+- **Pantallas**: el panel de ML (/publicador/:id), «Publicar en portales» y el selector de plataformas ya no bloquean pesos ni propiedades sin sincronizar (solo ejemplos o cuentas sin inmobiliaria). Facebook e Instagram siguen necesitando la propiedad en la app.
+
+Qué funciona hoy sin aplicar SQL: publicar/actualizar/pausar/reactivar/finalizar en ML propiedades en pesos o solo-CRM e importar avisos, con el vínculo guardado en el navegador de quien lo hizo. Qué requiere la migración: que ese vínculo y el estado del aviso se vean desde otros equipos y que las notificaciones de ML actualicen esas publicaciones.
