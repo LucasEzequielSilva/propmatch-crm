@@ -16,6 +16,12 @@
  * Propiedades de ejemplo: nunca. No existen en la base (no se sincronizan), y
  * si el cliente avisa que es de ejemplo se corta antes de tocar ningún portal.
  *
+ * Propiedades que solo viven en el CRM (precio en pesos o sin sincronizar):
+ * vienen con `crmPropertyId` en lugar de `propertyId`. No hay fila en la base
+ * para comprobar la agencia, así que solo las atienden los adapters con
+ * `supportsCrmOnly` (validan la ficha y aceptan fotos solo de la carpeta de la
+ * agencia); el resto responde "property_not_found" con el motivo.
+ *
  * Sin imports de runtime (dependencias inyectadas): se prueba sin red.
  */
 import type { AgencyScope, PortalAdapter, PortalId, PortalInput, PublishResult } from "./types.js";
@@ -38,6 +44,8 @@ export interface EngineResponse {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CRM_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const CRM_ONLY_MESSAGE = "Este portal todavía necesita que la propiedad esté sincronizada con la app (precio en USD).";
 export const MAX_PORTALS = 10;
 export const SAMPLE_MESSAGE = "Es una propiedad de ejemplo: no se publica en ningún portal.";
 
@@ -54,8 +62,10 @@ const result = (portal: PortalId, outcome: PublishResult["outcome"], message: st
 export async function runEngine(req: EngineRequest, deps: EngineDeps): Promise<EngineResponse> {
   const b = req.body ?? {};
   const propertyId = typeof b.propertyId === "string" ? b.propertyId : "";
+  const crmPropertyId = typeof b.crmPropertyId === "string" && CRM_ID.test(b.crmPropertyId) ? b.crmPropertyId : null;
+  const crmOnly = !propertyId && !!crmPropertyId;
   const rawPortals = Array.isArray(b.portals) ? b.portals : null;
-  if (!UUID.test(propertyId) || !rawPortals || rawPortals.length === 0 || rawPortals.length > MAX_PORTALS) {
+  if ((!crmOnly && !UUID.test(propertyId)) || !rawPortals || rawPortals.length === 0 || rawPortals.length > MAX_PORTALS) {
     return { http: 400, body: { error: "bad_request" } };
   }
   const adapters: PortalAdapter[] = [];
@@ -67,8 +77,8 @@ export async function runEngine(req: EngineRequest, deps: EngineDeps): Promise<E
   if (b.isSample === true) return { http: 422, body: { error: "sample", message: SAMPLE_MESSAGE } };
 
   // Aislamiento: la propiedad tiene que ser de la agencia del usuario.
-  const prop = await deps.loadProperty(req.scope.agencyId, propertyId);
-  if (!prop) {
+  const prop = crmOnly ? null : await deps.loadProperty(req.scope.agencyId, propertyId);
+  if (!crmOnly && !prop) {
     return {
       http: 404,
       body: { error: "property_not_found", message: "La propiedad no está sincronizada con la app o no es de tu inmobiliaria." },
@@ -82,6 +92,7 @@ export async function runEngine(req: EngineRequest, deps: EngineDeps): Promise<E
       try {
         const av = a.availability();
         if (av.state !== "available") return result(a.id, "unavailable", av.reason);
+        if (crmOnly && !a.supportsCrmOnly) return result(a.id, "property_not_found", CRM_ONLY_MESSAGE);
 
         const conn = await a.status(req.scope);
         if (conn.state === "needs_reauth")
@@ -90,7 +101,7 @@ export async function runEngine(req: EngineRequest, deps: EngineDeps): Promise<E
           return result(a.id, "not_connected", `Tu inmobiliaria no tiene ${a.name} conectado. Conectalo en Configuración → Integraciones.`);
 
         const input = (inputs[a.id] && typeof inputs[a.id] === "object" ? inputs[a.id] : {}) as PortalInput;
-        const pr = { scope: req.scope, propertyId, input };
+        const pr = { scope: req.scope, propertyId: crmOnly ? "" : propertyId, crmPropertyId, input };
         return req.mode === "check" ? await a.validate(pr) : await a.publish(pr);
       } catch {
         return result(a.id, "error", `No se pudo completar la acción en ${a.name}. Probá de nuevo en un rato.`);

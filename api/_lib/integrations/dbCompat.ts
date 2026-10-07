@@ -29,7 +29,15 @@ export function isMissingColumn(error: DbError | null | undefined): boolean {
 export const NEW_CONNECTION_COLUMNS = ["auth_method", "last_error", "last_checked_at"] as const;
 export const NEW_PUBLICATION_COLUMNS = ["connection_id"] as const;
 
-const missing = { connection: false, publication: false };
+/**
+ * `crm`: columnas crm_property_id / property_id nullable de la migración
+ * 20261007120000_publications_crm_property (publicar propiedades que no están
+ * en la app). Sin ellas, la publicación de esas propiedades se guarda en el
+ * navegador (ver api/_lib/meliItems.ts).
+ */
+export const NEW_CRM_PUBLICATION_COLUMNS = ["crm_property_id"] as const;
+
+const missing = { connection: false, publication: false, crm: false };
 
 export function schemaFlags() {
   return { ...missing };
@@ -39,9 +47,10 @@ export function schemaFlags() {
 export function resetSchemaFlags() {
   missing.connection = false;
   missing.publication = false;
+  missing.crm = false;
 }
 
-export function markMissing(kind: "connection" | "publication") {
+export function markMissing(kind: "connection" | "publication" | "crm") {
   missing[kind] = true;
 }
 
