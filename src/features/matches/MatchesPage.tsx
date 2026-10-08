@@ -114,11 +114,14 @@ export default function MatchesPage() {
 
   const stats = useMemo(
     () => ({
-      total: all.length,
+      // Los interesados reales de la app suman a «activos» y «nuevos hoy».
+      total: all.length + appLeads.length,
       high: all.filter((m) => m.match.score >= 85).length,
-      today: all.filter((m) => new Date(m.match.created_at).getTime() > dayAgo).length,
+      today:
+        all.filter((m) => new Date(m.match.created_at).getTime() > dayAgo).length +
+        appLeads.filter((l) => new Date(l.at).getTime() > dayAgo).length,
     }),
-    [all, dayAgo],
+    [all, appLeads, dayAgo],
   );
 
   return (
@@ -136,7 +139,7 @@ export default function MatchesPage() {
             <OverviewCard
               value={String(stats.total)}
               label="Matches activos"
-              sub="Sobre tu cartera actual"
+              sub={appLeads.length > 0 ? `${appLeads.length} desde la app · ${all.length} compatibles` : "Sobre tu cartera actual"}
               icon={<MatchesSolidIcon size={26} color="white" />}
               grad="linear-gradient(135deg,#7C3AED,#A855F7)"
               light="#F5F3FF"

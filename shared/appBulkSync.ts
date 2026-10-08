@@ -22,6 +22,14 @@ export const APP_SUPPORTED_OPERATIONS = ["venta", "alquiler", "alquiler_temporal
 /** Tope de fotos que se copian y se mandan a la app por propiedad. */
 export const MAX_PHOTOS_PER_PROPERTY = 40;
 
+/**
+ * Tipos donde los ambientes no aplican (terreno, local, oficina): si no hay
+ * dato, van a la app con 0 en vez de quedar afuera (la columna es NOT NULL).
+ */
+export const ROOMLESS_TYPES = ["terreno", "local", "oficina"] as const;
+export const isRoomlessType = (type: string | null | undefined): boolean =>
+  (ROOMLESS_TYPES as readonly string[]).includes(type ?? "");
+
 /** Lo mínimo de una propiedad del CRM que hace falta para decidir. */
 export interface BulkProperty {
   id: string;
@@ -69,10 +77,11 @@ export const usablePhotos = (photos: string[] | undefined): string[] =>
   (photos ?? []).filter((u) => typeof u === "string" && u.length > 0 && !u.startsWith("blob:"));
 
 /** Misma regla que `roomsOf` en propertySync: si no hay ambientes, dormitorios + 1. */
-export function bulkRoomsOf(p: Pick<BulkProperty, "rooms" | "bedrooms">): number | null {
+export function bulkRoomsOf(p: Pick<BulkProperty, "rooms" | "bedrooms"> & { type?: string }): number | null {
   if (p.rooms !== undefined && p.rooms !== null) return p.rooms;
-  if (p.rooms === null) return null;
-  return typeof p.bedrooms === "number" ? p.bedrooms + 1 : null;
+  const fallback = isRoomlessType(p.type) ? 0 : null;
+  if (p.rooms === null) return fallback;
+  return typeof p.bedrooms === "number" ? p.bedrooms + 1 : fallback;
 }
 
 /** Todos los motivos por los que una propiedad NO puede subir (vacío = puede). */

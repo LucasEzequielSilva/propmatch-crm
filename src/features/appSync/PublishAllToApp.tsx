@@ -13,6 +13,7 @@
  *    la app, con el mismo motor en tandas. Ver docs/marca-de-agua-app.md.
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { useStore } from "@/data/store";
 import { supabase } from "@/lib/supabase";
@@ -25,6 +26,7 @@ import {
   ineligibleReasons,
   jobProgress,
   planPhotos,
+  type BulkSummary,
   type CopyPhotosResponse,
   type IneligibleReason,
 } from "../../../shared/appBulkSync";
@@ -302,7 +304,6 @@ function Summary({ agencyId }: { agencyId: string }) {
     },
     [summary, photos, agencyId],
   );
-  const reasons = Object.entries(summary.reasonCounts) as [IneligibleReason, number][];
   const n = summary.ready.length;
 
   return (
@@ -319,36 +320,7 @@ function Summary({ agencyId }: { agencyId: string }) {
         </p>
       )}
 
-      {summary.ineligible.length > 0 && (
-        <details className="rounded-xl border px-4 py-3" style={{ borderColor: "#EDE9FE" }}>
-          <summary className="text-sm cursor-pointer" style={{ color: INK, fontWeight: 700 }}>
-            Por qué no van {summary.ineligible.length} propiedades
-          </summary>
-          <ul className="mt-2 text-sm space-y-1" style={{ color: "#374151" }}>
-            {reasons.map(([r, count]) => (
-              <li key={r}>
-                <strong>{count}</strong> · {INELIGIBLE_LABEL[r]}
-              </li>
-            ))}
-          </ul>
-          <details className="mt-3">
-            <summary className="text-xs cursor-pointer" style={{ color: VIOLET, fontWeight: 700 }}>Ver la lista</summary>
-            <ul className="mt-2 text-xs space-y-1 max-h-60 overflow-y-auto" style={{ color: MUTED }}>
-              {summary.ineligible.slice(0, 500).map((p) => (
-                <li key={p.id}>
-                  <span style={{ color: INK, fontWeight: 600 }}>{p.title}</span> — {p.reasons.map((r) => INELIGIBLE_LABEL[r]).join(" · ")}
-                </li>
-              ))}
-              {summary.ineligible.length > 500 && <li>… y {summary.ineligible.length - 500} más.</li>}
-            </ul>
-          </details>
-          {summary.reasonCounts.currency ? (
-            <p className="mt-3 text-xs" style={{ color: MUTED }}>
-              Las propiedades en pesos siguen en el CRM y se pueden publicar en los portales; la app solo maneja USD.
-            </p>
-          ) : null}
-        </details>
-      )}
+      <NotGoingList summary={summary} />
 
       {n > 0 ? (
         <>
@@ -398,8 +370,64 @@ const STATUS_TEXT = {
   done: "¡Listo!",
 } as const;
 
+/**
+ * Las que no van a la app, con el motivo de cada una y un acceso para
+ * completarlas (el multipublicador de la propiedad tiene los arreglos en línea).
+ */
+function NotGoingList({ summary, open = false, title }: { summary: BulkSummary; open?: boolean; title?: string }) {
+  const navigate = useNavigate();
+  if (summary.ineligible.length === 0) return null;
+  const reasons = Object.entries(summary.reasonCounts) as [IneligibleReason, number][];
+  const fixable = (r: IneligibleReason[]) => !r.includes("sample") && !r.includes("currency") && !r.includes("closed");
+  return (
+    <details className="rounded-xl border px-4 py-3" style={{ borderColor: "#EDE9FE" }} open={open}>
+      <summary className="text-sm cursor-pointer" style={{ color: INK, fontWeight: 700 }}>
+        {title ?? `Por qué no van ${summary.ineligible.length} propiedades`}
+      </summary>
+      <ul className="mt-2 text-sm space-y-1" style={{ color: "#374151" }}>
+        {reasons.map(([r, count]) => (
+          <li key={r}>
+            <strong>{count}</strong> · {INELIGIBLE_LABEL[r]}
+          </li>
+        ))}
+      </ul>
+      <details className="mt-3" open={open}>
+        <summary className="text-xs cursor-pointer" style={{ color: VIOLET, fontWeight: 700 }}>Ver cuáles son</summary>
+        <ul className="mt-2 text-xs space-y-1.5 max-h-72 overflow-y-auto" style={{ color: MUTED }}>
+          {summary.ineligible.slice(0, 500).map((p) => (
+            <li key={p.id} className="flex flex-wrap items-baseline gap-x-2">
+              <span style={{ color: INK, fontWeight: 600 }}>{p.title}</span>
+              <span>— {p.reasons.map((r) => INELIGIBLE_LABEL[r]).join(" · ")}</span>
+              {fixable(p.reasons) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDialogOpen(false);
+                    navigate(`/publicador/${p.id}`);
+                  }}
+                  className="underline"
+                  style={{ color: VIOLET, fontWeight: 700 }}
+                >
+                  Completar
+                </button>
+              )}
+            </li>
+          ))}
+          {summary.ineligible.length > 500 && <li>… y {summary.ineligible.length - 500} más.</li>}
+        </ul>
+      </details>
+      {summary.reasonCounts.currency ? (
+        <p className="mt-3 text-xs" style={{ color: MUTED }}>
+          Las propiedades en pesos siguen en el CRM y se pueden publicar en los portales; la app solo maneja USD.
+        </p>
+      ) : null}
+    </details>
+  );
+}
+
 function JobProgress() {
-  const { appAgencyId } = useStore();
+  const { appAgencyId, properties, photos } = useStore();
+  const pending = useMemo(() => classifyForApp(properties, photos), [properties, photos]);
   const job = useBulkJob(appAgencyId);
   if (!job) return null;
   const p = jobProgress(job);
@@ -493,6 +521,33 @@ function JobProgress() {
                 <span style={{ color: INK, fontWeight: 600 }}>{job.titles[id] ?? id}</span> — {job.results[id]?.reason ?? "Error"}
               </li>
             ))}
+          </ul>
+        </details>
+      )}
+
+      {/* Al terminar: las que quedaron afuera de la app y por qué. */}
+      {finished && !refresh && (
+        <NotGoingList
+          summary={pending}
+          open
+          title={`${pending.ineligible.length} propiedades no se publicaron en la app`}
+        />
+      )}
+
+      {p.photoFailures > 0 && (
+        <details className="rounded-xl border px-4 py-3" style={{ borderColor: "#EDE9FE" }}>
+          <summary className="text-sm cursor-pointer" style={{ color: INK, fontWeight: 700 }}>
+            Propiedades con fotos que no se pudieron copiar
+          </summary>
+          <ul className="mt-2 text-xs space-y-1 max-h-48 overflow-y-auto" style={{ color: MUTED }}>
+            {job.ids
+              .filter((id) => (job.results[id]?.photoFailures ?? 0) > 0)
+              .map((id) => (
+                <li key={id}>
+                  <span style={{ color: INK, fontWeight: 600 }}>{job.titles[id] ?? id}</span> — {job.results[id]?.photoFailures}{" "}
+                  {job.results[id]?.photoFailures === 1 ? "foto" : "fotos"}
+                </li>
+              ))}
           </ul>
         </details>
       )}
