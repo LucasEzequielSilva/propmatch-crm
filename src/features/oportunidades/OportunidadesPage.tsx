@@ -585,15 +585,25 @@ function OpportunityCard({
         )}
 
         <div className="flex items-start gap-2.5 mb-3">
-          <div
-            className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarGradient(contactName)} flex items-center justify-center text-white flex-shrink-0`}
+          {/* Avatar y nombre llevan a la ficha del cliente (el resto de la tarjeta la expande). */}
+          <button
+            type="button"
+            aria-label={`Ver la ficha de ${contactName}`}
+            title="Ver ficha del cliente"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenContact();
+            }}
+            className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarGradient(contactName)} flex items-center justify-center text-white flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-violet-300 transition-shadow`}
             style={{ fontSize: "10px", fontWeight: 700 }}
           >
             {initials(contactName)}
-          </div>
+          </button>
           <div className="flex-1 min-w-0">
-            <p
-              className="text-sm truncate hover:underline"
+            <button
+              type="button"
+              title="Ver ficha del cliente"
+              className="block max-w-full text-left text-sm truncate cursor-pointer hover:underline decoration-violet-400 underline-offset-2"
               style={{ color: "#1F0A3C", fontWeight: 700 }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -601,7 +611,7 @@ function OpportunityCard({
               }}
             >
               {contactName} <SampleBadge record={opp} />
-            </p>
+            </button>
             <p className="text-xs truncate mt-0.5" style={{ color: "#7458C4" }}>
               {propertyTitle}
             </p>
