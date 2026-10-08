@@ -47,7 +47,7 @@ Google vuelve a leer los calendarios por URL cada varias horas (no se puede forz
 ### Puesta en marcha (B)
 
 1. Tener creado el **Supabase propio del CRM** (el del inbox) y cargadas en Vercel `CRM_SUPABASE_URL` y `CRM_SUPABASE_SERVICE_ROLE_KEY` (además de `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `APP_URL`, que ya están).
-2. Aplicar en **esa** base (no en la de la app) `supabase-crm/migrations/20261008120000_calendar_feeds.sql`.
+2. Aplicar en **esa** base (no en la de la app) `supabase-crm/migrations/20261008130000_calendar_feeds.sql`.
 3. Redeploy. Sin la base configurada (o sin la migración), la Agenda muestra «Falta configurar la base del CRM» y nada se rompe.
 
 ### Seguridad
@@ -130,8 +130,8 @@ Refresh automático: el access token se renueva cuando le falta menos de 1 min o
 - De la base del CRM: `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_ROLE_KEY`.
 
 **7. Migraciones**: en el Supabase **del CRM** (no en el de la app), en orden:
-1. `supabase-crm/migrations/20261008120000_calendar_feeds.sql` (opción B)
-2. `supabase-crm/migrations/20261008120100_google_calendar_connections.sql` (opción A)
+1. `supabase-crm/migrations/20261008130000_calendar_feeds.sql` (opción B)
+2. `supabase-crm/migrations/20261008130100_google_calendar_connections.sql` (opción A)
 
 Redeploy. Sin Google configurado, la tarjeta dice «Todavía no está disponible» y el link .ics sigue andando. Sin la base: «Falta configurar la base del CRM».
 
