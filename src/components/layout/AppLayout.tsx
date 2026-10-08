@@ -4,6 +4,7 @@ import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { ProppiPanel } from "@/features/proppi/ProppiPanel";
 import { SampleBanner } from "./SampleBanner";
+import { BulkAppSyncHost } from "@/features/appSync/PublishAllToApp";
 
 /**
  * Marco de la aplicación: sidebar fijo + área de contenido.
@@ -44,6 +45,8 @@ export function AppLayout() {
       </main>
       <MobileNav />
       <ProppiPanel />
+      {/* «Publicar todas en la app»: sigue corriendo aunque se cambie de pantalla. */}
+      <BulkAppSyncHost />
     </div>
   );
 }

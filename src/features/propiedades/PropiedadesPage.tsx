@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/icons";
 import { useStore, isLinkedAgencyId } from "@/data/store";
 import { MeliImportButton } from "@/features/integraciones/MeliImportDialog";
+import { PublishAllToAppButton } from "@/features/appSync/PublishAllToApp";
 import { ZONES } from "@/data/seed";
 import {
   PROPERTY_STATUS_LABEL,
@@ -125,6 +126,11 @@ export default function PropiedadesPage() {
             style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
           />
         )}
+        {/* Sin cuenta vinculada (o sin ser admin) se ve deshabilitado, con el motivo. */}
+        <PublishAllToAppButton
+          className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
+          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+        />
       </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
