@@ -347,6 +347,12 @@ export const PROPERTY_FIELDS: FieldDef[] = [
   { key: "photo", label: "Foto (URL)", synonyms: ["foto", "fotos", "imagen", "url foto", "link foto"], hint: "Links separados por coma" },
 ];
 
+/** Link de la publicación original que el exportador deja al final de la descripción. */
+export function sourceUrlOf(description: string | null | undefined): string | null {
+  const m = (description ?? "").match(/Fuente:\s*(https?:\/\/\S+)/i);
+  return m ? m[1].replace(/[).,;]+$/, "").toLowerCase() : null;
+}
+
 export function buildPropertyDrafts(
   sheet: Sheet,
   mapping: Mapping,
@@ -360,6 +366,13 @@ export function buildPropertyDrafts(
   const key = (street: string | null, number: string | null, title: string, price: number | null, description: string | null) =>
     normalizeText(`${street ?? ""} ${number ?? ""} ${title} ${price ?? ""} ${(description ?? "").slice(-300)}`);
   const existingKeys = new Map(existing.map((p) => [key(p.street, p.street_number, p.title, p.price, p.description), p]));
+  // Si la descripción trae el link de la publicación original ("Fuente: https://…"),
+  // ese link identifica la propiedad aunque el texto o el precio hayan cambiado en la web.
+  const existingBySource = new Map<string, Property>();
+  for (const p of existing) {
+    const src = sourceUrlOf(p.description);
+    if (src && !existingBySource.has(src)) existingBySource.set(src, p);
+  }
   const seenInFile = new Set<string>();
 
   return sheet.rows.map((row, i) => {
@@ -407,7 +420,7 @@ export function buildPropertyDrafts(
     const photos = splitUrls(get("photo")).filter((u) => /^https?:\/\//.test(u));
 
     const k = key(street, street_number, title, price, get("description") || null);
-    const dup = existingKeys.get(k);
+    const dup = existingKeys.get(k) ?? (sourceUrlOf(get("description")) ? existingBySource.get(sourceUrlOf(get("description"))!) : undefined);
     let duplicate = dup ? dup.title : null;
     if (!duplicate && seenInFile.has(k)) duplicate = "otra fila de este archivo";
     seenInFile.add(k);
