@@ -14,7 +14,8 @@
     "test:voz": "node --test scripts/voz.test.ts",
     "test:brand": "node --test scripts/brand.test.ts",
     "test:integraciones": "node --test scripts/integraciones.test.ts",
-    "test:marketing": "node --test scripts/marketing.test.ts"
+    "test:marketing": "node --test scripts/marketing.test.ts",
+    "test:cuenta": "node --test scripts/cuenta.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

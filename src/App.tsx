@@ -6,6 +6,7 @@ import { customDomainSlug } from "@/features/sitio/customDomain";
 
 import LoginPage from "@/features/auth/LoginPage";
 import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
+import { EmailChangeNotice } from "@/features/auth/EmailChangeNotice";
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import ContactosPage from "@/features/contactos/ContactosPage";
 import ContactoDetallePage from "@/features/contactos/ContactoDetallePage";
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <StoreProvider>
       <PasswordRecovery />
+      <EmailChangeNotice />
       <BrowserRouter>
         <Routes>
           {/* Ficha que recibe el cliente: pública, sin sesión y sin el layout del CRM. */}

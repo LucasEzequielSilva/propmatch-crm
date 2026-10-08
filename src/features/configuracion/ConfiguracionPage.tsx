@@ -6,6 +6,8 @@ import { avatarGradient, initials } from "@/lib/format";
 import { ProppiSettingsCard } from "@/features/proppi/ProppiSettingsCard";
 import { ChannelsSettings } from "@/features/inbox/channels/ChannelsSettings";
 import { SampleDataCard } from "./SampleDataCard";
+import { AccountCard } from "./AccountCard";
+import { Field, inputClass } from "./fields";
 import { IntegracionesLinkCard } from "@/features/integraciones/IntegracionesLinkCard";
 import { SampleBadge } from "@/components/ui/SampleBadge";
 import { BrandingCard } from "@/features/branding/BrandingCard";
@@ -15,14 +17,15 @@ import { DocTemplatesCard } from "@/features/branding/DocTemplatesCard";
  * Configuración.
  *
  * Tres cosas y nada más: los datos de la inmobiliaria (los ve todo el equipo),
- * el perfil propio y volver a los datos de ejemplo. Lo demás (roles, invitar
+ * el perfil propio, la cuenta (email y contraseña, en `AccountCard`) y volver
+ * a los datos de ejemplo. Lo demás (roles, invitar
  * agentes, planes) depende de tener backend y no tiene sentido simularlo.
  */
 
 const ROLE_LABEL = { owner: "Dueño", admin: "Administrador", agente: "Agente inmobiliario" } as const;
 
 export default function ConfiguracionPage() {
-  const { agency, profile, profiles, updateAgency, updateProfile, reset } = useStore();
+  const { agency, profile, profiles, updateAgency, updateProfile, reset, isDemo } = useStore();
   const canEditAgency = profile.role === "owner" || profile.role === "admin";
   const [toast, setToast] = useState<string | null>(null);
 
@@ -55,11 +58,14 @@ export default function ConfiguracionPage() {
             key={`profile-${profile.id}-${profile.full_name}-${profile.email}-${profile.phone}`}
             initial={profile}
             roleLabel={ROLE_LABEL[profile.role]}
+            emailFromAccount={!isDemo}
             onSave={(input) => {
               updateProfile(profile.id, input);
               setToast("Perfil guardado");
             }}
           />
+
+          <AccountCard onDone={setToast} />
 
           <Card>
             <SectionHeader inCard title="Equipo" subtitle={`${profiles.length} personas en ${agency.name}`} />
@@ -187,10 +193,13 @@ function AgencyCard({
 function ProfileCard({
   initial,
   roleLabel,
+  emailFromAccount,
   onSave,
 }: {
   initial: ProfileInput;
   roleLabel: string;
+  /** Con cuenta real el email es el de la cuenta: se cambia en "Mi cuenta", no acá. */
+  emailFromAccount: boolean;
   onSave: (input: ProfileInput) => void;
 }) {
   const [form, setForm] = useState<ProfileInput>({
@@ -233,11 +242,13 @@ function ProfileCard({
             className={inputClass}
           />
         </Field>
-        <Field label="Email (para iniciar sesión)">
+        <Field label={emailFromAccount ? "Email (se cambia en Mi cuenta)" : "Email (para iniciar sesión)"}>
           <input
             type="email"
             value={form.email ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            readOnly={emailFromAccount}
+            disabled={emailFromAccount}
             className={inputClass}
           />
         </Field>
@@ -303,30 +314,6 @@ function ResetCard({ onReset }: { onReset: () => void }) {
 }
 
 /* ── Piezas ──────────────────────────────────────────────────────────────── */
-
-const inputClass =
-  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all bg-white " +
-  "text-[#1F0A3C] placeholder:text-[#7C6A99] border-[#EDE9FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE] " +
-  "disabled:bg-[#FAFAFF] disabled:text-[#7C6A99] disabled:cursor-not-allowed";
-
-function Field({
-  label,
-  className = "",
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className={`block ${className}`}>
-      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
 
 function SaveBar({ dirty, error, onSave }: { dirty: boolean; error: string | null; onSave: () => void }) {
   return (
