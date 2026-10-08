@@ -741,3 +741,65 @@ export function feedIcsEvents(items: GcalItem[], appUrl: string): IcsEvent[] {
     endIso: i.end,
   }));
 }
+
+/* ── Opción A: qué mandar en cada vuelta (navegador) ──────────────────────── */
+
+/** Lo que el navegador recuerda de cada ítem que mandó a Google (localStorage, por cuenta). */
+export interface LedgerEntry {
+  /** null = Google lo borró y el CRM no lo puede borrar (tarea / visita de la app): no se vuelve a mandar salvo que cambie. */
+  gid: string | null;
+  hash: string;
+  times: GcalTimes;
+}
+
+export interface DesiredItem {
+  item: GcalItem;
+  crmUpdatedAt: string;
+}
+
+export interface ReconcilePlan {
+  upserts: GcalUpsertRequestItem[];
+  deletes: string[];
+  /** Entradas del ledger que ya no sirven (descartadas y sin ítem). */
+  drop: string[];
+}
+
+/** Ventana para mandar ítems NUEVOS (lo viejo no se sube de golpe al conectar). */
+export const SYNC_PAST_DAYS = 7;
+export const SYNC_FUTURE_DAYS = 365;
+
+export function inSyncWindow(t: GcalTimes, now: Date): boolean {
+  const start = t.allDay ? Date.parse(`${t.start}T00:00:00Z`) : Date.parse(t.start);
+  const end = t.allDay ? Date.parse(`${t.end}T00:00:00Z`) : Date.parse(t.end);
+  return end >= now.getTime() - SYNC_PAST_DAYS * DAY_MS && start <= now.getTime() + SYNC_FUTURE_DAYS * DAY_MS;
+}
+
+/**
+ * Compara lo que el CRM quiere tener en Google con lo que ya se mandó.
+ * Idempotente: con el ledger al día, el plan sale vacío. `visitsKnown` false
+ * = esta pestaña no cargó las visitas de la app: no se borra ninguna.
+ */
+export function planReconcile(
+  desired: Map<string, DesiredItem>,
+  ledger: Record<string, LedgerEntry>,
+  now: Date,
+  opts: { visitsKnown: boolean },
+): ReconcilePlan {
+  const upserts: GcalUpsertRequestItem[] = [];
+  const deletes: string[] = [];
+  const drop: string[] = [];
+  for (const [pm, d] of desired) {
+    const entry = ledger[pm];
+    const hash = itemHash(d.item);
+    if (entry && entry.hash === hash) continue;
+    if (!entry && !inSyncWindow(d.item, now)) continue;
+    upserts.push({ ...d.item, crmUpdatedAt: d.crmUpdatedAt, known: entry?.gid ? entry.times : null });
+  }
+  for (const [pm, entry] of Object.entries(ledger)) {
+    if (desired.has(pm)) continue;
+    if (!opts.visitsKnown && pm.startsWith("visit:")) continue;
+    if (entry.gid) deletes.push(pm);
+    else drop.push(pm);
+  }
+  return { upserts, deletes, drop };
+}

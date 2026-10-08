@@ -3,6 +3,8 @@
  * cambios hechos en cualquier pantalla (agendar una visita desde un contacto,
  * una tarea con fecha…) lleguen a Google aunque la Agenda no esté abierta.
  *
+ * Opción A — conexión directa (useGcalSync): CRM ↔ Google al instante.
+ *
  * Opción B — link de suscripción (.ics): si el agente lo activó, cada cambio
  * en sus eventos / visitas / tareas manda un snapshot (con debounce) a
  * gcal-feed-push. Google lo vuelve a leer cada varias horas.
@@ -14,6 +16,7 @@ import { useStore } from "@/data/store";
 import { fnv1a, type GcalItem } from "../../../shared/gcal";
 import { feedApi, type FeedStatus } from "./api";
 import { crmItems, feedItems } from "./items";
+import { useGcalSync, type SyncController } from "./useGcalSync";
 
 const FEED_DEBOUNCE_MS = 3_000;
 
@@ -63,6 +66,7 @@ export interface FeedController {
 
 interface GcalContextValue {
   feed: FeedController;
+  sync: SyncController;
   /** La Agenda avisa qué visitas de la app (ya filtradas al agente) hay hoy. */
   reportAppVisits: (items: GcalItem[]) => void;
   /** La Agenda se abrió: se reenvía el snapshot del link. */
@@ -83,7 +87,10 @@ export function GoogleCalendarProvider({ children }: { children: ReactNode }) {
 
   /* Ítems del agente ─────────────────────────────────────────────────────── */
   const [visits, setVisits] = useState<GcalItem[]>([]);
+  /** true cuando la Agenda ya cargó las visitas de la app en esta sesión (recién ahí se pueden borrar de Google). */
+  const [visitsKnown, setVisitsKnown] = useState(false);
   useEffect(() => {
+    setVisitsKnown(false);
     setVisits(userId ? readJson<FeedLocal>(feedKey(userId), { url: null, visits: [] }).visits : []);
   }, [userId]);
 
@@ -95,6 +102,7 @@ export function GoogleCalendarProvider({ children }: { children: ReactNode }) {
   const reportAppVisits = useCallback(
     (next: GcalItem[]) => {
       if (!userId) return;
+      setVisitsKnown(true);
       setVisits((prev) => {
         if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
         const local = readJson<FeedLocal>(feedKey(userId), { url: null, visits: [] });
@@ -247,5 +255,10 @@ export function GoogleCalendarProvider({ children }: { children: ReactNode }) {
     revoke,
   };
 
-  return <Ctx.Provider value={{ feed, reportAppVisits, agendaOpened }}>{children}</Ctx.Provider>;
+  // Para la sincronización directa, las visitas de la app solo cuentan cuando la Agenda ya las cargó en esta
+  // sesión (las del caché podrían estar viejas y resucitar una visita cancelada).
+  const syncItems = useMemo(() => (visitsKnown ? items : items.filter((i) => !i.propmatchId.startsWith("visit:"))), [items, visitsKnown]);
+  const sync = useGcalSync({ userId, isDemo, items: syncItems, visitsKnown });
+
+  return <Ctx.Provider value={{ feed, sync, reportAppVisits, agendaOpened }}>{children}</Ctx.Provider>;
 }
