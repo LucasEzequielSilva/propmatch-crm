@@ -7,8 +7,8 @@
  * Guardado:
  *   - local: `agency.branding` en el store (localStorage, por agencia; la demo
  *     tiene el suyo);
- *   - público (solo cuenta vinculada a una agencia real): logo y brand.png en
- *     `property-photos/<agency_id>/branding/`.
+ *   - público (solo cuenta vinculada a una agencia real): logo, logo para
+ *     fotos (opcional) y brand.png en `property-photos/<agency_id>/branding/`.
  */
 import { useMemo } from "react";
 import { useStore, isLinkedAgencyId, type AgencyInput } from "@/data/store";
@@ -116,13 +116,21 @@ export async function publishBrand(agencyId: string, brand: AgencyBrand): Promis
   const bucket = supabase.storage.from(BRAND_BUCKET);
   let next: AgencyBrand = { ...brand, updatedAt: new Date().toISOString() };
 
-  if (next.logoUrl?.startsWith("data:")) {
-    const blob = dataUrlToBlob(next.logoUrl);
+  // Logo principal y versión para fotos: nombre nuevo en cada cambio (el CDN
+  // nunca sirve uno viejo).
+  const uploads = [
+    ["logoUrl", "logo"],
+    ["photoLogoUrl", "logo-fotos"],
+  ] as const;
+  for (const [field, name] of uploads) {
+    const value = next[field];
+    if (!value?.startsWith("data:")) continue;
+    const blob = dataUrlToBlob(value);
     const ext = blob.type === "image/jpeg" ? "jpg" : "png";
-    const path = `${brandFolder(agencyId)}/logo-${Date.now()}.${ext}`;
+    const path = `${brandFolder(agencyId)}/${name}-${Date.now()}.${ext}`;
     const { error } = await bucket.upload(path, blob, { contentType: blob.type, cacheControl: "31536000", upsert: false });
-    if (error) return { ok: false, error: "No pudimos subir el logo. Probá de nuevo en un rato." };
-    next = { ...next, logoUrl: bucket.getPublicUrl(path).data.publicUrl };
+    if (error) return { ok: false, error: field === "logoUrl" ? "No pudimos subir el logo. Probá de nuevo en un rato." : "No pudimos subir el logo para fotos. Probá de nuevo en un rato." };
+    next = { ...next, [field]: bucket.getPublicUrl(path).data.publicUrl };
   }
 
   const clean = sanitizeBrand(next, { logoPrefix: brandLogoPrefix(SUPABASE_URL, agencyId) });

@@ -1,18 +1,28 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Card, SectionHeader } from "@/components/ui/Card";
 import { useStore } from "@/data/store";
 import { agencyPatch, canPublishBrand, fetchPublishedBrand, processLogo, publishBrand } from "@/lib/branding";
+import { PhotoLogoOverlay } from "./PhotoLogoOverlay";
 import {
+  DEFAULT_PHOTO_LOGO,
   EMPTY_BRAND,
+  PHOTO_LOGO_BACKDROPS,
+  PHOTO_LOGO_POSITIONS,
+  PHOTO_LOGO_POSITION_LABEL,
+  PHOTO_LOGO_SIZES,
   PROPMATCH_PRIMARY,
   PROPMATCH_SECONDARY,
   brandCssVars,
   checkContrast,
   isHexColor,
   resolveBrand,
+  resolvePhotoLogo,
   sanitizeBrand,
   textOn,
   type AgencyBrand,
+  type PhotoLogoBackdrop,
+  type PhotoLogoSettings,
+  type PhotoLogoSize,
 } from "../../../shared/brand";
 
 const INK = "#1F0A3C";
@@ -34,12 +44,14 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
   const { agency, profile, updateAgency } = useStore();
   const canEdit = profile.role === "owner" || profile.role === "admin";
   const publishable = canPublishBrand(agency.id);
-  const saved = agency.branding ?? null;
+  // Normalizada: las marcas guardadas antes del logo para fotos no traen esos campos.
+  const saved = useMemo(() => (agency.branding ? sanitizeBrand(agency.branding, { allowDataLogo: true }) : null), [agency.branding]);
   const [form, setForm] = useState<AgencyBrand>(() => saved ?? { ...EMPTY_BRAND, phone: agency.phone, email: agency.email });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const photoFileRef = useRef<HTMLInputElement>(null);
   const id = useId();
 
   // Otro miembro de la agencia ya publicó la marca: se trae la publicada.
@@ -64,11 +76,14 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
   });
   const dirty = JSON.stringify(form) !== JSON.stringify(saved ?? null);
 
-  async function onLogo(file: File | undefined) {
+  const setPhotoLogo = (patch: Partial<PhotoLogoSettings>) =>
+    setForm((f) => ({ ...f, photoLogo: { ...(f.photoLogo ?? DEFAULT_PHOTO_LOGO), ...patch } }));
+
+  async function onLogo(file: File | undefined, field: "logoUrl" | "photoLogoUrl" = "logoUrl") {
     if (!file) return;
     setError(null);
     try {
-      set("logoUrl", await processLogo(file));
+      set(field, await processLogo(file));
     } catch (e) {
       setError(e instanceof Error ? e.message : "No pudimos leer el logo.");
     }
@@ -238,6 +253,16 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
             <input type="checkbox" checked={form.showPoweredBy} disabled={!canEdit} onChange={(e) => set("showPoweredBy", e.target.checked)} />
             Mostrar «Hecho con PropMatch» chiquito al pie
           </label>
+
+          <PhotoLogoSection
+            form={form}
+            canEdit={canEdit}
+            inputRef={photoFileRef}
+            inputId={`${id}-photo-logo`}
+            onFile={(f) => onLogo(f, "photoLogoUrl")}
+            onRemove={() => set("photoLogoUrl", null)}
+            onChange={setPhotoLogo}
+          />
         </div>
 
         {/* Vista previa */}
@@ -269,6 +294,213 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
         </div>
       )}
     </Card>
+  );
+}
+
+const SIZE_LABEL: Record<PhotoLogoSize, string> = { sm: "Chico", md: "Mediano" };
+const BACKDROP_LABEL: Record<PhotoLogoBackdrop, string> = { shadow: "Sombra suave", light: "Placa clara", dark: "Placa oscura" };
+
+/** Fotos de ejemplo (dibujadas con CSS, sin pedir imágenes afuera). */
+const SAMPLE_PHOTOS = [
+  {
+    label: "Foto clara",
+    background:
+      "linear-gradient(180deg, #DBEAFE 0%, #F1F5F9 45%, transparent 45%), linear-gradient(90deg, #F8FAFC 0 30%, #E2E8F0 30% 33%, #FFFFFF 33% 70%, #CBD5E1 70% 72%, #F1F5F9 72%), #F8FAFC",
+  },
+  {
+    label: "Foto oscura",
+    background:
+      "radial-gradient(circle at 70% 30%, rgba(251,191,36,0.55) 0 6%, transparent 22%), linear-gradient(180deg, #1E293B 0%, #0F172A 55%, #3F2A1D 55%, #1C1410 100%)",
+  },
+];
+
+/**
+ * «Logo sobre las fotos»: versión para fotos (opcional), sí/no, esquina,
+ * tamaño y fondo, con vista previa sobre una foto clara y una oscura.
+ */
+function PhotoLogoSection({
+  form,
+  canEdit,
+  inputRef,
+  inputId,
+  onFile,
+  onRemove,
+  onChange,
+}: {
+  form: AgencyBrand;
+  canEdit: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputId: string;
+  onFile: (f: File | undefined) => void;
+  onRemove: () => void;
+  onChange: (patch: Partial<PhotoLogoSettings>) => void;
+}) {
+  const settings = form.photoLogo ?? DEFAULT_PHOTO_LOGO;
+  const hasOwn = !!form.photoLogoUrl;
+  // La vista previa se ve aunque esté apagado (atenuada), para poder elegir antes de prender.
+  const preview = resolvePhotoLogo({ ...form, photoLogo: { ...settings, show: true } });
+  const off = !canEdit || !settings.show;
+  const prevId = useId();
+  const chip = "min-h-9 px-3 rounded-lg text-xs border transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+  const chipStyle = (active: boolean): CSSProperties =>
+    active
+      ? { background: "#F5F3FF", borderColor: "#7C3AED", color: "#5B21B6", fontWeight: 700 }
+      : { background: "white", borderColor: "#DDD6FE", color: INK, fontWeight: 600 };
+
+  return (
+    <div className="sm:col-span-2 rounded-xl border p-4 grid gap-4" style={{ borderColor: "#EDE9FE" }}>
+      <div>
+        <p className="text-sm" style={{ color: INK, fontWeight: 700 }}>Logo sobre las fotos</p>
+        <p className="text-xs mt-0.5" style={{ color: SOFT }}>
+          Se ve encima de las fotos en el CRM, la ficha para clientes, el PDF y tu web. Las fotos no se modifican: a Mercado Libre y a la app van sin logo.
+        </p>
+      </div>
+      <label className="flex items-center gap-2 text-sm" style={{ color: INK, fontWeight: 600 }}>
+        <input type="checkbox" checked={settings.show} disabled={!canEdit} onChange={(e) => onChange({ show: e.target.checked })} />
+        Mostrar el logo sobre las fotos
+      </label>
+
+      <div className="flex items-center gap-4">
+        <div
+          className="w-28 h-20 rounded-xl border flex items-center justify-center overflow-hidden flex-shrink-0"
+          style={{ borderColor: "#EDE9FE", background: "repeating-conic-gradient(#3B2A55 0% 25%, #1F0A3C 0% 50%) 50% / 16px 16px" }}
+        >
+          {form.photoLogoUrl ? (
+            <img src={form.photoLogoUrl} alt="Logo para fotos" className="max-w-full max-h-full object-contain p-2" />
+          ) : (
+            <span className="text-xs text-center px-2" style={{ color: "#E9E3F5" }}>Sin versión para fotos</span>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm" style={{ color: INK, fontWeight: 700 }}>
+            Versión para fotos <span style={{ fontWeight: 400, color: SOFT }}>(opcional)</span>
+          </p>
+          <p className="text-xs" style={{ color: SOFT }}>
+            Ideal: tu logo en blanco, PNG con fondo transparente (o SVG). Si no la subís, usamos el logo principal sobre una placa blanca.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml"
+              className="sr-only"
+              disabled={!canEdit}
+              onChange={(e) => {
+                onFile(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => inputRef.current?.click()}
+              className="min-h-9 px-3 rounded-lg text-xs border bg-white disabled:opacity-50"
+              style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+            >
+              {hasOwn ? "Cambiar versión para fotos" : "Subir versión para fotos"}
+            </button>
+            {hasOwn && canEdit && (
+              <button type="button" onClick={onRemove} className="min-h-9 px-3 rounded-lg text-xs" style={{ color: "#BE123C", fontWeight: 700 }}>
+                Quitar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <fieldset>
+        <legend className="text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>Posición</legend>
+        <div className="grid grid-cols-2 gap-2 max-w-sm">
+          {PHOTO_LOGO_POSITIONS.map((pos) => (
+            <button
+              key={pos}
+              type="button"
+              aria-pressed={settings.position === pos}
+              disabled={off}
+              onClick={() => onChange({ position: pos })}
+              className={chip}
+              style={chipStyle(settings.position === pos)}
+            >
+              {PHOTO_LOGO_POSITION_LABEL[pos]}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs mt-1.5" style={{ color: SOFT }}>
+          Si en esa esquina ya hay algo (estado, operación, estrella, contador de fotos), el logo se corre solo a otra libre.
+        </p>
+      </fieldset>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <fieldset>
+          <legend className="text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>Tamaño</legend>
+          <div className="flex gap-2">
+            {PHOTO_LOGO_SIZES.map((size) => (
+              <button
+                key={size}
+                type="button"
+                aria-pressed={settings.size === size}
+                disabled={off}
+                onClick={() => onChange({ size })}
+                className={chip}
+                style={chipStyle(settings.size === size)}
+              >
+                {SIZE_LABEL[size]}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>Fondo para que se lea</legend>
+          <div className="flex flex-wrap gap-2">
+            {PHOTO_LOGO_BACKDROPS.map((b) => {
+              const active = hasOwn ? settings.backdrop === b : b === "light";
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  aria-pressed={active}
+                  disabled={off || !hasOwn}
+                  onClick={() => onChange({ backdrop: b })}
+                  className={chip}
+                  style={chipStyle(active)}
+                >
+                  {BACKDROP_LABEL[b]}
+                </button>
+              );
+            })}
+          </div>
+          {!hasOwn && (
+            <p className="text-xs mt-1.5" style={{ color: SOFT }}>
+              Con el logo principal va siempre sobre placa clara. Subí la versión para fotos para elegir.
+            </p>
+          )}
+        </fieldset>
+      </div>
+
+      <div>
+        <p id={prevId} className="text-xs mb-2" style={{ color: SOFT, fontWeight: 700 }}>
+          VISTA PREVIA SOBRE FOTOS{settings.show ? "" : " · apagado: todavía no se muestra"}
+        </p>
+        {preview ? (
+          <div role="group" aria-labelledby={prevId} className="grid grid-cols-2 gap-3" style={{ opacity: settings.show ? 1 : 0.6 }}>
+            {SAMPLE_PHOTOS.map((ph) => (
+              <figure key={ph.label} className="m-0">
+                <div className="relative rounded-xl overflow-hidden aspect-[4/3]" style={{ background: ph.background }}>
+                  <span aria-hidden="true" className="absolute top-3 left-3 text-[11px] px-2 py-0.5 rounded-full bg-white" style={{ color: "#5B21B6", fontWeight: 700 }}>
+                    Venta
+                  </span>
+                  <PhotoLogoOverlay logo={preview} avoid={["top-left"]} />
+                </div>
+                <figcaption className="text-[11px] mt-1" style={{ color: SOFT }}>{ph.label}</figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs" style={{ color: SOFT }}>Subí un logo (el principal o la versión para fotos) para ver cómo queda.</p>
+        )}
+      </div>
+    </div>
   );
 }
 
