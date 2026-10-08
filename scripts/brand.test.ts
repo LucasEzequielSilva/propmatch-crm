@@ -11,7 +11,9 @@ import {
   contrastRatio,
   decodeBrandPng,
   encodeBrandPng,
+  photoLogoCorner,
   readableOn,
+  resolvePhotoLogo,
   resolveBrand,
   sanitizeBrand,
 } from "../shared/brand.ts";
@@ -93,4 +95,50 @@ test("resolveBrand: usa los datos de la cuenta como respaldo", () => {
   assert.equal(r2.name, "López");
   assert.equal(r2.onPrimary, "#1F0A3C");
   assert.ok(r2.custom);
+});
+
+test("logo sobre fotos: apagado por defecto y tolera marcas viejas", () => {
+  const vieja = sanitizeBrand({ displayName: "López", logoUrl: "https://x.supabase.co/l.png" })!;
+  assert.deepEqual(vieja.photoLogo, { show: false, position: "bottom-right", size: "sm", backdrop: "shadow" });
+  assert.equal(vieja.photoLogoUrl, null);
+  assert.equal(resolvePhotoLogo(vieja), null);
+  // Marca guardada antes de este cambio (sin los campos nuevos).
+  assert.equal(resolvePhotoLogo({ logoUrl: "https://x.supabase.co/l.png" }), null);
+  assert.equal(resolveBrand(vieja, { name: "Inmo" }).photoLogo, null);
+});
+
+test("logo sobre fotos: lista blanca de opciones y misma regla de URL que el logo", () => {
+  const prefix = brandLogoPrefix("https://x.supabase.co", "agency-1");
+  const b = sanitizeBrand(
+    { photoLogoUrl: "https://evil.com/w.png", photoLogo: { show: true, position: "centro", size: "xl", backdrop: "neon", extra: 1 } },
+    { logoPrefix: prefix },
+  )!;
+  assert.equal(b.photoLogoUrl, null);
+  assert.deepEqual(b.photoLogo, { show: true, position: "bottom-right", size: "sm", backdrop: "shadow" });
+  const ok = sanitizeBrand({ photoLogoUrl: `${prefix}logo-foto-1.png`, photoLogo: { show: true, position: "top-left", size: "md", backdrop: "dark" } }, { logoPrefix: prefix })!;
+  assert.equal(ok.photoLogoUrl, `${prefix}logo-foto-1.png`);
+  assert.deepEqual(ok.photoLogo, { show: true, position: "top-left", size: "md", backdrop: "dark" });
+  assert.equal(sanitizeBrand({ photoLogoUrl: "data:image/png;base64,AAAA" })!.photoLogoUrl, null, "data URL solo con allowDataLogo");
+});
+
+test("logo sobre fotos: sin versión para fotos usa el principal con placa clara", () => {
+  const on = { show: true, position: "bottom-right", size: "sm", backdrop: "shadow" } as const;
+  assert.equal(resolvePhotoLogo({ photoLogo: on }), null, "sin ningún logo no hay nada que mostrar");
+  const main = resolvePhotoLogo({ logoUrl: "https://x.supabase.co/l.png", photoLogo: on })!;
+  assert.equal(main.src, "https://x.supabase.co/l.png");
+  assert.equal(main.backdrop, "light");
+  assert.ok(main.usesMainLogo);
+  const own = resolvePhotoLogo({ logoUrl: "https://x.supabase.co/l.png", photoLogoUrl: "https://x.supabase.co/w.png", photoLogo: { ...on, backdrop: "dark" } })!;
+  assert.equal(own.src, "https://x.supabase.co/w.png");
+  assert.equal(own.backdrop, "dark");
+  assert.ok(!own.usesMainLogo);
+  assert.equal(resolvePhotoLogo({ photoLogoUrl: "javascript:alert(1)", photoLogo: on }), null);
+});
+
+test("logo sobre fotos: la esquina esquiva los badges", () => {
+  assert.equal(photoLogoCorner("bottom-right"), "bottom-right");
+  assert.equal(photoLogoCorner("bottom-right", ["bottom-right"]), "bottom-left");
+  assert.equal(photoLogoCorner("top-left", ["top-left", "top-right"]), "bottom-left");
+  assert.equal(photoLogoCorner("top-left", ["top-left", "top-right", "bottom-left"]), "bottom-right");
+  assert.equal(photoLogoCorner("top-right", ["top-left", "top-right", "bottom-left", "bottom-right"]), "top-right");
 });

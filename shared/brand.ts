@@ -48,7 +48,114 @@ export interface AgencyBrand {
   footer: string | null;
   /** «Hecho con PropMatch» chiquito al pie. */
   showPoweredBy: boolean;
+  /**
+   * Versión del logo para poner SOBRE las fotos (ideal blanca, PNG
+   * transparente). Opcional: si falta se usa `logoUrl` sobre una placa
+   * blanca. Mismas reglas que `logoUrl` (https de la carpeta de la agencia o
+   * data URL antes de publicar).
+   */
+  photoLogoUrl: string | null;
+  /** Cómo se muestra el logo sobre las fotos. Ver «Logo sobre las fotos» más abajo. */
+  photoLogo: PhotoLogoSettings;
   updatedAt: string | null;
+}
+
+/* ── Logo sobre las fotos ────────────────────────────────────────────────── */
+/*
+ * SOLO VISUAL: el logo se dibuja como una capa CSS encima de la foto (en el
+ * CRM, la ficha para clientes, su PDF y la web pública). Los archivos de las
+ * fotos NO se tocan, así que lo que viaja a Mercado Libre, a la app PropMatch
+ * o al Estudio de Instagram es la foto original, sin logo.
+ *
+ * Por qué no se "quema" en la foto: Mercado Libre pide fotos sin logos,
+ * marcas de agua ni datos de contacto sobreimpresos y puede bajar la
+ * calidad de la publicación o pausarla; además la app PropMatch muestra las
+ * fotos de varias inmobiliarias y conviene que salgan limpias.
+ * PENDIENTE (si algún día se quiere): exportar fotos con marca de agua real
+ * para canales que lo permitan (web propia, redes), como opción aparte y
+ * nunca para Mercado Libre.
+ */
+
+export const PHOTO_LOGO_POSITIONS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
+export type PhotoLogoPosition = (typeof PHOTO_LOGO_POSITIONS)[number];
+export const PHOTO_LOGO_SIZES = ["sm", "md"] as const;
+export type PhotoLogoSize = (typeof PHOTO_LOGO_SIZES)[number];
+/** `shadow`: sombra suave (para logos blancos/transparentes); `light`/`dark`: placa translúcida redondeada. */
+export const PHOTO_LOGO_BACKDROPS = ["shadow", "light", "dark"] as const;
+export type PhotoLogoBackdrop = (typeof PHOTO_LOGO_BACKDROPS)[number];
+
+export interface PhotoLogoSettings {
+  show: boolean;
+  position: PhotoLogoPosition;
+  size: PhotoLogoSize;
+  backdrop: PhotoLogoBackdrop;
+}
+
+export const PHOTO_LOGO_POSITION_LABEL: Record<PhotoLogoPosition, string> = {
+  "top-left": "Arriba a la izquierda",
+  "top-right": "Arriba a la derecha",
+  "bottom-left": "Abajo a la izquierda",
+  "bottom-right": "Abajo a la derecha",
+};
+
+/**
+ * Abajo a la derecha por defecto: arriba van el estado, la operación y la
+ * estrella, y abajo a la izquierda «Publicada hace…» (tarjetas del CRM).
+ */
+export const DEFAULT_PHOTO_LOGO: PhotoLogoSettings = { show: false, position: "bottom-right", size: "sm", backdrop: "shadow" };
+
+const oneOf = <T extends string>(list: readonly T[], v: unknown, fallback: T): T => (list.includes(v as T) ? (v as T) : fallback);
+
+export function sanitizePhotoLogo(input: unknown): PhotoLogoSettings {
+  const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  return {
+    show: o.show === true,
+    position: oneOf(PHOTO_LOGO_POSITIONS, o.position, DEFAULT_PHOTO_LOGO.position),
+    size: oneOf(PHOTO_LOGO_SIZES, o.size, DEFAULT_PHOTO_LOGO.size),
+    backdrop: oneOf(PHOTO_LOGO_BACKDROPS, o.backdrop, DEFAULT_PHOTO_LOGO.backdrop),
+  };
+}
+
+export interface ResolvedPhotoLogo {
+  src: string;
+  position: PhotoLogoPosition;
+  size: PhotoLogoSize;
+  backdrop: PhotoLogoBackdrop;
+  /** No hay versión para fotos: se usa el logo principal (siempre con placa clara). */
+  usesMainLogo: boolean;
+}
+
+const safeImgSrc = (v: unknown): string | null =>
+  typeof v === "string" && (/^https:\/\/[^\s"'<>]+$/i.test(v) || /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(v)) ? v : null;
+
+/**
+ * Qué logo va sobre las fotos y cómo. `null` si está apagado o no hay ningún
+ * logo. Tolera marcas viejas (sin los campos nuevos) y la que viaja en el
+ * link de la ficha.
+ */
+export function resolvePhotoLogo(brand: Partial<AgencyBrand> | null | undefined): ResolvedPhotoLogo | null {
+  if (!brand) return null;
+  const s = sanitizePhotoLogo(brand.photoLogo);
+  if (!s.show) return null;
+  const own = safeImgSrc(brand.photoLogoUrl);
+  const main = safeImgSrc(brand.logoUrl);
+  const src = own ?? main;
+  if (!src) return null;
+  return { src, position: s.position, size: s.size, backdrop: own ? s.backdrop : "light", usesMainLogo: !own };
+}
+
+/**
+ * Esquina para el logo sin pisar lo que ya ocupa esa foto (badges, contador,
+ * estrella). Prueba la elegida, después la del mismo borde (izq ↔ der),
+ * después la de enfrente (arriba ↔ abajo) y por último la diagonal. Si están
+ * todas ocupadas, queda la elegida.
+ */
+export function photoLogoCorner(preferred: PhotoLogoPosition, occupied: readonly PhotoLogoPosition[] = []): PhotoLogoPosition {
+  const [v, h] = preferred.split("-") as ["top" | "bottom", "left" | "right"];
+  const flipH = h === "left" ? "right" : "left";
+  const flipV = v === "top" ? "bottom" : "top";
+  const order = [preferred, `${v}-${flipH}`, `${flipV}-${h}`, `${flipV}-${flipH}`] as PhotoLogoPosition[];
+  return order.find((c) => !occupied.includes(c)) ?? preferred;
 }
 
 /** Colores de PropMatch: lo que se ve si la inmobiliaria no eligió los suyos. */
@@ -71,6 +178,8 @@ export const EMPTY_BRAND: AgencyBrand = {
   facebook: null,
   footer: null,
   showPoweredBy: true,
+  photoLogoUrl: null,
+  photoLogo: DEFAULT_PHOTO_LOGO,
   updatedAt: null,
 };
 
@@ -121,14 +230,13 @@ export interface SanitizeOptions {
 export function sanitizeBrand(input: unknown, opts: SanitizeOptions = {}): AgencyBrand | null {
   if (!input || typeof input !== "object") return null;
   const o = input as Record<string, unknown>;
-  let logo: string | null = null;
-  if (typeof o.logoUrl === "string") {
-    if (opts.allowDataLogo && /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(o.logoUrl) && o.logoUrl.length < 700_000) {
-      logo = o.logoUrl;
-    } else if (/^https:\/\/[^\s"'<>]+$/i.test(o.logoUrl) && o.logoUrl.length <= 500) {
-      logo = !opts.logoPrefix || o.logoUrl.startsWith(opts.logoPrefix) ? o.logoUrl : null;
-    }
-  }
+  const logoField = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    if (opts.allowDataLogo && /^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(v) && v.length < 700_000) return v;
+    if (/^https:\/\/[^\s"'<>]+$/i.test(v) && v.length <= 500) return !opts.logoPrefix || v.startsWith(opts.logoPrefix) ? v : null;
+    return null;
+  };
+  const logo = logoField(o.logoUrl);
   const email = str(o.email, 120);
   return {
     v: 1,
@@ -146,6 +254,8 @@ export function sanitizeBrand(input: unknown, opts: SanitizeOptions = {}): Agenc
     facebook: handle(o.facebook),
     footer: str(o.footer, 400),
     showPoweredBy: o.showPoweredBy !== false,
+    photoLogoUrl: logoField(o.photoLogoUrl),
+    photoLogo: sanitizePhotoLogo(o.photoLogo),
     updatedAt: typeof o.updatedAt === "string" && !Number.isNaN(Date.parse(o.updatedAt)) ? o.updatedAt : null,
   };
 }
@@ -244,6 +354,8 @@ export interface ResolvedBrand {
   facebook: string | null;
   footer: string | null;
   showPoweredBy: boolean;
+  /** Logo sobre las fotos (solo visual). `null` si está apagado. */
+  photoLogo: ResolvedPhotoLogo | null;
   /** `true` si la inmobiliaria cargó algo de su marca. */
   custom: boolean;
 }
@@ -277,6 +389,7 @@ export function resolveBrand(
     facebook: b.facebook,
     footer: b.footer,
     showPoweredBy: b.showPoweredBy !== false,
+    photoLogo: resolvePhotoLogo(brand),
     custom,
   };
 }
