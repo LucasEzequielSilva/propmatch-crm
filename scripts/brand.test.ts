@@ -99,7 +99,7 @@ test("resolveBrand: usa los datos de la cuenta como respaldo", () => {
 
 test("logo sobre fotos: apagado por defecto y tolera marcas viejas", () => {
   const vieja = sanitizeBrand({ displayName: "López", logoUrl: "https://x.supabase.co/l.png" })!;
-  assert.deepEqual(vieja.photoLogo, { show: false, position: "bottom-right", size: "sm", backdrop: "shadow" });
+  assert.deepEqual(vieja.photoLogo, { show: false, inApp: false, position: "bottom-right", size: "sm", backdrop: "shadow" });
   assert.equal(vieja.photoLogoUrl, null);
   assert.equal(resolvePhotoLogo(vieja), null);
   // Marca guardada antes de este cambio (sin los campos nuevos).
@@ -114,10 +114,10 @@ test("logo sobre fotos: lista blanca de opciones y misma regla de URL que el log
     { logoPrefix: prefix },
   )!;
   assert.equal(b.photoLogoUrl, null);
-  assert.deepEqual(b.photoLogo, { show: true, position: "bottom-right", size: "sm", backdrop: "shadow" });
+  assert.deepEqual(b.photoLogo, { show: true, inApp: false, position: "bottom-right", size: "sm", backdrop: "shadow" });
   const ok = sanitizeBrand({ photoLogoUrl: `${prefix}logo-foto-1.png`, photoLogo: { show: true, position: "top-left", size: "md", backdrop: "dark" } }, { logoPrefix: prefix })!;
   assert.equal(ok.photoLogoUrl, `${prefix}logo-foto-1.png`);
-  assert.deepEqual(ok.photoLogo, { show: true, position: "top-left", size: "md", backdrop: "dark" });
+  assert.deepEqual(ok.photoLogo, { show: true, inApp: false, position: "top-left", size: "md", backdrop: "dark" });
   assert.equal(sanitizeBrand({ photoLogoUrl: "data:image/png;base64,AAAA" })!.photoLogoUrl, null, "data URL solo con allowDataLogo");
 });
 
