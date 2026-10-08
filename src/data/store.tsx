@@ -72,6 +72,34 @@ import { isSample } from "@/lib/samples";
 const STORAGE_KEY = "propmatch.store.v1";
 /** Datos de la demo (cuenta `u-1`, sin Supabase), separados de los reales. */
 const DEMO_STORAGE_KEY = "propmatch.store.demo.v1";
+/** Sin sesión (pantalla de login): un espacio aparte, que no es de ninguna cuenta. */
+const ANON_STORAGE_KEY = "propmatch.store.v1:anon";
+/** Quién ya adoptó los datos guardados antes de separar por cuenta (STORAGE_KEY). */
+const LEGACY_CLAIM_KEY = "propmatch.store.v1:claimedBy";
+/** Cada cuenta real guarda sus datos aparte: dos cuentas en el mismo navegador no se mezclan. */
+const userStorageKey = (userId: string) => `${STORAGE_KEY}:${userId}`;
+
+/**
+ * Datos de una cuenta. La primera cuenta que entra después de separar por
+ * cuenta adopta lo que había guardado antes (STORAGE_KEY); las demás arrancan
+ * con su espacio propio.
+ */
+function loadUserData(userId: string): StoreData {
+  const key = userStorageKey(userId);
+  try {
+    if (localStorage.getItem(key) === null) {
+      const legacy = localStorage.getItem(STORAGE_KEY);
+      const claimedBy = localStorage.getItem(LEGACY_CLAIM_KEY);
+      if (legacy !== null && !claimedBy) {
+        localStorage.setItem(key, legacy);
+        localStorage.setItem(LEGACY_CLAIM_KEY, userId);
+      }
+    }
+  } catch {
+    // Storage bloqueado: se trabaja en memoria.
+  }
+  return loadData(key);
+}
 const DEMO_USER_ID = "u-1";
 
 /** Campos de Property que también viven en la app: si cambian, se re-sincroniza. */
@@ -441,7 +469,7 @@ export const isLinkedAgencyId = (id: string) => !id.startsWith(UNLINKED_AGENCY_P
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   // La demo guarda en su propia clave: así sus datos de ejemplo nunca se
   // mezclan con los de una cuenta real en el mismo navegador.
-  const [storageKey, setStorageKey] = useState(() => (isDemoActive() ? DEMO_STORAGE_KEY : STORAGE_KEY));
+  const [storageKey, setStorageKey] = useState(() => (isDemoActive() ? DEMO_STORAGE_KEY : ANON_STORAGE_KEY));
   const storageKeyRef = useRef(storageKey);
   storageKeyRef.current = storageKey;
   const [data, setData] = useState<StoreData>(() => loadData(storageKey));
@@ -485,11 +513,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   /** Busca la agencia del usuario y arma su Profile local si hace falta. */
   const applySession = useCallback(async (userId: string, email: string | null) => {
-    // Al entrar con una cuenta real se vuelve a los datos reales del navegador.
+    // Al entrar con una cuenta real se usan los datos de ESA cuenta en este navegador.
     setDemoFlag(false);
-    if (storageKeyRef.current !== STORAGE_KEY) {
-      setStorageKey(STORAGE_KEY);
-      setData(loadData(STORAGE_KEY));
+    const accountKey = userStorageKey(userId);
+    if (storageKeyRef.current !== accountKey) {
+      setStorageKey(accountKey);
+      setData(loadUserData(userId));
     }
 
     const { data: membership } = await supabase
@@ -946,11 +975,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     void supabase.auth.signOut();
     setAgencyContext(null);
     setCurrentUserId(null);
-    if (storageKeyRef.current === DEMO_STORAGE_KEY) {
-      setDemoFlag(false);
-      setStorageKey(STORAGE_KEY);
-      setData(loadData(STORAGE_KEY));
-    }
+    // Al salir no quedan a la vista los datos de la cuenta (ni de la demo).
+    setDemoFlag(false);
+    setStorageKey(ANON_STORAGE_KEY);
+    setData(loadData(ANON_STORAGE_KEY));
   }, []);
 
   /**
