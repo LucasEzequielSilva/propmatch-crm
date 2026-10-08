@@ -382,6 +382,8 @@ interface StoreValue extends StoreData {
   logActivity: (input: LogActivityInput) => void;
   /** Recalcula las iniciales si cambia el nombre. */
   updateProfile: (id: string, input: ProfileInput) => void;
+  /** Pone en el perfil propio el email de la cuenta de Supabase (tras confirmar un cambio de email). */
+  syncAccountEmail: (email: string) => void;
   addTask: (input: NewTaskInput) => Task;
   toggleTask: (id: string) => void;
   removeTask: (id: string) => void;
@@ -449,6 +451,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * agencia local que no sincroniza con la app hasta que la vinculen.
    */
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  currentUserIdRef.current = currentUserId;
   const [sessionLoading, setSessionLoading] = useState(true);
   /** Cuenta creada que todavía tiene que confirmar el email: el login muestra los pasos que faltan. */
   const [pendingLinkEmail, setPendingLinkEmail] = useState<string | null>(null);
@@ -507,7 +511,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     setData((d) => {
-      if (d.profiles.some((p) => p.id === userId)) return d;
+      const existing = d.profiles.find((p) => p.id === userId);
+      if (existing) {
+        // Si cambió el email de la cuenta (link de confirmación), el perfil lo refleja.
+        if (!email || existing.email === email) return d;
+        return { ...d, profiles: d.profiles.map((p) => (p.id === userId ? { ...p, email } : p)) };
+      }
       const name = email?.split("@")[0] ?? "Agente";
       const newProfile: Profile = {
         id: userId,
@@ -1662,6 +1671,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const syncAccountEmail = useCallback<StoreValue["syncAccountEmail"]>((email) => {
+    const id = currentUserIdRef.current;
+    if (!id) return;
+    setData((d) => {
+      if (!d.profiles.some((p) => p.id === id && p.email !== email)) return d;
+      return { ...d, profiles: d.profiles.map((p) => (p.id === id ? { ...p, email } : p)) };
+    });
+  }, []);
+
   const setOpportunityPriority = useCallback<StoreValue["setOpportunityPriority"]>(
     (id, note) => {
       const nowIso = new Date().toISOString();
@@ -1943,6 +1961,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       patchAppVisitChecklist,
       updateAgency,
       updateProfile,
+      syncAccountEmail,
       logActivity,
       snoozeFollowUp,
       importContacts,
@@ -1998,6 +2017,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     patchAppVisitChecklist,
     updateAgency,
     updateProfile,
+    syncAccountEmail,
     logActivity,
     snoozeFollowUp,
     importContacts,
