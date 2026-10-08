@@ -22,6 +22,7 @@ import {
   classifyForApp,
   externalPhotos,
   failedIds,
+  ineligibleReasons,
   jobProgress,
   planPhotos,
   type CopyPhotosResponse,
@@ -562,6 +563,79 @@ export function UpdateAppPhotos({ fingerprint }: { fingerprint: string }) {
           {busy && <span className="text-xs">Hay una publicación en la app en curso: esperá a que termine.</span>}
           {!access.allowed && access.reason && <span className="text-xs">{access.reason}.</span>}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Fila «App PropMatch» del multipublicador ─────────────────────────── */
+
+/**
+ * La app PropMatch como un canal más de una propiedad. Publica (o actualiza)
+ * SOLO esta propiedad reutilizando el motor de «Publicar todas»: copia de
+ * fotos externas, logo en las fotos si está activo, reintentos.
+ */
+export function AppChannelRow({ propertyId }: { propertyId: string }) {
+  const access = useBulkAccess();
+  const job = useBulkJob(access.agencyId);
+  const { properties, photos } = useStore();
+  const property = properties.find((p) => p.id === propertyId);
+  if (!property) return null;
+
+  const inJob = job && job.ids.includes(propertyId) ? job : null;
+  const result = inJob?.results[propertyId];
+  const working = (inJob?.status === "running" && !result) || property.sync_status === "syncing";
+  const otherJobRunning = !inJob && isRunning();
+  const reasons = property.is_sample ? [] : ineligibleReasons(property, photos[propertyId]);
+  const inApp = !!property.app_property_id && !property.is_sample;
+
+  let line: { text: string; color: string };
+  if (property.is_sample) line = { text: "Es de ejemplo: no se publica", color: "#9CA3AF" };
+  else if (!access.agencyId) line = { text: NOT_LINKED_TEXT, color: "#9CA3AF" };
+  else if (working) line = { text: "Publicando en la app…", color: "#B45309" };
+  else if (result && !result.ok) line = { text: `Error: ${result.reason ?? "no se pudo publicar"}`, color: "#BE123C" };
+  else if (property.sync_status === "error") line = { text: "Error al sincronizar con la app", color: "#BE123C" };
+  else if (inApp) line = { text: "Publicada en la app", color: "#15803D" };
+  else if (reasons.length > 0)
+    line = { text: `No va a la app: ${reasons.map((r: IneligibleReason) => INELIGIBLE_LABEL[r].toLowerCase()).join(", ")}`, color: "#9CA3AF" };
+  else line = { text: "Sin publicar · lista para subir", color: "#9CA3AF" };
+
+  const canAct = access.allowed && !property.is_sample && reasons.length === 0 && !working && !otherJobRunning;
+  const disabledReason = !access.allowed
+    ? access.reason
+    : otherJobRunning
+      ? "Hay una publicación en tanda en curso: esperá a que termine"
+      : null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b" style={{ borderColor: "#F3F0FF" }}>
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 text-sm text-white"
+        style={{ background: "var(--gradient-brand)", fontWeight: 800 }}
+        aria-hidden="true"
+      >
+        PM
+      </div>
+      <div className="min-w-0 flex-1" style={{ minWidth: 160 }}>
+        <p className="text-sm truncate" style={{ color: INK, fontWeight: 700 }}>App PropMatch</p>
+        <p className="text-xs mt-0.5" style={{ color: line.color, fontWeight: 600 }}>{line.text}</p>
+        {property.app_photo_notice && (
+          <p className="text-xs mt-0.5" style={{ color: "#B45309" }}>{property.app_photo_notice}</p>
+        )}
+        {!canAct && disabledReason && !property.is_sample && (
+          <p className="text-xs mt-0.5" style={{ color: MUTED }}>{disabledReason}</p>
+        )}
+      </div>
+      {access.agencyId && !property.is_sample && reasons.length === 0 && (
+        <button
+          type="button"
+          disabled={!canAct}
+          onClick={() => startJob(access.agencyId!, [{ id: property.id, title: property.title || "(sin título)" }])}
+          className="px-3 py-1.5 rounded-lg text-xs border hover:bg-violet-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 700 }}
+        >
+          {working ? "Publicando…" : inApp ? "Actualizar en la app" : "Publicar en la app"}
+        </button>
       )}
     </div>
   );
