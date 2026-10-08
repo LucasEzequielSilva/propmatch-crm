@@ -16,6 +16,7 @@ import {
   StarOutlineIcon,
 } from "@/components/ui/icons";
 import { useStore } from "@/data/store";
+import { AppLeadsSection, useAppLeads } from "./AppLeadsSection";
 import { ZONES } from "@/data/seed";
 import { PROPERTY_TYPE_LABEL, avatarGradient, initials, matchQuality, money, relativeTime } from "@/lib/format";
 import type { Contact, ContactRequirement, Match, Property, PropertyType } from "@/types/db";
@@ -81,6 +82,7 @@ export default function MatchesPage() {
   const navigate = useNavigate();
   const { createOpportunityFromMatch, markMatchReviewed } = useStore();
   const all = useHydratedMatches();
+  const appLeads = useAppLeads();
 
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FilterTab>("todos");
@@ -178,11 +180,19 @@ export default function MatchesPage() {
           </div>
         </div>
 
+        {/* Interesados reales de la app, arriba de los compatibles que calcula el CRM. */}
+        <AppLeadsSection query={query} />
+        {appLeads.length > 0 && (
+          <h2 className="mt-8 px-4 md:px-8 text-base" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+            Compatibles de tu cartera
+          </h2>
+        )}
+
         {filtered.length === 0 ? (
           <div className="px-4 md:px-8">
             <EmptyState
               icon={<MatchesIcon size={24} color="#7C3AED" />}
-              title={all.length === 0 ? "Todavía no hay matches" : "Sin resultados"}
+              title={all.length === 0 ? (appLeads.length > 0 ? "Todavía no hay compatibles calculados" : "Todavía no hay matches") : "Sin resultados"}
               description={
                 all.length === 0
                   ? "Cargá propiedades y qué busca cada contacto: el sistema cruza ambos lados y calcula la compatibilidad solo."
