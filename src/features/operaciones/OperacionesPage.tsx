@@ -40,6 +40,9 @@ export default function OperacionesPage() {
   const preProperty = params.get("propiedad");
   const preContact = params.get("contacto");
   const [creating, setCreating] = useState(Boolean(preProperty || preContact));
+  // Desde «Iniciar desde una oportunidad»: el alta abre con estos datos ya elegidos.
+  // (Pasarlos por la URL no alcanza: el modal se monta antes de que cambien los params.)
+  const [startPick, setStartPick] = useState<{ propertyId: string; contactId: string } | null>(null);
 
   // Accesos directos: oportunidades abiertas (las más avanzadas primero) que
   // todavía no tienen operación. Un clic abre el alta ya completa.
@@ -52,7 +55,7 @@ export default function OperacionesPage() {
   }, [deals, opportunities]);
 
   const startFrom = (o: Opportunity) => {
-    setParams({ propiedad: o.property_id!, contacto: o.contact_id }, { replace: true });
+    setStartPick({ propertyId: o.property_id!, contactId: o.contact_id });
     setCreating(true);
   };
 
@@ -77,7 +80,13 @@ export default function OperacionesPage() {
         title="Operaciones"
         subtitle="Cada venta o alquiler, paso a paso hasta cerrarla."
         search={{ placeholder: "Buscar operación...", value: query, onChange: setQuery }}
-        action={{ label: "Nueva operación", onClick: () => setCreating(true) }}
+        action={{
+          label: "Nueva operación",
+          onClick: () => {
+            setStartPick(null);
+            setCreating(true);
+          },
+        }}
       />
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
@@ -158,10 +167,12 @@ export default function OperacionesPage() {
 
       {creating && (
         <NewDealModal
-          initialPropertyId={preProperty}
-          initialContactId={preContact}
+          key={startPick ? `${startPick.propertyId}:${startPick.contactId}` : "nueva"}
+          initialPropertyId={startPick?.propertyId ?? preProperty}
+          initialContactId={startPick?.contactId ?? preContact}
           onClose={() => {
             setCreating(false);
+            setStartPick(null);
             if (preProperty || preContact) setParams({}, { replace: true });
           }}
           onCreated={(id) => navigate(`/operaciones/${id}`)}
