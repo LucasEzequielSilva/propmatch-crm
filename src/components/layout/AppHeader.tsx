@@ -51,12 +51,13 @@ export function AppHeader({
 
   return (
     // En celular: título + campana/avatar/acción en la primera fila, y buscador
-    // y botones extra en una segunda fila a lo ancho. En escritorio, una fila.
+    // y botones extra en una segunda fila a lo ancho. En pantallas muy anchas (2xl), una fila;
+    // antes, si hay muchos botones, bajan a una segunda fila en vez de aplastar el título.
     <header
-      className="flex flex-wrap md:flex-nowrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-8 py-3 md:py-5 border-b flex-shrink-0"
+      className="flex flex-wrap 2xl:flex-nowrap items-center justify-between gap-x-4 gap-y-3 px-4 md:px-8 py-3 md:py-5 border-b flex-shrink-0"
       style={{ borderColor: "#EDE9FE", backgroundColor: "#FDFCFF" }}
     >
-      <div className="min-w-0 flex-1 md:flex-initial order-1">
+      <div className="min-w-0 md:min-w-[14rem] flex-1 2xl:flex-initial order-1">
         {breadcrumb && breadcrumb.length > 0 && (
           <p className="hidden md:block text-xs mb-1" style={{ color: "#7458C4", fontWeight: 500 }}>
             {breadcrumb.map((crumb, i) => (
@@ -87,13 +88,13 @@ export function AppHeader({
       </div>
 
       {(children || search) && (
-        <div className="order-3 md:order-2 w-full md:w-auto flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 [&>*]:flex-shrink-0">
+        <div className="order-3 2xl:order-2 w-full 2xl:w-auto flex flex-wrap items-center gap-2 md:gap-3 [&>*]:flex-shrink-0">
           {children}
           {search && <HeaderSearch {...search} />}
         </div>
       )}
 
-      <div className="order-2 md:order-3 flex items-center gap-2 md:gap-3 flex-shrink-0">
+      <div className="order-2 2xl:order-3 flex items-center gap-2 md:gap-3 flex-shrink-0">
         {!compact && (
           <>
             <NotificationsMenu />

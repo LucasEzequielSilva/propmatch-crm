@@ -3,6 +3,7 @@ import { WhatsAppIcon } from "@/components/ui/icons";
 import { decodeListing, type SharedListing } from "@/lib/share";
 import { whatsappLink } from "@/lib/whatsapp";
 import { fetchPublishedBrand } from "@/lib/branding";
+import { PhotoLogoOverlay } from "@/features/branding/PhotoLogoOverlay";
 import { OPERATION_LABEL, PROPERTY_TYPE_LABEL, money } from "@/lib/format";
 import { brandCssVars, resolveBrand, type AgencyBrand } from "../../../shared/brand";
 
@@ -178,6 +179,8 @@ export default function FichaPage() {
                   {photo + 1} / {l.photos.length}
                 </span>
               )}
+              {/* Logo sobre la foto: solo visual, también en el PDF. Esquiva el contador. */}
+              <PhotoLogoOverlay logo={brand.photoLogo} context="hero" avoid={l.photos.length > 1 ? ["bottom-right"] : []} />
             </div>
             {l.photos.length > 1 && (
               <div className="px-4 sm:px-0 mt-2 flex gap-2 overflow-x-auto print:hidden">
@@ -270,7 +273,10 @@ export default function FichaPage() {
           {l.photos.length > 1 && (
             <section className="ficha-print-photos hidden mt-7 gap-2" style={{ gridTemplateColumns: "repeat(3, 1fr)" }} aria-hidden="true">
               {l.photos.slice(1, 7).map((url) => (
-                <img key={url} src={url} alt="" style={{ width: "100%", height: "42mm", objectFit: "cover", borderRadius: 4, breakInside: "avoid" }} />
+                <div key={url} style={{ position: "relative", borderRadius: 4, overflow: "hidden", breakInside: "avoid" }}>
+                  <img src={url} alt="" style={{ display: "block", width: "100%", height: "42mm", objectFit: "cover" }} />
+                  <PhotoLogoOverlay logo={brand.photoLogo} />
+                </div>
               ))}
             </section>
           )}

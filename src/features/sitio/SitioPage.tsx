@@ -15,6 +15,8 @@ import {
 } from "../../../shared/publicSite";
 import { useSiteData } from "./useSiteData";
 import { useDocumentMeta } from "./useDocumentMeta";
+import { PhotoLogoOverlay } from "@/features/branding/PhotoLogoOverlay";
+import { resolvePhotoLogo, type ResolvedPhotoLogo } from "../../../shared/brand";
 import { INK, SiteMessage, SiteShell, SOFT, useSiteHref } from "./SiteChrome";
 
 const num = (v: string | null) => {
@@ -56,6 +58,7 @@ export default function SitioPage() {
   const site = state.kind === "ok" ? state.site : null;
 
   const list = useMemo(() => (site ? filterProperties(site.properties, filters) : []), [site, filters]);
+  const photoLogo = useMemo(() => resolvePhotoLogo(site?.agency.brand), [site]);
   const ops = useMemo(() => [...new Set(site?.properties.map((p) => p.operation) ?? [])], [site]);
   const types = useMemo(() => [...new Set(site?.properties.map((p) => p.type) ?? [])], [site]);
 
@@ -125,7 +128,7 @@ export default function SitioPage() {
           <ul className="mt-4 grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((p, i) => (
               <li key={p.id}>
-                <PropertyCard p={p} slug={site.agency.slug} eager={i < 3} notPublished={state.notPublished.has(p.id)} />
+                <PropertyCard p={p} slug={site.agency.slug} eager={i < 3} notPublished={state.notPublished.has(p.id)} photoLogo={photoLogo} />
               </li>
             ))}
           </ul>
@@ -198,7 +201,19 @@ function FilterBar({ value, onChange, ops, types }: { value: SiteFilters; onChan
   );
 }
 
-function PropertyCard({ p, slug, eager, notPublished }: { p: PublicProperty; slug: string; eager: boolean; notPublished: boolean }) {
+function PropertyCard({
+  p,
+  slug,
+  eager,
+  notPublished,
+  photoLogo,
+}: {
+  p: PublicProperty;
+  slug: string;
+  eager: boolean;
+  notPublished: boolean;
+  photoLogo: ResolvedPhotoLogo | null;
+}) {
   const href = useSiteHref();
   return (
     <Link
@@ -222,6 +237,8 @@ function PropertyCard({ p, slug, eager, notPublished }: { p: PublicProperty; slu
             No se publica
           </span>
         )}
+        {/* Logo de la inmobiliaria: capa CSS decorativa, la foto no se toca. */}
+        {p.photos[0] && <PhotoLogoOverlay logo={photoLogo} avoid={notPublished ? ["top-left", "top-right"] : ["top-left"]} />}
       </div>
       <div className="p-4">
         <p className="text-lg" style={{ fontWeight: 800 }}>
