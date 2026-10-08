@@ -343,6 +343,17 @@ interface StoreValue extends StoreData {
    * propiedad que no está en la app, para no subir las mismas fotos dos veces.
    */
   replacePropertyPhotos: (id: string, photos: string[]) => void;
+  /**
+   * uuid de la agencia en la app si la cuenta está vinculada (agency_members);
+   * `null` = modo local, no sincroniza. Lo usa «Publicar todas en la app».
+   */
+  appAgencyId: string | null;
+  /**
+   * «Publicar todas en la app»: crea (o actualiza) la fila en la app con estas
+   * fotos (ya copiadas a property-photos; las `data:` se suben acá). Idempotente:
+   * si ya tiene `app_property_id`, actualiza esa fila. Devuelve el error a mostrar.
+   */
+  publishPropertyToApp: (id: string, appPhotos: string[]) => Promise<{ ok: true } | { ok: false; error: string }>;
   addContact: (input: NewContactInput) => Contact;
   updateContact: (id: string, patch: Partial<Contact>) => void;
   /** Crea o reemplaza la búsqueda activa de un contacto. */
@@ -408,6 +419,18 @@ interface StoreValue extends StoreData {
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
+
+/** Error de Supabase al publicar en la app → texto para la inmobiliaria. */
+function appErrorMessage(err: unknown): string {
+  const e = (err ?? {}) as { code?: string; message?: string };
+  const msg = e.message ?? "";
+  if (e.code === "42501" || /row-level security|permission denied/i.test(msg))
+    return "La app no dio permiso (revisá que tu cuenta siga vinculada a la agencia)";
+  if (e.code === "23514" || /check constraint/i.test(msg)) return "Faltan datos que exige la app (precio según la operación)";
+  if (e.code === "23502" || /null value/i.test(msg)) return "Faltan datos que exige la app";
+  if (/fetch|network|Failed to fetch/i.test(msg)) return "Sin conexión con la app. Reintentá en un rato";
+  return msg ? `La app rechazó la propiedad: ${msg.slice(0, 160)}` : "La app rechazó la propiedad";
+}
 
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -1096,6 +1119,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const replacePropertyPhotos = useCallback<StoreValue["replacePropertyPhotos"]>((id, next) => {
     setData((d) => (d.photos[id] ? { ...d, photos: { ...d.photos, [id]: next } } : d));
+  }, []);
+
+  const publishPropertyToApp = useCallback<StoreValue["publishPropertyToApp"]>(async (id, appPhotos) => {
+    const ctx = agencyContextRef.current;
+    const current = propertiesRef.current.find((p) => p.id === id);
+    if (!ctx) return { ok: false, error: "Tu cuenta todavía no está vinculada a la app PropMatch" };
+    if (!current) return { ok: false, error: "La propiedad ya no existe en el CRM" };
+    // Seguridad: una propiedad de ejemplo nunca llega a la app (base real).
+    if (isSample(current)) return { ok: false, error: "Es un dato de ejemplo: no se publica" };
+    if (!canPublishToApp(current)) return { ok: false, error: "La app solo maneja precios en USD" };
+    const existingAppId = current.app_property_id ?? null;
+    const input = {
+      ...current,
+      // Sin `rooms` (dato viejo) roomsOf usa dormitorios + 1, igual que la elegibilidad.
+      bedrooms: current.bedrooms ?? 0,
+      photos: appPhotos,
+    } as unknown as NewPropertyInput;
+    setData((d) => ({ ...d, properties: d.properties.map((p) => (p.id === id ? { ...p, sync_status: "syncing" } : p)) }));
+    try {
+      const uploaded = await uploadPropertyPhotos(ctx.agencyId, id, appPhotos);
+      const appId = await upsertAppProperty(input, ctx, uploaded, existingAppId);
+      // Las data: subidas recién se reemplazan en el CRM por su URL; el resto queda igual.
+      const swap = new Map(appPhotos.map((u, i) => [u, uploaded[i]]));
+      setData((d) => ({
+        ...d,
+        properties: d.properties.map((p) => (p.id === id ? { ...p, app_property_id: appId, sync_status: "synced" } : p)),
+        photos: d.photos[id] ? { ...d.photos, [id]: d.photos[id].map((u) => (u.startsWith("data:") ? swap.get(u) ?? u : u)) } : d.photos,
+      }));
+      return { ok: true };
+    } catch (err) {
+      console.error("No se pudo publicar la propiedad en la app", err);
+      setData((d) => ({ ...d, properties: d.properties.map((p) => (p.id === id ? { ...p, sync_status: "error" } : p)) }));
+      return { ok: false, error: appErrorMessage(err) };
+    }
   }, []);
 
   const savePropertyEdit = useCallback<StoreValue["savePropertyEdit"]>(
@@ -1944,6 +2001,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateProperty,
       savePropertyEdit,
       replacePropertyPhotos,
+      appAgencyId: agencyContext?.agencyId ?? null,
+      publishPropertyToApp,
       addContact,
       updateContact,
       saveRequirement,
@@ -2000,6 +2059,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     updateProperty,
     savePropertyEdit,
     replacePropertyPhotos,
+    agencyContext,
+    publishPropertyToApp,
     addContact,
     updateContact,
     saveRequirement,
