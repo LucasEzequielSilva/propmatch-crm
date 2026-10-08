@@ -17,7 +17,8 @@
     "test:marketing": "node --test scripts/marketing.test.ts",
     "test:cuenta": "node --test scripts/cuenta.test.ts",
     "test:app-sync": "node --test scripts/appBulkSync.test.ts",
-    "test:marca-agua": "node --test scripts/appWatermark.test.ts"
+    "test:marca-agua": "node --test scripts/appWatermark.test.ts",
+    "test:gcal": "node --test scripts/gcal.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

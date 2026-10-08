@@ -10,6 +10,8 @@ export interface AppVisitsState {
   enabled: boolean;
   loading: boolean;
   error: string | null;
+  /** true después del primer fetch exitoso (antes, `visits` vacío no quiere decir «no hay»). */
+  loaded: boolean;
 }
 
 /**
@@ -22,10 +24,12 @@ export function useAppVisits(): AppVisitsState {
   const [visits, setVisits] = useState<AppVisitRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
       setVisits([]);
+      setLoaded(false);
       return;
     }
     let cancelled = false;
@@ -36,6 +40,7 @@ export function useAppVisits(): AppVisitsState {
         if (cancelled) return;
         setVisits(rows);
         setError(null);
+        setLoaded(true);
       } catch (err) {
         console.error("No se pudieron traer las visitas de la app", err);
         if (!cancelled) setError("No pudimos traer las visitas de la app. Reintentamos en un minuto.");
@@ -51,5 +56,5 @@ export function useAppVisits(): AppVisitsState {
     };
   }, [enabled, agency.id]);
 
-  return { visits, enabled, loading, error };
+  return { visits, enabled, loading, error, loaded };
 }

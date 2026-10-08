@@ -32,6 +32,10 @@
       "destination": "/api/meta?action=:action"
     },
     {
+      "source": "/api/integrations/calendar/:file",
+      "destination": "/api/integrations?action=calendar-feed&file=:file"
+    },
+    {
       "source": "/api/integrations/:action",
       "destination": "/api/integrations?action=:action"
     },

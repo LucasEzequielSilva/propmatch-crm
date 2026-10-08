@@ -331,6 +331,10 @@ export interface CalendarEvent {
   checklist?: VisitChecklist;
   /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
   is_sample?: boolean;
+  /** Último cambio (para «gana el último cambio» con Google Calendar). Sin definir = created_at. */
+  updated_at?: string;
+  /** Id del evento en el Google Calendar del agente (ver src/lib/gcal). */
+  google_event_id?: string | null;
 }
 
 /* ── Agenda: estado y feedback de visitas ─────────────────────────────────── */
@@ -365,6 +369,10 @@ export interface Task {
   created_at: string;
   /** Dato de ejemplo: solo vive en el navegador (ver src/lib/samples.ts). */
   is_sample?: boolean;
+  /** Último cambio. Sin definir = created_at. */
+  updated_at?: string;
+  /** Id del evento (día completo) en el Google Calendar del agente. */
+  google_event_id?: string | null;
 }
 
 /* ── Vistas compuestas que usan las pantallas ─────────────────────────────── */

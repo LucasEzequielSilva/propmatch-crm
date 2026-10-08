@@ -347,10 +347,13 @@ export function firstFreeSlot(
   weekStart: Date,
   now = new Date(),
   minMinutes = 60,
+  /** Ocupados de Google Calendar (con horario). */
+  extraBusy: { start: Date; end: Date }[] = [],
 ): { start: Date; end: Date } | null {
-  const busy = items
-    .filter((i) => i.status !== "cancelada")
-    .map((i) => [i.start.getTime(), i.end.getTime()] as const);
+  const busy = [
+    ...items.filter((i) => i.status !== "cancelada").map((i) => [i.start.getTime(), i.end.getTime()] as const),
+    ...extraBusy.map((b) => [b.start.getTime(), b.end.getTime()] as const),
+  ];
   for (let d = 0; d < 6; d++) {
     const day = addDays(weekStart, d);
     const dayStart = new Date(day);
@@ -375,6 +378,41 @@ function roundUpQuarter(t: number): number {
   const q = 15 * MIN;
   return Math.ceil(t / q) * q;
 }
+
+/* ── «Ocupado» de Google Calendar ─────────────────────────────────────────── */
+
+/** Evento del Google del agente que no es de PropMatch: solo horario (y título si lo eligió). No se guarda en el CRM. */
+export interface BusyBlock {
+  id: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  title: string | null;
+}
+
+const localDate = (d: string) => {
+  const [y, m, day] = d.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, day || 1);
+};
+
+export function toBusyBlocks(rows: { id: string; allDay: boolean; start: string; end: string; title: string | null }[]): BusyBlock[] {
+  return rows.map((r) => ({
+    id: r.id,
+    allDay: r.allDay,
+    title: r.title,
+    start: r.allDay ? localDate(r.start) : new Date(r.start),
+    end: r.allDay ? localDate(r.end) : new Date(r.end),
+  }));
+}
+
+/** ¿El bloque toca ese día? (Los de día completo tienen fin exclusivo.) */
+export function busyOnDay(b: BusyBlock, day: Date): boolean {
+  const s = startOfDay(day).getTime();
+  const e = addDays(startOfDay(day), 1).getTime();
+  return b.start.getTime() < e && b.end.getTime() > s;
+}
+
+export const BUSY_COLORS = { bg: "#F3F4F6", border: "#D1D5DB", text: "#4B5563", stripes: "repeating-linear-gradient(135deg, #F3F4F6 0 6px, #E5E7EB 6px 12px)" };
 
 /* ── KPIs ─────────────────────────────────────────────────────────────────── */
 

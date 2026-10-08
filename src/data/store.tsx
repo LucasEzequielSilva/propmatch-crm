@@ -279,6 +279,15 @@ function pickCrmDetails(input: PropertyCrmDetails): PropertyCrmDetails {
   return out as PropertyCrmDetails;
 }
 
+export type GcalPatch =
+  | {
+      kind: "event";
+      id: string;
+      patch: Partial<Pick<CalendarEvent, "starts_at" | "ends_at" | "status" | "updated_at" | "google_event_id">>;
+    }
+  | { kind: "event"; id: string; remove: true }
+  | { kind: "task"; id: string; patch: Partial<Pick<Task, "due_date" | "updated_at" | "google_event_id">> };
+
 export interface NewEventInput {
   type: EventType;
   title: string;
@@ -410,6 +419,12 @@ interface StoreValue extends StoreData {
   removeEvent: (id: string) => void;
   /** Cambios puntuales de un evento (estado, feedback, checklist). */
   patchEvent: (id: string, patch: Partial<CalendarEvent>) => void;
+  /**
+   * Cambios que vienen de Google Calendar (o el id de Google al sincronizar).
+   * No toca `updated_at` salvo que el patch lo traiga: así el próximo
+   * «gana el último cambio» compara contra la hora de Google.
+   */
+  applyGcalPatches: (patches: GcalPatch[]) => void;
   /** Guarda el feedback de una visita real de la app (solo local). */
   saveAppVisitFeedback: (visitId: string, feedback: VisitFeedback) => void;
   /** Tilda un ítem del checklist de una visita real de la app (solo local). */
@@ -1571,7 +1586,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const updateEvent = useCallback<StoreValue["updateEvent"]>((id, input) => {
     setData((d) => ({
       ...d,
-      events: d.events.map((e) => (e.id === id ? { ...e, ...input } : e)),
+      events: d.events.map((e) => (e.id === id ? { ...e, ...input, updated_at: new Date().toISOString() } : e)),
     }));
   }, []);
 
@@ -1582,8 +1597,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const patchEvent = useCallback<StoreValue["patchEvent"]>((id, patch) => {
     setData((d) => ({
       ...d,
-      events: d.events.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+      events: d.events.map((e) => (e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e)),
     }));
+  }, []);
+
+  const applyGcalPatches = useCallback<StoreValue["applyGcalPatches"]>((patches) => {
+    if (patches.length === 0) return;
+    setData((d) => {
+      let events = d.events;
+      let tasks = d.tasks;
+      for (const p of patches) {
+        if (p.kind === "task") tasks = tasks.map((t) => (t.id === p.id ? { ...t, ...p.patch } : t));
+        else if ("remove" in p) events = events.filter((e) => e.id !== p.id);
+        else events = events.map((e) => (e.id === p.id ? { ...e, ...p.patch } : e));
+      }
+      return { ...d, events, tasks };
+    });
   }, []);
 
   const saveAppVisitFeedback = useCallback<StoreValue["saveAppVisitFeedback"]>((visitId, feedback) => {
@@ -1893,7 +1922,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const toggleTask = useCallback<StoreValue["toggleTask"]>((id) => {
     setData((d) => ({
       ...d,
-      tasks: d.tasks.map((t) => (t.id === id ? { ...t, is_done: !t.is_done } : t)),
+      tasks: d.tasks.map((t) => (t.id === id ? { ...t, is_done: !t.is_done, updated_at: new Date().toISOString() } : t)),
     }));
   }, []);
 
@@ -2065,6 +2094,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateEvent,
       removeEvent,
       patchEvent,
+      applyGcalPatches,
       saveAppVisitFeedback,
       patchAppVisitChecklist,
       updateAgency,
@@ -2123,6 +2153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     updateEvent,
     removeEvent,
     patchEvent,
+    applyGcalPatches,
     saveAppVisitFeedback,
     patchAppVisitChecklist,
     updateAgency,
