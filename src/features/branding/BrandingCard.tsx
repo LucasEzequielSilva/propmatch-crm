@@ -3,6 +3,8 @@ import { Card, SectionHeader } from "@/components/ui/Card";
 import { useStore } from "@/data/store";
 import { agencyPatch, canPublishBrand, fetchPublishedBrand, processLogo, publishBrand } from "@/lib/branding";
 import { PhotoLogoOverlay } from "./PhotoLogoOverlay";
+import { UpdateAppPhotos } from "@/features/appSync/PublishAllToApp";
+import { appWatermarkFor } from "@/lib/appWatermark";
 import {
   DEFAULT_PHOTO_LOGO,
   EMPTY_BRAND,
@@ -16,6 +18,7 @@ import {
   checkContrast,
   isHexColor,
   resolveBrand,
+  appWatermarkFingerprint,
   resolvePhotoLogo,
   sanitizeBrand,
   textOn,
@@ -257,6 +260,8 @@ export function BrandingCard({ onSaved }: { onSaved: (msg: string) => void }) {
           <PhotoLogoSection
             form={form}
             canEdit={canEdit}
+            publishable={publishable}
+            savedAppFingerprint={appWatermarkFingerprint(appWatermarkFor(saved, agency.id))}
             inputRef={photoFileRef}
             inputId={`${id}-photo-logo`}
             onFile={(f) => onLogo(f, "photoLogoUrl")}
@@ -321,6 +326,8 @@ const SAMPLE_PHOTOS = [
 function PhotoLogoSection({
   form,
   canEdit,
+  publishable,
+  savedAppFingerprint,
   inputRef,
   inputId,
   onFile,
@@ -329,6 +336,10 @@ function PhotoLogoSection({
 }: {
   form: AgencyBrand;
   canEdit: boolean;
+  /** Cuenta vinculada a una inmobiliaria real (la marca se publica). */
+  publishable: boolean;
+  /** Huella del logo para la app según la marca GUARDADA (no la del formulario). */
+  savedAppFingerprint: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
   inputId: string;
   onFile: (f: File | undefined) => void;
@@ -339,7 +350,8 @@ function PhotoLogoSection({
   const hasOwn = !!form.photoLogoUrl;
   // La vista previa se ve aunque esté apagado (atenuada), para poder elegir antes de prender.
   const preview = resolvePhotoLogo({ ...form, photoLogo: { ...settings, show: true } });
-  const off = !canEdit || !settings.show;
+  // Esquina, tamaño y fondo valen para lo visual y para las fotos de la app.
+  const off = !canEdit || (!settings.show && !settings.inApp);
   const prevId = useId();
   const chip = "min-h-9 px-3 rounded-lg text-xs border transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
   const chipStyle = (active: boolean): CSSProperties =>
@@ -352,13 +364,37 @@ function PhotoLogoSection({
       <div>
         <p className="text-sm" style={{ color: INK, fontWeight: 700 }}>Logo sobre las fotos</p>
         <p className="text-xs mt-0.5" style={{ color: SOFT }}>
-          Se ve encima de las fotos en el CRM, la ficha para clientes, el PDF y tu web. Las fotos no se modifican: a Mercado Libre y a la app van sin logo.
+          Se ve encima de las fotos en el CRM, la ficha para clientes, el PDF y tu web. Las fotos no se modifican: a Mercado Libre van siempre sin logo.
         </p>
       </div>
       <label className="flex items-center gap-2 text-sm" style={{ color: INK, fontWeight: 600 }}>
         <input type="checkbox" checked={settings.show} disabled={!canEdit} onChange={(e) => onChange({ show: e.target.checked })} />
         Mostrar el logo sobre las fotos
       </label>
+      <div className="grid gap-2">
+        <label className="flex items-start gap-2 text-sm" style={{ color: INK, fontWeight: 600 }}>
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={settings.inApp}
+            disabled={!canEdit}
+            onChange={(e) => onChange({ inApp: e.target.checked })}
+            aria-describedby={`${prevId}-app`}
+          />
+          <span>
+            Poner el logo en las fotos de la app PropMatch
+            <span id={`${prevId}-app`} className="block text-xs mt-0.5" style={{ color: SOFT, fontWeight: 400 }}>
+              Se agrega a una copia de cada foto que va a la app. Las fotos originales y las de Mercado Libre no cambian.
+            </span>
+          </span>
+        </label>
+        {settings.inApp && !publishable && (
+          <p className="text-xs" style={{ color: SOFT }}>
+            Se aplica cuando uses la cuenta de tu inmobiliaria vinculada a la app (con la marca publicada).
+          </p>
+        )}
+        {publishable && <UpdateAppPhotos fingerprint={savedAppFingerprint} />}
+      </div>
 
       <div className="flex items-center gap-4">
         <div
@@ -480,10 +516,10 @@ function PhotoLogoSection({
 
       <div>
         <p id={prevId} className="text-xs mb-2" style={{ color: SOFT, fontWeight: 700 }}>
-          VISTA PREVIA SOBRE FOTOS{settings.show ? "" : " · apagado: todavía no se muestra"}
+          VISTA PREVIA SOBRE FOTOS{settings.show || settings.inApp ? "" : " · apagado: todavía no se muestra"}
         </p>
         {preview ? (
-          <div role="group" aria-labelledby={prevId} className="grid grid-cols-2 gap-3" style={{ opacity: settings.show ? 1 : 0.6 }}>
+          <div role="group" aria-labelledby={prevId} className="grid grid-cols-2 gap-3" style={{ opacity: settings.show || settings.inApp ? 1 : 0.6 }}>
             {SAMPLE_PHOTOS.map((ph) => (
               <figure key={ph.label} className="m-0">
                 <div className="relative rounded-xl overflow-hidden aspect-[4/3]" style={{ background: ph.background }}>

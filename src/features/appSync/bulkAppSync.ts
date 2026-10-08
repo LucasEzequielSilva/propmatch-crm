@@ -18,10 +18,36 @@ import {
   syncOneProperty,
   type BulkItem,
   type BulkJobState,
+  type JobKind,
   type SyncOneDeps,
 } from "../../../shared/appBulkSync";
 
 const KEY = "propmatch.appBulkSync.v1";
+/** Huella del logo con el que están las fotos que ya subieron a la app (por agencia). */
+const APPLIED_KEY = "propmatch.appWatermark.applied.v1";
+
+/**
+ * Con qué logo (huella de `appWatermarkFingerprint`) quedaron las fotos que ya
+ * están en la app. Sin dato = "off": lo publicado antes de esta opción va sin
+ * logo. Si difiere de la marca actual, conviene «Actualizar las fotos en la app».
+ */
+export function appliedFingerprint(agencyId: string): string {
+  try {
+    const all = JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "{}") as Record<string, unknown>;
+    return typeof all[agencyId] === "string" ? (all[agencyId] as string) : "off";
+  } catch {
+    return "off";
+  }
+}
+
+function saveApplied(agencyId: string, fingerprint: string) {
+  try {
+    const all = JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "{}") as Record<string, unknown>;
+    localStorage.setItem(APPLIED_KEY, JSON.stringify({ ...all, [agencyId]: fingerprint }));
+  } catch {
+    // Sin storage solo se pierde el recordatorio de «Actualizar las fotos».
+  }
+}
 /** Propiedades en paralelo (cada una ya copia sus fotos de a varias del lado servidor). */
 export const CONCURRENCY = 2;
 
@@ -114,7 +140,7 @@ async function run() {
         }
         const result = r.ok
           ? r.value.ok
-            ? { ok: true, photoFailures: r.value.photoFailures.length }
+            ? { ok: true, photoFailures: r.value.photoFailures.length, watermarkFailures: r.value.watermarkFailures }
             : { ok: false, reason: r.value.reason, photoFailures: r.value.photoFailures.length }
           : { ok: false, reason: r.error };
         set({ ...state, results: { ...state.results, [id]: result } });
@@ -127,12 +153,17 @@ async function run() {
   if (fatal) set({ ...state, status: "paused", lastError: fatal });
   else if (ctrl.cancelled) set({ ...state, status: "cancelled" });
   else if (state.status !== "paused") set({ ...state, status: pendingIds(state).length ? "paused" : "done" });
+  // «Actualizar las fotos» terminado: las que están en la app quedaron con este logo.
+  if (state.status === "done" && state.kind === "refresh" && state.fingerprint) saveApplied(state.agencyId, state.fingerprint);
 }
 
-/** Arranca un trabajo nuevo con estas propiedades. */
-export function startJob(agencyId: string, items: BulkItem[]) {
+/**
+ * Arranca un trabajo nuevo con estas propiedades: publicar las que faltan
+ * (`publish`) o volver a mandar las fotos de las que ya están (`refresh`).
+ */
+export function startJob(agencyId: string, items: BulkItem[], opts: { kind?: JobKind; fingerprint?: string | null } = {}) {
   if (running) return;
-  set(newJob(agencyId, items));
+  set(newJob(agencyId, items, new Date(), opts));
   void run();
 }
 
