@@ -9,6 +9,9 @@ import { ADAPTERS, PORTAL_IDS, adapterFor } from "./_lib/integrations/registry.j
 import { parseReturnTarget } from "./_lib/integrations/returnTo.js";
 import { meliImportDetails, meliImportLink, meliImportList } from "./_lib/integrations/adapters/mercadolibreImport.js";
 import { parseImportCursor, parseImportLinks, parseItemIds } from "./_lib/integrations/meliRequest.js";
+import { randomUUID } from "node:crypto";
+import { copyPhotos, parseCopyRequest } from "./_lib/photoCopy/core.js";
+import { downloadImage } from "./_lib/photoCopy/download.js";
 
 /**
  * Una sola función para /api/integrations/* (Configuración → Integraciones y
@@ -24,6 +27,9 @@ import { parseImportCursor, parseImportLinks, parseItemIds } from "./_lib/integr
  *   POST import         { portal: "mercadolibre", cursor? }   una página de avisos de la cuenta conectada
  *   POST import-details { portal: "mercadolibre", ids }       detalle con descripción (hasta 20)
  *   POST import-link    { portal: "mercadolibre", links }     vincula propiedades importadas con su aviso
+ *   POST copy-photos    { crmPropertyId, urls }  solo admins: copia fotos externas (hasta 40) al bucket
+ *                       property-photos/<agencia>/<crmPropertyId>/ → { results, skipped }
+ *                       (ver docs/publicar-todas-en-la-app.md)
  *
  * Las URLs registradas en los portales (/api/meli/callback, /api/meli/notifications)
  * no cambian: siguen en api/meli.ts.
@@ -166,6 +172,38 @@ function importAction(kind: "list" | "details" | "link") {
   };
 }
 
+/**
+ * «Publicar todas en la app»: copia las fotos externas (p. ej. las de un Excel
+ * importado) de UNA propiedad al bucket público `property-photos`, en la
+ * carpeta de la agencia del usuario (sale del JWT + agency_members, nunca del
+ * pedido). Del lado servidor porque el navegador no puede leer imágenes de
+ * otro dominio sin CORS. Validaciones anti-SSRF y de tamaño/tipo en
+ * _lib/photoCopy. Lo que no entra en el plazo vuelve en `skipped`.
+ */
+async function copyPhotosAction(req: VercelRequest, res: VercelResponse) {
+  if (!allowMethod(req, res, "POST")) return;
+  try {
+    const ctx = await requireAgencyAdmin(req, res);
+    if (!ctx) return;
+    const parsed = parseCopyRequest(body(req));
+    if (!parsed) return fail(res, 400, "bad_request");
+    const bucket = supabaseAdmin().storage.from("property-photos");
+    const r = await copyPhotos(ctx.agencyId, parsed, {
+      download: downloadImage,
+      upload: async (path, bytes, type) => {
+        const { error } = await bucket.upload(path, bytes, { contentType: type, upsert: false, cacheControl: "31536000" });
+        if (error) throw error;
+        return bucket.getPublicUrl(path).data.publicUrl;
+      },
+      newId: randomUUID,
+      now: Date.now,
+    });
+    json(res, 200, r);
+  } catch {
+    fail(res, 500, "server_error");
+  }
+}
+
 export default routeByAction("integrations", {
   list,
   connect,
@@ -176,4 +214,5 @@ export default routeByAction("integrations", {
   import: importAction("list"),
   "import-details": importAction("details"),
   "import-link": importAction("link"),
+  "copy-photos": copyPhotosAction,
 });
