@@ -21,7 +21,7 @@ alta) vuelvan al CRM y no a la app, el dominio del CRM tiene que estar permitido
 
 - Supabase → **Authentication → URL Configuration → Redirect URLs → Add URL** →
   `https://propmatch-crm-taupe.vercel.app/**`
-- Para probar en local, también `http://localhost:5173/**`.
+- Para probar en local, también `http://localhost:5180/**`.
 - **No cambiar el Site URL**: lo usa la app. Si el destino que pide el CRM no está en la lista,
   Supabase manda al usuario al Site URL (la app) en vez de al CRM.
 
