@@ -28,6 +28,7 @@ import { WebChannelPanel } from "./WebChannelPanel";
 import { SampleBadge, SampleNotice } from "@/components/ui/SampleBadge";
 import { FixList, type Fix, type FixItem } from "./completar/InlineFix";
 import { PublishToPortalsDialog } from "@/features/integraciones/PublishToPortalsDialog";
+import { AppChannelRow } from "@/features/appSync/PublishAllToApp";
 import { FIX_LABEL, editorHref, fixesForCheck, isFieldKey, optionalMissing, shortMissingForCheck, type FixKey, type LinkKey } from "./completar/fields";
 
 const initialsOf = (name: string) =>
@@ -398,6 +399,8 @@ export default function MultipublicadorVivoPage() {
                 </p>
               ) : (
                 <div>
+                  {/* La app PropMatch es un canal más (la demanda propia de PropMatch). */}
+                  <AppChannelRow propertyId={property.id} />
                   {channels.map((ch) => (
                     <ChannelRow
                       key={ch.info.channel}
