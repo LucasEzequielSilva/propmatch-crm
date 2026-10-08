@@ -64,3 +64,7 @@ Respuesta: `{ results: [{ url, ok, publicUrl?, reason? }], skipped: [url] }`.
 ## Pruebas
 
 `npm run test:app-sync` (sin red): elegibilidad, plan y reemplazo de fotos, cola con concurrencia/pausa/cancelar, estado guardado, sync de una propiedad con fakes, guardas anti-SSRF, tipo por bytes y orquestador del servidor.
+
+## Logo en las fotos
+
+Si en *Marca* está prendido «Poner el logo en las fotos de la app PropMatch», cada propiedad sube a la app con copias de sus fotos con el logo quemado (el CRM se queda con las originales). Para poner al día las que ya estaban en la app está «Actualizar las fotos en la app», que usa este mismo motor. Ver [marca-de-agua-app.md](marca-de-agua-app.md).

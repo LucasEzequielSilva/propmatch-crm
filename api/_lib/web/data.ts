@@ -23,6 +23,7 @@ import {
   type PublicProperty,
   type PublicPropertyType,
 } from "../../../shared/publicSite.js";
+import { originalPhotos, photosPublicBase } from "../../../shared/appWatermark.js";
 import { BRAND_BUCKET, brandLogoPrefix, brandObjectPath, decodeBrandPng, sanitizeBrand, type AgencyBrand } from "../../../shared/brand.js";
 
 const PROPERTY_COLUMNS =
@@ -148,7 +149,11 @@ function toPublic(r: PropertyRow, web: { status: string; external_id: string | n
     rooms: r.rooms,
     amenities: (r.amenities ?? []).slice(0, 40),
     area: r.barrio,
-    photos: (r.photos ?? []).filter((u) => /^https:\/\//.test(u)).slice(0, 30),
+    // Si la app tiene copias con el logo quemado, la web muestra las originales
+    // (el logo ya lo pone la capa CSS «Logo sobre las fotos»: así no sale dos veces).
+    photos: originalPhotos(r.photos, photosPublicBase(process.env.SUPABASE_URL ?? ""))
+      .filter((u) => /^https:\/\//.test(u))
+      .slice(0, 30),
     exact: decodeExactGeo(web?.external_id),
     updatedAt: r.updated_at,
   };

@@ -9,8 +9,10 @@ import { ADAPTERS, PORTAL_IDS, adapterFor } from "./_lib/integrations/registry.j
 import { parseReturnTarget } from "./_lib/integrations/returnTo.js";
 import { meliImportDetails, meliImportLink, meliImportList } from "./_lib/integrations/adapters/mercadolibreImport.js";
 import { parseImportCursor, parseImportLinks, parseItemIds } from "./_lib/integrations/meliRequest.js";
-import { randomUUID } from "node:crypto";
-import { copyPhotos, parseCopyRequest } from "./_lib/photoCopy/core.js";
+import { createHash, randomUUID } from "node:crypto";
+import { MAX_IMAGE_BYTES, copyPhotos, parseCopyRequest, sniffImage } from "./_lib/photoCopy/core.js";
+import { env } from "./_lib/env.js";
+import { parseWatermarkRequest, photosPublicBase, watermarkPhotos } from "../shared/appWatermark.js";
 import { downloadImage } from "./_lib/photoCopy/download.js";
 
 /**
@@ -30,6 +32,10 @@ import { downloadImage } from "./_lib/photoCopy/download.js";
  *   POST copy-photos    { crmPropertyId, urls }  solo admins: copia fotos externas (hasta 40) al bucket
  *                       property-photos/<agencia>/<crmPropertyId>/ → { results, skipped }
  *                       (ver docs/publicar-todas-en-la-app.md)
+ *   POST watermark-photos { crmPropertyId, urls, logoUrl, position, size, backdrop }
+ *                       miembros de la agencia: copia con el logo quemado de fotos de la
+ *                       agencia (hasta 12) en property-photos/<agencia>/<crmPropertyId>/app/
+ *                       → { results, skipped } (ver docs/marca-de-agua-app.md)
  *
  * Las URLs registradas en los portales (/api/meli/callback, /api/meli/notifications)
  * no cambian: siguen en api/meli.ts.
@@ -204,6 +210,53 @@ async function copyPhotosAction(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+/**
+ * «Poner el logo en las fotos de la app PropMatch»: genera, para UNA
+ * propiedad, una copia de cada foto con el logo de la inmobiliaria quemado.
+ * Solo lee del bucket (fotos de `<agencia>/…` y logo de `<agencia>/branding/`,
+ * la agencia sale de la sesión): nunca baja nada de internet. Idempotente: si
+ * la copia (mismo hash de foto + logo + opciones) ya existe, no se procesa.
+ * Lo que no entra en el plazo vuelve en `skipped`. Lógica en
+ * shared/appWatermark.ts; el dibujo (sharp) en _lib/photoWatermark/render.ts,
+ * que se carga recién acá para no demorar el arranque de las otras acciones.
+ */
+async function watermarkPhotosAction(req: VercelRequest, res: VercelResponse) {
+  if (!allowMethod(req, res, "POST")) return;
+  try {
+    const ctx = await requireAgencyMember(req, res);
+    if (!ctx) return;
+    const parsed = parseWatermarkRequest(body(req), { publicBase: photosPublicBase(env("SUPABASE_URL")), agencyId: ctx.agencyId });
+    if (!parsed) return fail(res, 400, "bad_request");
+    const { renderWatermark } = await import("./_lib/photoWatermark/render.js");
+    const bucket = supabaseAdmin().storage.from("property-photos");
+    const r = await watermarkPhotos(ctx.agencyId, parsed, {
+      hash: (s) => createHash("sha256").update(s).digest("hex"),
+      listNames: async (folder) => {
+        const { data, error } = await bucket.list(folder, { limit: 1000 });
+        if (error) throw error;
+        return new Set((data ?? []).map((o) => o.name));
+      },
+      download: async (path) => {
+        const { data, error } = await bucket.download(path);
+        if (error || !data) throw error ?? new Error("download");
+        const bytes = new Uint8Array(await data.arrayBuffer());
+        if (bytes.length > MAX_IMAGE_BYTES || !sniffImage(bytes)) throw new Error("not_image");
+        return bytes;
+      },
+      render: renderWatermark,
+      upload: async (path, bytes) => {
+        const { error } = await bucket.upload(path, bytes, { contentType: "image/jpeg", upsert: true, cacheControl: "31536000" });
+        if (error) throw error;
+      },
+      publicUrl: (path) => bucket.getPublicUrl(path).data.publicUrl,
+      now: Date.now,
+    });
+    json(res, 200, r);
+  } catch {
+    fail(res, 500, "server_error");
+  }
+}
+
 export default routeByAction("integrations", {
   list,
   connect,
@@ -215,4 +268,5 @@ export default routeByAction("integrations", {
   "import-details": importAction("details"),
   "import-link": importAction("link"),
   "copy-photos": copyPhotosAction,
+  "watermark-photos": watermarkPhotosAction,
 });

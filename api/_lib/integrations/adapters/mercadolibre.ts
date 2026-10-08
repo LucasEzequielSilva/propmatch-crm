@@ -50,6 +50,7 @@ import { meliOutcome, type MeliActionResponse } from "../meliOutcome.js";
 import { ITEM_ID, filterCrmPhotos, parseListing, parsePrevious, parseTarget, type MeliTarget } from "../meliRequest.js";
 import { buildReturnUrl, parseReturnTarget, type ReturnTarget } from "../returnTo.js";
 import type { AgencyScope, Availability, PortalAdapter, PublishRequest } from "../types.js";
+import { portalPhotosFromAppRow } from "../../../../shared/appWatermark.js";
 
 /* ════════════════════════════ conexión (OAuth + PKCE) ═══════════════════ */
 
@@ -253,12 +254,14 @@ export type MeliAction = (typeof MELI_ACTIONS)[number];
 /** Compatibilidad: la lista blanca de la ficha vive en meliRequest.ts (se prueba sin red). */
 export { parseListing };
 
-/** Fotos de la fila de la app: Storage público del propio proyecto, o fotos que el aviso ya tiene en ML. */
+/**
+ * Fotos de la fila de la app: Storage público del propio proyecto, o fotos que
+ * el aviso ya tiene en ML. Si la app tiene copias con el logo quemado
+ * («Poner el logo en las fotos de la app»), a Mercado Libre van las
+ * ORIGINALES: no acepta logos ni marcas de agua (ver shared/appWatermark.ts).
+ */
 function publicPhotos(photos: unknown, existing: string[] = []): string[] {
-  if (!Array.isArray(photos)) return [];
-  const prefix = `${env("SUPABASE_URL").replace(/\/+$/, "")}/storage/v1/object/public/`;
-  const known = new Set(existing);
-  return photos.filter((u): u is string => typeof u === "string" && (u.startsWith(prefix) || known.has(u)));
+  return portalPhotosFromAppRow(photos, { supabaseUrl: env("SUPABASE_URL"), existing });
 }
 
 /** URLs de las fotos que el aviso ya tiene en Mercado Libre. */

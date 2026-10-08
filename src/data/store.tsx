@@ -58,6 +58,8 @@ import {
 import { CURRENT_USER_ID, seedAgency } from "./seed";
 import { adoptSamples, markLegacySamples, restoreSamples, sampleSlices, SAMPLES_VERSION, stripSamples } from "./samples";
 import { isSample } from "@/lib/samples";
+import { photosBase, photosForApp, watermarkNotice } from "@/lib/appWatermark";
+import { originalPhotos } from "../../shared/appWatermark";
 
 /**
  * Store del frontend.
@@ -381,7 +383,12 @@ interface StoreValue extends StoreData {
    * fotos (ya copiadas a property-photos; las `data:` se suben acá). Idempotente:
    * si ya tiene `app_property_id`, actualiza esa fila. Devuelve el error a mostrar.
    */
-  publishPropertyToApp: (id: string, appPhotos: string[]) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Crea o actualiza la fila en la app con estas fotos (las originales del CRM).
+   * Si está prendido «Poner el logo en las fotos de la app», la app recibe las
+   * copias con logo; `watermarkFailures` = fotos que fueron sin logo.
+   */
+  publishPropertyToApp: (id: string, appPhotos: string[]) => Promise<{ ok: true; watermarkFailures?: number } | { ok: false; error: string }>;
   addContact: (input: NewContactInput) => Contact;
   updateContact: (id: string, patch: Partial<Contact>) => void;
   /** Crea o reemplaza la búsqueda activa de un contacto. */
@@ -684,8 +691,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           });
 
           const newProperties = toAdd.map(toProperty);
+          // Si la app tiene copias con el logo quemado, el CRM guarda las originales.
+          const base = photosBase();
           const newPhotos = Object.fromEntries(
-            toAdd.map((row, i) => [newProperties[i].id, row.photos ?? []]),
+            toAdd.map((row, i) => [newProperties[i].id, originalPhotos(row.photos, base)]),
           );
 
           return {
@@ -993,6 +1002,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   propertiesRef.current = data.properties;
   const photosRef = useRef(data.photos);
   photosRef.current = data.photos;
+  /** Marca de la agencia (para el logo en las fotos de la app). */
+  const brandingRef = useRef(data.agency.branding);
+  brandingRef.current = data.agency.branding;
   const dealsRef = useRef(data.deals);
   dealsRef.current = data.deals;
   const appOffersRef = useRef(data.appOffers);
@@ -1009,11 +1021,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (isSample(propertiesRef.current.find((p) => p.id === localId))) return;
       try {
         const photoUrls = await uploadPropertyPhotos(ctx.agencyId, localId, input.photos);
-        const appId = await upsertAppProperty(input, ctx, photoUrls, existingAppId);
+        // A la app pueden ir copias con el logo quemado; el CRM se queda con las originales.
+        const forApp = await photosForApp(ctx.agencyId, localId, photoUrls, brandingRef.current);
+        const appId = await upsertAppProperty(input, ctx, forApp.photos, existingAppId);
         setData((d) => ({
           ...d,
           properties: d.properties.map((p) =>
-            p.id === localId ? { ...p, app_property_id: appId, sync_status: "synced" } : p,
+            p.id === localId
+              ? { ...p, app_property_id: appId, sync_status: "synced", app_photo_notice: watermarkNotice(forApp.failures.length) }
+              : p,
           ),
           photos: { ...d.photos, [localId]: photoUrls },
         }));
@@ -1167,15 +1183,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => ({ ...d, properties: d.properties.map((p) => (p.id === id ? { ...p, sync_status: "syncing" } : p)) }));
     try {
       const uploaded = await uploadPropertyPhotos(ctx.agencyId, id, appPhotos);
-      const appId = await upsertAppProperty(input, ctx, uploaded, existingAppId);
+      // A la app pueden ir copias con el logo quemado; el CRM se queda con las originales.
+      const forApp = await photosForApp(ctx.agencyId, id, uploaded, brandingRef.current);
+      const appId = await upsertAppProperty(input, ctx, forApp.photos, existingAppId);
       // Las data: subidas recién se reemplazan en el CRM por su URL; el resto queda igual.
       const swap = new Map(appPhotos.map((u, i) => [u, uploaded[i]]));
+      const notice = watermarkNotice(forApp.failures.length);
       setData((d) => ({
         ...d,
-        properties: d.properties.map((p) => (p.id === id ? { ...p, app_property_id: appId, sync_status: "synced" } : p)),
+        properties: d.properties.map((p) =>
+          p.id === id ? { ...p, app_property_id: appId, sync_status: "synced", app_photo_notice: notice } : p,
+        ),
         photos: d.photos[id] ? { ...d.photos, [id]: d.photos[id].map((u) => (u.startsWith("data:") ? swap.get(u) ?? u : u)) } : d.photos,
       }));
-      return { ok: true };
+      return { ok: true, watermarkFailures: forApp.failures.length };
     } catch (err) {
       console.error("No se pudo publicar la propiedad en la app", err);
       setData((d) => ({ ...d, properties: d.properties.map((p) => (p.id === id ? { ...p, sync_status: "error" } : p)) }));

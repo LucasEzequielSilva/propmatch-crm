@@ -16,7 +16,8 @@
     "test:integraciones": "node --test scripts/integraciones.test.ts",
     "test:marketing": "node --test scripts/marketing.test.ts",
     "test:cuenta": "node --test scripts/cuenta.test.ts",
-    "test:app-sync": "node --test scripts/appBulkSync.test.ts"
+    "test:app-sync": "node --test scripts/appBulkSync.test.ts",
+    "test:marca-agua": "node --test scripts/appWatermark.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -26,6 +27,7 @@
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.1",
     "recharts": "^3.10.1",
+    "sharp": "^0.34.5",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

@@ -379,9 +379,10 @@ export function buildMeliItem(
     listing_type_id: listingTypeId,
     condition: "not_specified",
     channels: ["marketplace"],
-    // Fotos originales, SIN el logo de la inmobiliaria: el «logo sobre las
-    // fotos» de la marca es solo una capa CSS del CRM/ficha/web y Mercado Libre
-    // no acepta logos ni marcas de agua en las fotos (ver shared/brand.ts).
+    // Fotos originales, SIN el logo de la inmobiliaria: Mercado Libre no
+    // acepta logos ni marcas de agua. El «logo sobre las fotos» es una capa CSS
+    // y las copias con logo de la app se cambian por su original antes de
+    // llegar acá (portalPhotosFromAppRow, ver shared/appWatermark.ts).
     pictures: pictureUrls.slice(0, MELI_LIMITS.picturesMax).map((source) => ({ source })),
     location: buildLocation(p),
     attributes: buildMeliAttributes(p, allowedAttributes),

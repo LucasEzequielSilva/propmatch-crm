@@ -9,6 +9,7 @@ import { isDemoActive } from "@/lib/demo";
 import type { PortalAuthMethod, PortalId } from "@/lib/integrations/registry";
 import type { PropertyPublication } from "@/types/db";
 import type { ImportedPropertyDraft } from "../../../shared/meliImport";
+import type { AppWatermarkTarget, WatermarkResponse } from "../../../shared/appWatermark";
 
 export type ConnectionState = "connected" | "not_connected" | "error" | "needs_reauth" | "unavailable";
 
@@ -127,6 +128,15 @@ export const integrationsApi = {
     call<{ results: { url: string; ok: boolean; publicUrl?: string; reason?: string }[]; skipped: string[] }>("copy-photos", {
       method: "POST",
       body: { crmPropertyId, urls },
+    }),
+  /**
+   * «Poner el logo en las fotos de la app»: copias con el logo quemado de fotos
+   * de la agencia (hasta 12 por pedido). Ver shared/appWatermark.ts.
+   */
+  watermarkPhotos: (crmPropertyId: string, urls: string[], target: AppWatermarkTarget) =>
+    call<WatermarkResponse>("watermark-photos", {
+      method: "POST",
+      body: { crmPropertyId, urls, logoUrl: target.logoUrl, position: target.position, size: target.size, backdrop: target.backdrop },
     }),
 };
 

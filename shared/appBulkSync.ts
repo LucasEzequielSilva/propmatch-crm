@@ -290,11 +290,27 @@ export interface JobItemResult {
   reason?: string;
   /** Fotos que no se pudieron copiar (la propiedad subió con el resto). */
   photoFailures?: number;
+  /** Fotos que fueron a la app SIN el logo (no se pudo generar la copia con logo). */
+  watermarkFailures?: number;
 }
+
+/**
+ * `publish`: «Publicar todas en la app» (las que todavía no están).
+ * `refresh`: «Actualizar las fotos en la app» (las que ya están: se vuelven a
+ * mandar sus fotos, con o sin logo según la marca actual).
+ */
+export type JobKind = "publish" | "refresh";
 
 export interface BulkJobState {
   version: 1;
   agencyId: string;
+  /** Sin definir = `publish` (trabajos guardados antes de «Actualizar las fotos»). */
+  kind?: JobKind;
+  /**
+   * Solo `refresh`: huella del logo con el que se actualizaron las fotos
+   * (`appWatermarkFingerprint`). Al terminar queda como «aplicada».
+   */
+  fingerprint?: string | null;
   status: JobStatus;
   /** Propiedades a procesar, en orden. */
   ids: string[];
@@ -306,11 +322,18 @@ export interface BulkJobState {
   updatedAt: string;
 }
 
-export function newJob(agencyId: string, items: BulkItem[], now = new Date()): BulkJobState {
+export function newJob(
+  agencyId: string,
+  items: BulkItem[],
+  now = new Date(),
+  opts: { kind?: JobKind; fingerprint?: string | null } = {},
+): BulkJobState {
   const iso = now.toISOString();
   return {
     version: 1,
     agencyId,
+    kind: opts.kind ?? "publish",
+    fingerprint: opts.fingerprint ?? null,
     status: "running",
     ids: items.map((i) => i.id),
     titles: Object.fromEntries(items.map((i) => [i.id, i.title])),
@@ -328,16 +351,18 @@ export function jobProgress(s: BulkJobState) {
   let ok = 0;
   let failed = 0;
   let photoFailures = 0;
+  let watermarkFailures = 0;
   for (const id of s.ids) {
     const r = s.results[id];
     if (!r) continue;
     if (r.ok) ok++;
     else failed++;
     photoFailures += r.photoFailures ?? 0;
+    watermarkFailures += r.watermarkFailures ?? 0;
   }
   const done = ok + failed;
   const total = s.ids.length;
-  return { done, total, ok, failed, photoFailures, pct: total ? Math.round((done / total) * 100) : 100 };
+  return { done, total, ok, failed, photoFailures, watermarkFailures, pct: total ? Math.round((done / total) * 100) : 100 };
 }
 
 /** «Reintentar las fallidas»: vuelven a pendientes, el resto queda como estaba. */
@@ -359,6 +384,8 @@ export function parseJob(raw: string | null): BulkJobState | null {
     return {
       version: 1,
       agencyId: j.agencyId,
+      kind: j.kind === "refresh" ? "refresh" : "publish",
+      fingerprint: typeof j.fingerprint === "string" ? j.fingerprint : null,
       status: ["paused", "interrupted", "cancelled", "done"].includes(status) ? status : "interrupted",
       ids: j.ids,
       titles: j.titles && typeof j.titles === "object" ? j.titles : {},
@@ -392,12 +419,15 @@ export interface SyncOneDeps {
   copyPhotos: (crmPropertyId: string, urls: string[]) => Promise<CopyPhotosResponse>;
   /** Guarda en el CRM las URLs nuevas (en el mismo orden), sin re-sincronizar. */
   replacePhotos: (id: string, photos: string[]) => void;
-  /** Crea (o actualiza, si ya tiene `app_property_id`) la fila en la app con estas fotos. */
-  publish: (id: string, appPhotos: string[]) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Crea (o actualiza, si ya tiene `app_property_id`) la fila en la app con
+   * estas fotos (si la marca lo pide, la app recibe copias con logo).
+   */
+  publish: (id: string, appPhotos: string[]) => Promise<{ ok: true; watermarkFailures?: number } | { ok: false; error: string }>;
 }
 
 export type SyncOneResult =
-  | { ok: true; photoFailures: { url: string; reason: string }[] }
+  | { ok: true; photoFailures: { url: string; reason: string }[]; watermarkFailures: number }
   | { ok: false; reason: string; photoFailures: { url: string; reason: string }[]; fatal?: boolean };
 
 /** Errores que frenan TODO el trabajo (no tiene sentido seguir con las demás). */
@@ -438,7 +468,7 @@ export async function syncOneProperty(id: string, deps: SyncOneDeps): Promise<Sy
     }
     const pub = await deps.publish(id, appPhotos);
     if (!pub.ok) return { ok: false, reason: pub.error, photoFailures };
-    return { ok: true, photoFailures };
+    return { ok: true, photoFailures, watermarkFailures: pub.watermarkFailures ?? 0 };
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : "Error inesperado", photoFailures };
   }

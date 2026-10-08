@@ -237,7 +237,7 @@ export function ChannelsPanel({
     else if (!usd) app = { label: "No se puede publicar", tone: "wait", detail: "La app solo acepta precios en USD." };
     else if (saved?.sync_status === "synced")
       app = saved.status === "disponible"
-        ? { label: "Publicada", tone: "ok" }
+        ? { label: "Publicada", tone: "ok", detail: saved.app_photo_notice ?? undefined }
         : { label: "Pausada en la app", tone: "off", detail: "Solo las disponibles se ven en la app." };
     else if (saved?.sync_status === "syncing") app = { label: "Sincronizando", tone: "wait" };
     else if (saved?.sync_status === "error") app = { label: "Error", tone: "error", detail: "Falló la última sincronización. Se reintenta al guardar." };

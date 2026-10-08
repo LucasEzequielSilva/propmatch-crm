@@ -250,7 +250,7 @@ export default function PropiedadDetallePage() {
                 >
                   <StarIcon size={15} color={property.is_featured ? "white" : "#9CA3AF"} />
                 </button>
-                {/* Solo visual (CSS): la foto que va a Mercado Libre y a la app sigue sin logo. */}
+                {/* Solo visual (CSS): la foto que va a Mercado Libre sigue sin logo (a la app, solo si se prende el logo en las fotos de la app). */}
                 {cover && <PhotoLogoOverlay logo={photoLogo} context="hero" avoid={["top-left", "top-right"]} />}
               </div>
 

@@ -8,6 +8,9 @@
  *  - <AppPropMatchCard/>: tarjeta «App PropMatch» de Configuración → Integraciones.
  *  - <BulkAppSyncHost/>: montado en el layout; mantiene vivas las dependencias
  *    del trabajo, muestra el progreso flotante y el diálogo.
+ *  - <UpdateAppPhotos/>: «Actualizar las fotos en la app» (Marca → Logo sobre
+ *    las fotos): vuelve a mandar las fotos de las propiedades que ya están en
+ *    la app, con el mismo motor en tandas. Ver docs/marca-de-agua-app.md.
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Card } from "@/components/ui/Card";
@@ -25,6 +28,7 @@ import {
   type IneligibleReason,
 } from "../../../shared/appBulkSync";
 import {
+  appliedFingerprint,
   cancelJob,
   clearJob,
   isRunning,
@@ -130,7 +134,14 @@ export function BulkAppSyncHost() {
             style={{ background: job.status === "running" ? VIOLET : "#F59E0B" }}
             aria-hidden="true"
           />
-          {job.status === "running" ? "Publicando en la app" : "Publicación en la app en pausa"} · {p.done}/{p.total}
+          {job.kind === "refresh"
+            ? job.status === "running"
+              ? "Actualizando fotos en la app"
+              : "Actualización de fotos en pausa"
+            : job.status === "running"
+              ? "Publicando en la app"
+              : "Publicación en la app en pausa"}{" "}
+          · {p.done}/{p.total}
         </button>
       )}
       {open && <PublishAllDialog onClose={() => setDialogOpen(false)} />}
@@ -210,6 +221,7 @@ export function AppPropMatchCard() {
 function PublishAllDialog({ onClose }: { onClose: () => void }) {
   const access = useBulkAccess();
   const job = useBulkJob(access.agencyId);
+  const refresh = job?.kind === "refresh";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -234,10 +246,12 @@ function PublishAllDialog({ onClose }: { onClose: () => void }) {
         <div className="px-6 py-5 border-b flex items-center gap-3" style={{ borderColor: "#EDE9FE", background: "#FDFCFF" }}>
           <div className="flex-1 min-w-0">
             <p id="publish-all-h" className="text-lg tracking-tight" style={{ color: INK, fontWeight: 800 }}>
-              Publicar todas en la app PropMatch
+              {refresh ? "Actualizar las fotos en la app PropMatch" : "Publicar todas en la app PropMatch"}
             </p>
             <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
-              Sube en tandas las propiedades del CRM que todavía no están en la app.
+              {refresh
+                ? "Vuelve a mandar, en tandas, las fotos de las propiedades que ya están en la app, con el logo como está configurado ahora."
+                : "Sube en tandas las propiedades del CRM que todavía no están en la app."}
             </p>
           </div>
           <button
@@ -367,6 +381,14 @@ function Summary({ agencyId }: { agencyId: string }) {
   );
 }
 
+const REFRESH_STATUS_TEXT = {
+  running: "Actualizando las fotos…",
+  paused: "En pausa",
+  interrupted: "Se interrumpió (se recargó o cerró la página). Podés retomarla desde donde quedó.",
+  cancelled: "Cancelada. Las que ya se actualizaron quedan así en la app.",
+  done: "¡Listo! Las fotos de la app quedaron al día.",
+} as const;
+
 const STATUS_TEXT = {
   running: "Publicando…",
   paused: "En pausa",
@@ -382,6 +404,7 @@ function JobProgress() {
   const p = jobProgress(job);
   const failed = failedIds(job);
   const finished = job.status === "done" || job.status === "cancelled";
+  const refresh = job.kind === "refresh";
   const btn = "inline-flex items-center min-h-[44px] px-4 rounded-xl text-sm border hover:bg-violet-50";
   const btnStyle = { borderColor: "#EDE9FE", color: VIOLET, fontWeight: 600, background: "white" } as const;
 
@@ -390,7 +413,7 @@ function JobProgress() {
       <div>
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-sm" style={{ color: INK, fontWeight: 700 }} role="status" aria-live="polite">
-            {STATUS_TEXT[job.status]}
+            {(refresh ? REFRESH_STATUS_TEXT : STATUS_TEXT)[job.status]}
           </p>
           <p className="text-sm tabular-nums" style={{ color: INK, fontWeight: 700 }}>
             {p.done}/{p.total}
@@ -408,7 +431,9 @@ function JobProgress() {
           <div className="h-full transition-all" style={{ width: `${p.pct}%`, background: "var(--gradient-brand)" }} />
         </div>
         <p className="mt-2 text-xs" style={{ color: MUTED }}>
-          {p.ok} subidas · {p.failed} fallidas{p.photoFailures > 0 ? ` · ${p.photoFailures} fotos no se pudieron copiar` : ""}
+          {p.ok} {refresh ? "actualizadas" : "subidas"} · {p.failed} fallidas
+          {p.photoFailures > 0 ? ` · ${p.photoFailures} fotos no se pudieron copiar` : ""}
+          {p.watermarkFailures > 0 ? ` · ${p.watermarkFailures} fotos fueron sin el logo` : ""}
         </p>
       </div>
 
@@ -452,14 +477,14 @@ function JobProgress() {
           </button>
         )}
         {finished && (
-          <button type="button" className={btn} style={btnStyle} onClick={clearJob}>Nueva publicación</button>
+          <button type="button" className={btn} style={btnStyle} onClick={clearJob}>{refresh ? "Listo" : "Nueva publicación"}</button>
         )}
       </div>
 
       {failed.length > 0 && (
         <details className="rounded-xl border px-4 py-3" style={{ borderColor: "#FECDD3" }} open={finished}>
           <summary className="text-sm cursor-pointer" style={{ color: "#BE123C", fontWeight: 700 }}>
-            {failed.length} no se pudieron subir
+            {failed.length} no se pudieron {refresh ? "actualizar" : "subir"}
           </summary>
           <ul className="mt-2 text-xs space-y-1 max-h-60 overflow-y-auto" style={{ color: MUTED }}>
             {failed.slice(0, 500).map((id) => (
@@ -476,6 +501,68 @@ function JobProgress() {
           Las fotos que no se pudieron copiar no se mandaron a la app (la propiedad subió con el resto) y siguen en el CRM con su dirección original.
         </p>
       )}
+
+      {p.watermarkFailures > 0 && (
+        <p className="text-xs" style={{ color: MUTED }}>
+          A las fotos que fueron sin el logo no se les pudo generar la copia: en la app se ve la original. Podés volver a intentarlo con «Actualizar las
+          fotos en la app» (en Configuración → Marca).
+        </p>
+      )}
     </>
+  );
+}
+
+/* ── «Actualizar las fotos en la app» ─────────────────────────────────── */
+
+/**
+ * Vuelve a mandar las fotos de las propiedades que YA están en la app (con o
+ * sin logo, según la marca guardada). Se destaca cuando la marca cambió desde
+ * la última actualización (`fingerprint` = huella de la marca guardada).
+ */
+export function UpdateAppPhotos({ fingerprint }: { fingerprint: string }) {
+  const access = useBulkAccess();
+  const { properties, photos } = useStore();
+  const job = useBulkJob(access.agencyId);
+  const synced = useMemo(() => classifyForApp(properties, photos).synced, [properties, photos]);
+  if (!access.agencyId) return null;
+  const pending = appliedFingerprint(access.agencyId) !== fingerprint;
+  const busy = isRunning() || (!!job && (job.status === "running" || job.status === "paused" || job.status === "interrupted"));
+  const n = synced.length;
+  const warn = pending && n > 0;
+  const before = n === 1 ? "la propiedad que ya está en la app sigue" : `las ${n} propiedades que ya están en la app siguen`;
+  const upToDate = n === 1 ? "la propiedad que está" : `las ${n} propiedades que están`;
+
+  return (
+    <div
+      className="rounded-xl px-4 py-3 grid gap-2"
+      style={{ background: warn ? "#FFFBEB" : "#F9FAFB", color: warn ? "#92400E" : "#374151" }}
+      role={warn ? "note" : undefined}
+    >
+      <p className="text-xs">
+        {n === 0
+          ? "Todavía no hay propiedades en la app: las que publiques desde ahora ya salen con esta configuración."
+          : pending
+            ? `Cambió el logo o esta opción desde la última vez: ${before} con las fotos de antes. Guardá la marca y actualizalas.`
+            : `Las fotos de ${upToDate} en la app ya tienen esta configuración. Las que publiques o edites desde ahora también.`}
+      </p>
+      {n > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!access.allowed || busy}
+            onClick={() => {
+              startJob(access.agencyId!, synced, { kind: "refresh", fingerprint });
+              setDialogOpen(true);
+            }}
+            className="min-h-9 px-3 rounded-lg text-xs border bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+          >
+            Actualizar las fotos en la app
+          </button>
+          {busy && <span className="text-xs">Hay una publicación en la app en curso: esperá a que termine.</span>}
+          {!access.allowed && access.reason && <span className="text-xs">{access.reason}.</span>}
+        </div>
+      )}
+    </div>
   );
 }
