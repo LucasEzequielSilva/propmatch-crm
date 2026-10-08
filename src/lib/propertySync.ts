@@ -13,6 +13,7 @@
  */
 
 import { supabase } from "./supabase";
+import { isRoomlessType } from "../../shared/appBulkSync";
 import type { CurrencyCode, OperationType, PropertyStatus, PropertyType } from "@/types/db";
 import type { NewPropertyInput } from "@/data/store";
 
@@ -91,7 +92,9 @@ export function canPublishToApp(input: { currency: CurrencyCode; is_sample?: boo
  * "no sé"), manda eso; si no vinieron (importador, datos viejos), se usa la
  * regla de siempre: dormitorios + 1 (estar).
  */
-export function roomsOf(input: { rooms?: number | null; bedrooms: number }): number | null {
+export function roomsOf(input: { rooms?: number | null; bedrooms: number; type?: string }): number | null {
+  // Terreno, local u oficina sin dato de ambientes: 0 (no aplica), igual que «Publicar todas».
+  if ((input.rooms === null || input.rooms === undefined) && isRoomlessType(input.type) && !input.bedrooms) return 0;
   return input.rooms !== undefined ? input.rooms : input.bedrooms + 1;
 }
 

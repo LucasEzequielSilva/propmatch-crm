@@ -15,6 +15,7 @@ import {
   externalPhotos,
   failedIds,
   ineligibleReasons,
+  bulkRoomsOf,
   jobProgress,
   newJob,
   parseJob,
@@ -449,4 +450,15 @@ test("«Actualizar las fotos en la app»: el trabajo recuerda su tipo y el logo,
   assert.equal(r.ok && r.watermarkFailures, 1);
   const done = { ...job, results: { p1: { ok: true, watermarkFailures: 1 } } };
   assert.equal(jobProgress(done).watermarkFailures, 1);
+});
+
+test("elegibilidad: terreno, local u oficina sin ambientes van con 0", () => {
+  for (const type of ["terreno", "local", "oficina"]) {
+    assert.deepEqual(ineligibleReasons(base({ type, rooms: null, bedrooms: null }), [EXT(1)]), []);
+    assert.equal(bulkRoomsOf({ type, rooms: null, bedrooms: null }), 0);
+  }
+  // Una casa o un departamento sin ambientes siguen sin poder subir.
+  assert.deepEqual(ineligibleReasons(base({ type: "casa", rooms: null, bedrooms: null }), [EXT(1)]), ["no_rooms"]);
+  // Con dato, se respeta.
+  assert.equal(bulkRoomsOf({ type: "oficina", rooms: 3, bedrooms: null }), 3);
 });
