@@ -62,18 +62,19 @@ export interface AgencyBrand {
 
 /* ── Logo sobre las fotos ────────────────────────────────────────────────── */
 /*
- * SOLO VISUAL: el logo se dibuja como una capa CSS encima de la foto (en el
- * CRM, la ficha para clientes, su PDF y la web pública). Los archivos de las
- * fotos NO se tocan, así que lo que viaja a Mercado Libre, a la app PropMatch
- * o al Estudio de Instagram es la foto original, sin logo.
+ * VISUAL (`show`): el logo se dibuja como una capa CSS encima de la foto (en
+ * el CRM, la ficha para clientes, su PDF y la web pública). Los archivos de
+ * las fotos NO se tocan.
  *
- * Por qué no se "quema" en la foto: Mercado Libre pide fotos sin logos,
- * marcas de agua ni datos de contacto sobreimpresos y puede bajar la
- * calidad de la publicación o pausarla; además la app PropMatch muestra las
- * fotos de varias inmobiliarias y conviene que salgan limpias.
- * PENDIENTE (si algún día se quiere): exportar fotos con marca de agua real
- * para canales que lo permitan (web propia, redes), como opción aparte y
- * nunca para Mercado Libre.
+ * EN LA APP (`inApp`, apagado por defecto): el servidor genera una COPIA de
+ * cada foto que va a la app PropMatch con el logo quemado (misma versión para
+ * fotos, esquina, tamaño y fondo) y la app recibe esas copias. Las originales
+ * siguen en el CRM y son las que van a Mercado Libre y al resto de los
+ * portales. Ver shared/appWatermark.ts y docs/marca-de-agua-app.md.
+ *
+ * Por qué nunca a Mercado Libre: pide fotos sin logos, marcas de agua ni
+ * datos de contacto sobreimpresos y puede bajar la calidad de la publicación
+ * o pausarla.
  */
 
 export const PHOTO_LOGO_POSITIONS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
@@ -86,6 +87,8 @@ export type PhotoLogoBackdrop = (typeof PHOTO_LOGO_BACKDROPS)[number];
 
 export interface PhotoLogoSettings {
   show: boolean;
+  /** Quemar el logo en una copia de cada foto que va a la app PropMatch. */
+  inApp: boolean;
   position: PhotoLogoPosition;
   size: PhotoLogoSize;
   backdrop: PhotoLogoBackdrop;
@@ -102,7 +105,7 @@ export const PHOTO_LOGO_POSITION_LABEL: Record<PhotoLogoPosition, string> = {
  * Abajo a la derecha por defecto: arriba van el estado, la operación y la
  * estrella, y abajo a la izquierda «Publicada hace…» (tarjetas del CRM).
  */
-export const DEFAULT_PHOTO_LOGO: PhotoLogoSettings = { show: false, position: "bottom-right", size: "sm", backdrop: "shadow" };
+export const DEFAULT_PHOTO_LOGO: PhotoLogoSettings = { show: false, inApp: false, position: "bottom-right", size: "sm", backdrop: "shadow" };
 
 const oneOf = <T extends string>(list: readonly T[], v: unknown, fallback: T): T => (list.includes(v as T) ? (v as T) : fallback);
 
@@ -110,6 +113,7 @@ export function sanitizePhotoLogo(input: unknown): PhotoLogoSettings {
   const o = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   return {
     show: o.show === true,
+    inApp: o.inApp === true,
     position: oneOf(PHOTO_LOGO_POSITIONS, o.position, DEFAULT_PHOTO_LOGO.position),
     size: oneOf(PHOTO_LOGO_SIZES, o.size, DEFAULT_PHOTO_LOGO.size),
     backdrop: oneOf(PHOTO_LOGO_BACKDROPS, o.backdrop, DEFAULT_PHOTO_LOGO.backdrop),
@@ -142,6 +146,43 @@ export function resolvePhotoLogo(brand: Partial<AgencyBrand> | null | undefined)
   const src = own ?? main;
   if (!src) return null;
   return { src, position: s.position, size: s.size, backdrop: own ? s.backdrop : "light", usesMainLogo: !own };
+}
+
+/** Logo para quemar en las fotos de la app PropMatch (ver shared/appWatermark.ts). */
+export interface AppWatermarkConfig {
+  /** URL https pública del logo, dentro de `<agency_id>/branding/`. */
+  logoUrl: string;
+  position: PhotoLogoPosition;
+  size: PhotoLogoSize;
+  backdrop: PhotoLogoBackdrop;
+}
+
+/**
+ * Qué logo se quema en las fotos de la app y cómo. `null` si la opción está
+ * apagada o el logo todavía no está publicado (data URL: solo local). Si se
+ * pasa `logoPrefix`, el logo tiene que estar dentro (la carpeta de la agencia).
+ * Mismas reglas que `resolvePhotoLogo`: sin versión para fotos se usa el logo
+ * principal sobre placa clara. No depende de `show` (lo visual en el CRM).
+ */
+export function resolveAppWatermark(brand: Partial<AgencyBrand> | null | undefined, logoPrefix?: string): AppWatermarkConfig | null {
+  if (!brand) return null;
+  const s = sanitizePhotoLogo(brand.photoLogo);
+  if (!s.inApp) return null;
+  const https = (v: unknown): string | null =>
+    typeof v === "string" && /^https:\/\/[^\s"'<>]+$/i.test(v) && v.length <= 500 && (!logoPrefix || v.startsWith(logoPrefix)) ? v : null;
+  const own = https(brand.photoLogoUrl);
+  const main = https(brand.logoUrl);
+  const logoUrl = own ?? main;
+  if (!logoUrl) return null;
+  return { logoUrl, position: s.position, size: s.size, backdrop: own ? s.backdrop : "light" };
+}
+
+/**
+ * Huella de la configuración que se quema (o "off"): si cambia, las fotos que
+ * ya están en la app quedaron con otra marca y conviene actualizarlas.
+ */
+export function appWatermarkFingerprint(c: AppWatermarkConfig | null): string {
+  return c ? `v1|${c.logoUrl}|${c.position}|${c.size}|${c.backdrop}` : "off";
 }
 
 /**

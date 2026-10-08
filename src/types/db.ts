@@ -215,6 +215,8 @@ export interface Property extends PropertyCrmDetails {
   app_property_id?: string | null;
   /** Estado de la sincronización con la app. Sin definir = todavía no se intentó. */
   sync_status?: "not_publishable" | "synced" | "syncing" | "error";
+  /** Aviso de la última publicación en la app (p. ej. fotos que fueron sin el logo). `null`/sin definir = nada. */
+  app_photo_notice?: string | null;
   /** La agencia tiene las llaves de la propiedad. Sin definir = no se cargó. */
   keys_custody?: boolean;
   /**

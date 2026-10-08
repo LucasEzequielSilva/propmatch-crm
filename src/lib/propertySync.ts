@@ -110,9 +110,10 @@ export function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
  * `{agencyId}/{propertyId}/...` — la policy de Storage habilita esa carpeta
  * para cualquier miembro de la agencia, no solo para el owner_id de la fila.
  * Las que ya son una URL (sincronizadas antes) se dejan igual.
- * Se suben tal cual, sin el logo de la inmobiliaria: el «logo sobre las
- * fotos» es solo visual (CSS) y la app PropMatch recibe la foto limpia (ver
- * shared/brand.ts).
+ * Se suben tal cual, sin el logo de la inmobiliaria: son las ORIGINALES que
+ * guarda el CRM. Si está prendido «Poner el logo en las fotos de la app», la
+ * app recibe después copias con logo (src/lib/appWatermark.ts y
+ * shared/appWatermark.ts); estas originales no se tocan.
  */
 export async function uploadPropertyPhotos(
   agencyId: string,

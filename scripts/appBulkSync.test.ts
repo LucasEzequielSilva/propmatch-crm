@@ -190,7 +190,7 @@ test("estado del trabajo: progreso, pendientes, reintento y lectura defensiva", 
   s.results.b = { ok: false, reason: "falló" };
   assert.deepEqual(pendingIds(s), ["c"]);
   assert.deepEqual(failedIds(s), ["b"]);
-  assert.deepEqual(jobProgress(s), { done: 2, total: 3, ok: 1, failed: 1, photoFailures: 1, pct: 67 });
+  assert.deepEqual(jobProgress(s), { done: 2, total: 3, ok: 1, failed: 1, photoFailures: 1, watermarkFailures: 0, pct: 67 });
   s = retryFailed(s);
   assert.deepEqual(pendingIds(s), ["b", "c"]);
   assert.equal(s.status, "running");
@@ -422,4 +422,31 @@ test("copyPhotos: lo que no entra en el plazo vuelve como `skipped`; una subida 
 
 test("tope de tamaño por imagen: 10 MB", () => {
   assert.equal(MAX_IMAGE_BYTES, 10 * 1024 * 1024);
+});
+
+test("«Actualizar las fotos en la app»: el trabajo recuerda su tipo y el logo, y cuenta las fotos sin logo", async () => {
+  const job = newJob("ag", [{ id: "p1", title: "Casa" }], new Date("2026-10-08T00:00:00Z"), { kind: "refresh", fingerprint: "v1|logo" });
+  const back = parseJob(JSON.stringify(job))!;
+  assert.equal(back.kind, "refresh");
+  assert.equal(back.fingerprint, "v1|logo");
+  // Trabajos guardados antes de esta opción: son de «Publicar todas».
+  const old = parseJob(JSON.stringify({ ...job, kind: undefined, fingerprint: undefined }))!;
+  assert.equal(old.kind, "publish");
+  assert.equal(old.fingerprint, null);
+
+  const own = "https://x.supabase.co/storage/v1/object/public/property-photos/ag/";
+  const r = await syncOneProperty("p1", {
+    ownPrefix: own,
+    photosOf: () => [`${own}p1/a.jpg`, `${own}p1/b.jpg`],
+    copyPhotos: async () => ({ ok: true, results: [], skipped: [] }),
+    replacePhotos: () => {},
+    publish: async (_id, photos) => {
+      assert.deepEqual(photos, [`${own}p1/a.jpg`, `${own}p1/b.jpg`], "a publish le llegan las originales");
+      return { ok: true, watermarkFailures: 1 };
+    },
+  });
+  assert.ok(r.ok);
+  assert.equal(r.ok && r.watermarkFailures, 1);
+  const done = { ...job, results: { p1: { ok: true, watermarkFailures: 1 } } };
+  assert.equal(jobProgress(done).watermarkFailures, 1);
 });

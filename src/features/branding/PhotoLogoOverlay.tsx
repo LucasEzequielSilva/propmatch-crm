@@ -5,8 +5,10 @@ import { photoLogoCorner, type PhotoLogoPosition, type PhotoLogoSize, type Resol
  * Logo de la inmobiliaria SOBRE una foto, como capa CSS.
  *
  * Es solo visual: no modifica el archivo de la foto. Lo que se manda a
- * Mercado Libre (que no acepta logos ni marcas de agua en las fotos) y a la
- * app PropMatch es siempre la foto original. Ver «Logo sobre las fotos» en
+ * Mercado Libre (que no acepta logos ni marcas de agua en las fotos) es
+ * siempre la foto original. A la app PropMatch también, salvo que esté
+ * prendido «Poner el logo en las fotos de la app»: ahí van copias con el logo
+ * quemado (ver shared/appWatermark.ts). Ver «Logo sobre las fotos» en
  * shared/brand.ts.
  *
  * Va dentro de un contenedor `position: relative`. Es decorativo
