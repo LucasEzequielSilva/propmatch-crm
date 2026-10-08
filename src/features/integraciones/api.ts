@@ -122,6 +122,12 @@ export const integrationsApi = {
   /** Vincula propiedades del CRM con su aviso (hasta 20). */
   meliImportLink: (links: { crmPropertyId: string; externalId: string; propertyId: string | null }[]) =>
     call<{ results: ImportLinkResult[] }>("import-link", { method: "POST", body: { portal: "mercadolibre", links } }),
+  /** «Publicar todas en la app»: copia fotos externas de UNA propiedad al bucket de PropMatch (solo admins). */
+  copyPhotos: (crmPropertyId: string, urls: string[]) =>
+    call<{ results: { url: string; ok: boolean; publicUrl?: string; reason?: string }[]; skipped: string[] }>("copy-photos", {
+      method: "POST",
+      body: { crmPropertyId, urls },
+    }),
 };
 
 export interface ImportCursor {
