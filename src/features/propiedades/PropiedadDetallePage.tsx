@@ -32,6 +32,8 @@ import { ownerReport } from "@/lib/ownerReport";
 import { WhatsAppIcon } from "@/components/ui/icons";
 import { DiagnosticoSection } from "./diagnostico/DiagnosticoSection";
 import { PublishToPortalsDialog } from "@/features/integraciones/PublishToPortalsDialog";
+import { useAgencyBrand } from "@/lib/branding";
+import { PhotoLogoOverlay } from "@/features/branding/PhotoLogoOverlay";
 
 const OPERATION_LABEL: Record<string, string> = {
   venta: "Venta",
@@ -80,6 +82,7 @@ export default function PropiedadDetallePage() {
     : publications.filter((c) => c.info.channel !== "web" && c.status === "published").length;
 
   const gallery = property ? (photos[property.id] ?? []) : [];
+  const { photoLogo } = useAgencyBrand();
 
   const propertyMatches = useMemo(
     () => (property ? matches.filter((m) => m.property_id === property.id) : []),
@@ -247,6 +250,8 @@ export default function PropiedadDetallePage() {
                 >
                   <StarIcon size={15} color={property.is_featured ? "white" : "#9CA3AF"} />
                 </button>
+                {/* Solo visual (CSS): la foto que va a Mercado Libre y a la app sigue sin logo. */}
+                {cover && <PhotoLogoOverlay logo={photoLogo} context="hero" avoid={["top-left", "top-right"]} />}
               </div>
 
               {gallery.length > 1 && (

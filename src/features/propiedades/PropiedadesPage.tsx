@@ -19,6 +19,8 @@ import { useStore, isLinkedAgencyId } from "@/data/store";
 import { MeliImportButton } from "@/features/integraciones/MeliImportDialog";
 import { PublishAllToAppButton } from "@/features/appSync/PublishAllToApp";
 import { ZONES } from "@/data/seed";
+import { useAgencyBrand } from "@/lib/branding";
+import { PhotoLogoOverlay } from "@/features/branding/PhotoLogoOverlay";
 import {
   PROPERTY_STATUS_LABEL,
   PROPERTY_STATUS_STYLE,
@@ -373,6 +375,7 @@ function PropertyCard({
   onToggleFeatured: () => void;
 }) {
   const statusStyle = PROPERTY_STATUS_STYLE[p.status];
+  const { photoLogo } = useAgencyBrand();
 
   return (
     <div
@@ -397,6 +400,8 @@ function PropertyCard({
           className="absolute inset-0"
           style={{ background: "linear-gradient(to top, rgba(31,10,60,0.35) 0%, transparent 60%)" }}
         />
+        {/* Solo visual (CSS): la foto no se toca. Arriba van estado y estrella; abajo a la izquierda, «Publicada…». */}
+        {photo && <PhotoLogoOverlay logo={photoLogo} avoid={["top-left", "top-right", "bottom-left"]} />}
 
         <div className="absolute top-3 left-3">
           <span
