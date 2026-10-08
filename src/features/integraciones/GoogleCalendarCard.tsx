@@ -7,10 +7,11 @@ import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { CalendarIcon } from "@/components/ui/icons";
 import { useGoogleCalendar } from "@/lib/gcal/GoogleCalendarProvider";
-import { FeedSection } from "@/features/agenda/GoogleCalendarDialog";
+import { ConnectSection, FeedSection, useGcalReturnNotice } from "@/features/agenda/GoogleCalendarDialog";
 
 export function GoogleCalendarCard() {
-  const { feed } = useGoogleCalendar();
+  const { feed, sync } = useGoogleCalendar();
+  const [notice] = useGcalReturnNotice(sync.refreshStatus);
   return (
     <Card padded>
       <div className="flex items-start gap-3">
@@ -25,7 +26,14 @@ export function GoogleCalendarCard() {
           </p>
         </div>
       </div>
+      {notice && (
+        <p role="status" className="text-sm px-4 py-3 rounded-xl mt-3" style={notice.ok ? { background: "#F0FDF4", color: "#15803D" } : { background: "#FFF1F2", color: "#BE123C" }}>
+          {notice.text}
+        </p>
+      )}
       <div className="mt-4 space-y-6">
+        <ConnectSection sync={sync} ret="integraciones" />
+        <hr style={{ borderColor: "#EDE9FE" }} />
         <FeedSection feed={feed} />
       </div>
     </Card>

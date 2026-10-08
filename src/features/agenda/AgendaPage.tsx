@@ -12,7 +12,7 @@ import { RouteSheetModal } from "./RouteSheetModal";
 import { TasksCard } from "./TasksCard";
 import { VisitPanel, type ScheduleDefaults } from "./VisitPanel";
 import { useAppVisits } from "./useAppVisits";
-import { GoogleCalendarDialog } from "./GoogleCalendarDialog";
+import { GoogleCalendarDialog, GcalPrefsToggles, ago, useGcalReturnNotice } from "./GoogleCalendarDialog";
 import { useGoogleCalendar } from "@/lib/gcal/GoogleCalendarProvider";
 import { appVisitItems } from "@/lib/gcal/items";
 import {
@@ -30,6 +30,8 @@ import {
   rangeLabel,
   shiftAnchor,
   startOfDay,
+  toBusyBlocks,
+  BUSY_COLORS,
   toIcsEvents,
   type AgendaItem,
   type AgendaView,
@@ -91,6 +93,8 @@ export default function AgendaPage() {
   // las visitas de la app del agente (las otras pantallas no las cargan).
   const { agendaOpened, reportAppVisits } = gcal;
   const feedState = gcal.feed.state;
+  const sync = gcal.sync;
+  const [gcalNotice, closeGcalNotice] = useGcalReturnNotice(sync.refreshStatus);
   useEffect(() => {
     if (feedState === "active") agendaOpened();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +125,19 @@ export default function AgendaPage() {
   }, [allItems, matchesAdvisor, query, contactName, propertyTitle]);
 
   const range = useMemo(() => rangeFor(view, anchor), [view, anchor]);
+
+  // Google Calendar (opción A): con la Agenda abierta se traen los cambios y el «Ocupado» del rango visible.
+  const { setAgendaRange } = sync;
+  useEffect(() => {
+    setAgendaRange({ start: range.start, end: range.end });
+  }, [range, setAgendaRange]);
+  useEffect(() => () => setAgendaRange(null), [setAgendaRange]);
+
+  /** «Ocupado» de Google: son del agente conectado, se ocultan si se filtra por otro asesor. */
+  const busy = useMemo(
+    () => (sync.prefs.showBusy && (!advisor || advisor === currentUserId) ? toBusyBlocks(sync.busyBlocks) : []),
+    [sync.prefs.showBusy, sync.busyBlocks, advisor, currentUserId],
+  );
   const rangeItems = useMemo(
     () => items.filter((i) => i.start >= range.start && i.start < range.end),
     [items, range],
@@ -147,7 +164,10 @@ export default function AgendaPage() {
   const selected = (selectedKey && allItems.find((i) => i.key === selectedKey)) || null;
   const panelItem = selected ?? nextItem;
 
-  const freeSlot = useMemo(() => firstFreeSlot(items, weekStart, now), [items, weekStart, now]);
+  const freeSlot = useMemo(
+    () => firstFreeSlot(items, weekStart, now, 60, busy.filter((b) => !b.allDay)),
+    [items, weekStart, now, busy],
+  );
 
   /* ── Acciones ──────────────────────────────────────────────────────────── */
 
@@ -287,8 +307,16 @@ export default function AgendaPage() {
                 {STATUS_META[s].label}
               </li>
             ))}
+            {busy.length > 0 && (
+              <li className="flex items-center gap-1.5 text-xs" style={{ color: "#7C6A99" }}>
+                <span className="w-2.5 h-2.5 rounded-full border" style={{ background: BUSY_COLORS.stripes, borderColor: BUSY_COLORS.border }} aria-hidden />
+                Ocupado en Google
+              </li>
+            )}
           </ul>
         </div>
+
+        <GcalStrip sync={sync} notice={gcalNotice} onCloseNotice={closeGcalNotice} onOpen={() => setGcalOpen(true)} />
 
         {(appVisits.error || notice) && (
           <div className="px-4 md:px-6 pt-3 space-y-2">
@@ -331,6 +359,7 @@ export default function AgendaPage() {
                 propertyTitle={propertyTitle}
                 now={now}
                 hideEmptyDays={view === "mes"}
+                busy={busy}
               />
             </div>
 
@@ -343,6 +372,7 @@ export default function AgendaPage() {
                   onSelect={select}
                   contactName={contactName}
                   now={now}
+                  busy={busy}
                 />
               )}
               {view === "mes" && (
@@ -356,6 +386,7 @@ export default function AgendaPage() {
                     setView("dia");
                   }}
                   now={now}
+                  busy={busy}
                 />
               )}
               {view === "lista" && (
@@ -367,6 +398,7 @@ export default function AgendaPage() {
                   contactName={contactName}
                   propertyTitle={propertyTitle}
                   now={now}
+                  busy={busy}
                 />
               )}
             </div>
@@ -467,5 +499,65 @@ export default function AgendaPage() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Franja de Google Calendar arriba del calendario: aviso al volver del login,
+ * estado de la conexión (cuenta, última sincronización, error) y los toggles
+ * de «Ocupado». Si no está conectado, solo un acceso discreto al diálogo.
+ */
+function GcalStrip({
+  sync,
+  notice,
+  onCloseNotice,
+  onOpen,
+}: {
+  sync: ReturnType<typeof useGoogleCalendar>["sync"];
+  notice: { ok: boolean; text: string } | null;
+  onCloseNotice: () => void;
+  onOpen: () => void;
+}) {
+  const box = "text-xs px-3 py-2 rounded-xl border flex items-start gap-2 flex-wrap";
+  return (
+    <div className="px-4 md:px-6 pt-3 space-y-2 empty:hidden">
+      {notice && (
+        <p
+          role="status"
+          className={box}
+          style={notice.ok ? { background: "#F0FDF4", color: "#15803D", borderColor: "#BBF7D0", fontWeight: 600 } : { background: "#FFF1F2", color: "#BE123C", borderColor: "#FECDD3", fontWeight: 600 }}
+        >
+          <span className="flex-1">{notice.text}</span>
+          <button type="button" onClick={onCloseNotice} aria-label="Cerrar aviso" className="w-6 h-6 rounded hover:bg-white" style={{ lineHeight: 1 }}>
+            ×
+          </button>
+        </p>
+      )}
+      {sync.state === "needs_reauth" && (
+        <p role="alert" className={box} style={{ background: "#FFF1F2", color: "#BE123C", borderColor: "#FECDD3", fontWeight: 600 }}>
+          <span className="flex-1">{sync.error ?? "Google desconectó PropMatch de tu cuenta. Volvé a conectar."}</span>
+          <button type="button" onClick={() => void sync.connect("agenda")} className="underline underline-offset-2" style={{ fontWeight: 700 }}>
+            Volver a conectar
+          </button>
+        </p>
+      )}
+      {sync.state === "connected" && (
+        <div className={box} style={{ background: "#F8FAFC", color: "#374151", borderColor: "#E2E8F0" }}>
+          <span className="flex-1 min-w-0">
+            <strong>Google Calendar</strong> conectado{sync.email ? ` (${sync.email})` : ""} ·{" "}
+            {sync.syncing ? "sincronizando…" : `última sincronización ${ago(sync.lastSyncAt) ?? "pendiente"}`}
+            {sync.error && (
+              <span className="block mt-0.5" style={{ color: "#92400E", fontWeight: 600 }}>
+                {sync.error}
+              </span>
+            )}
+          </span>
+          <GcalPrefsToggles sync={sync} />
+          <button type="button" onClick={onOpen} className="underline underline-offset-2 self-center" style={{ color: "#6D28D9", fontWeight: 700 }}>
+            Opciones
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
