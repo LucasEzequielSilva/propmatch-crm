@@ -10,7 +10,7 @@ import { useStore } from "@/data/store";
 import { money } from "@/lib/format";
 import { docProgress, nextStep, stepProgress } from "@/lib/deals";
 import { dealNumberLabel } from "@/lib/dealRoom";
-import type { Deal, DealStatus } from "@/types/db";
+import type { Deal, DealStatus, Opportunity, OpportunityStage } from "@/types/db";
 import { NewDealModal } from "./NewDealModal";
 
 export const DEAL_STATUS_LABEL: Record<DealStatus, string> = {
@@ -33,13 +33,28 @@ type Filter = "todas" | DealStatus;
 export default function OperacionesPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { deals, propertyById, contactById } = useStore();
+  const { deals, opportunities, propertyById, contactById } = useStore();
   const [filter, setFilter] = useState<Filter>("en_curso");
   const [query, setQuery] = useState("");
 
   const preProperty = params.get("propiedad");
   const preContact = params.get("contacto");
   const [creating, setCreating] = useState(Boolean(preProperty || preContact));
+
+  // Accesos directos: oportunidades abiertas (las más avanzadas primero) que
+  // todavía no tienen operación. Un clic abre el alta ya completa.
+  const startable = useMemo(() => {
+    const withDeal = new Set(deals.map((d) => d.opportunity_id).filter(Boolean));
+    return opportunities
+      .filter((o) => o.stage !== "perdida" && !withDeal.has(o.id) && o.property_id && o.contact_id)
+      .sort((a, b) => STAGE_ORDER[b.stage] - STAGE_ORDER[a.stage] || b.updated_at.localeCompare(a.updated_at))
+      .slice(0, 6);
+  }, [deals, opportunities]);
+
+  const startFrom = (o: Opportunity) => {
+    setParams({ propiedad: o.property_id!, contacto: o.contact_id }, { replace: true });
+    setCreating(true);
+  };
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,6 +94,50 @@ export default function OperacionesPage() {
           />
         </div>
 
+        {filter !== "cerrada" && filter !== "caida" && startable.length > 0 && (
+          <Card className="mb-4">
+            <div className="px-5 pt-4 pb-2">
+              <h3 className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                Iniciar desde una oportunidad
+              </h3>
+              <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
+                Interesados que vienen avanzando y todavía no tienen operación. Se completa sola con el cliente y la propiedad.
+              </p>
+            </div>
+            <div className="px-3 pb-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {startable.map((o) => {
+                const contact = contactById(o.contact_id);
+                const property = propertyById(o.property_id);
+                return (
+                  <div key={o.id} className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ borderColor: "#EDE9FE" }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/contactos/${o.contact_id}`)}
+                      className="min-w-0 flex-1 text-left"
+                      title="Ver ficha del cliente"
+                    >
+                      <p className="text-sm truncate hover:underline" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                        {contact?.full_name ?? "Sin contacto"}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: "#7458C4" }}>
+                        {STAGE_LABEL[o.stage]} · {property?.title ?? "Propiedad"}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startFrom(o)}
+                      className="px-3 py-1.5 rounded-lg text-xs text-white flex-shrink-0 hover:opacity-90"
+                      style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+                    >
+                      Iniciar operación
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         {visible.length === 0 ? (
           <Card>
             <EmptyState
@@ -111,6 +170,16 @@ export default function OperacionesPage() {
     </>
   );
 }
+
+const STAGE_ORDER: Record<OpportunityStage, number> = { nuevos: 0, contactados: 1, visita: 2, negociacion: 3, cierre: 4, perdida: -1 };
+const STAGE_LABEL: Record<OpportunityStage, string> = {
+  nuevos: "Nuevo",
+  contactados: "Contactado",
+  visita: "Visita",
+  negociacion: "Negociación",
+  cierre: "Cierre",
+  perdida: "Perdida",
+};
 
 function DealCard({ deal, onOpen }: { deal: Deal; onOpen: () => void }) {
   const { propertyById, contactById } = useStore();
