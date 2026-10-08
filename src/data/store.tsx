@@ -1123,7 +1123,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const existingAppId = current.app_property_id ?? null;
     const input = {
       ...current,
-      rooms: current.rooms !== undefined ? current.rooms : null,
+      // Sin `rooms` (dato viejo) roomsOf usa dormitorios + 1, igual que la elegibilidad.
       bedrooms: current.bedrooms ?? 0,
       photos: appPhotos,
     } as unknown as NewPropertyInput;
