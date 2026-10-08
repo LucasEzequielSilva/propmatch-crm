@@ -196,6 +196,13 @@ export const parsePropertyStatus = (raw: string) =>
     ["disponible", ["disponible", "activ", "publicad", "en venta"]],
   ]);
 
+/** Links (fotos): se separan por coma, punto y coma, barra vertical o espacios, nunca por "/" (es parte del link). */
+const splitUrls = (raw: string) =>
+  raw
+    .split(/[\s,;|]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 const splitList = (raw: string) =>
   raw
     .split(/[,;/|]| y /)
@@ -230,6 +237,8 @@ export interface Draft<T> {
   errors: string[];
   warnings: string[];
   duplicate: string | null; // nombre de lo que ya existe
+  /** Id de la propiedad que ya está en el CRM, cuando el repetido es contra algo ya cargado. */
+  existingId?: string;
 }
 
 export function buildContactDrafts(
@@ -344,9 +353,12 @@ export function buildPropertyDrafts(
   agentId: string,
   defaultProvince: string,
 ): Draft<NewPropertyInput & { photos: string[] }>[] {
-  const key = (street: string | null, number: string | null, title: string) =>
-    street ? normalizeText(`${street} ${number ?? ""}`) : normalizeText(title);
-  const existingKeys = new Map(existing.map((p) => [key(p.street, p.street_number, p.title), p]));
+  // Repetido = misma dirección Y mismo título y precio. Solo la calle no alcanza: muchas webs
+  // publican direcciones aproximadas ("Av. de los Lagos al 100") para varias propiedades.
+  // La descripción entra en la clave (recortada): distingue lotes o unidades con mismo título y precio.
+  const key = (street: string | null, number: string | null, title: string, price: number | null, description: string | null) =>
+    normalizeText(`${street ?? ""} ${number ?? ""} ${title} ${price ?? ""} ${(description ?? "").slice(-300)}`);
+  const existingKeys = new Map(existing.map((p) => [key(p.street, p.street_number, p.title, p.price, p.description), p]));
   const seenInFile = new Set<string>();
 
   return sheet.rows.map((row, i) => {
@@ -390,9 +402,9 @@ export function buildPropertyDrafts(
     const statusRaw = get("status");
     const status = parsePropertyStatus(statusRaw) ?? "disponible";
     const bedrooms = parseNumber(get("bedrooms"));
-    const photos = splitList(get("photo")).filter((u) => /^https?:\/\//.test(u));
+    const photos = splitUrls(get("photo")).filter((u) => /^https?:\/\//.test(u));
 
-    const k = key(street, street_number, title);
+    const k = key(street, street_number, title, price, get("description") || null);
     const dup = existingKeys.get(k);
     let duplicate = dup ? dup.title : null;
     if (!duplicate && seenInFile.has(k)) duplicate = "otra fila de este archivo";
@@ -429,7 +441,7 @@ export function buildPropertyDrafts(
           photos,
         };
 
-    return { row: i + 2, input, errors, warnings, duplicate };
+    return { row: i + 2, input, errors, warnings, duplicate, existingId: dup?.id };
   });
 }
 

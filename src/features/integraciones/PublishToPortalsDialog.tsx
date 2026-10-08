@@ -8,6 +8,10 @@
  * - No disponibles: deshabilitados con el motivo.
  * - Facebook/Instagram: se publican desde su panel (texto y fotos a elección).
  * El servidor vuelve a validar todo; el resultado se muestra por portal.
+ *
+ * Propiedades que no están en la app (precio en pesos o sin sincronizar):
+ * Mercado Libre las publica igual (fotos subidas a la carpeta de la agencia,
+ * ver meliTarget.ts); los portales que todavía necesitan la app lo explican.
  */
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -19,6 +23,17 @@ import { FixList, type Fix, type FixItem } from "@/features/propiedades/completa
 import { FIX_LABEL, editorHref, fixForMeliField, isFieldKey } from "@/features/propiedades/completar/fields";
 import { loadExtras } from "@/features/propiedades/MeliPublishPanel";
 import { toMeliListing } from "@/features/propiedades/useMeliPublish";
+import {
+  CRM_PHOTO_UPLOAD_ERROR,
+  LOCAL_ONLY_NOTICE,
+  meliBlockReason,
+  meliTargetBody,
+  meliTargetKind,
+  photosForValidation,
+  prepareCrmPhotos,
+} from "@/features/propiedades/meliTarget";
+import { useStore } from "@/data/store";
+import { saveCrmPublication } from "@/lib/crmPublications";
 import { isPublishable, validateMeliListing } from "../../../shared/meliListing";
 import { integrationsApi, type PortalResult, type PortalStatus, type PublishOutcome } from "./api";
 import { usePortalConnections } from "./usePortalConnections";
@@ -47,7 +62,7 @@ const OUTCOME_TEXT: Record<PublishOutcome, { text: string; ok: boolean }> = {
   unavailable: { text: "No disponible", ok: false },
   in_progress: { text: "Ya se está publicando", ok: false },
   not_published: { text: "Todavía no tiene aviso", ok: false },
-  property_not_found: { text: "Propiedad no sincronizada", ok: false },
+  property_not_found: { text: "Necesita la propiedad en la app", ok: false },
   error: { text: "No se pudo", ok: false },
 };
 
@@ -77,15 +92,19 @@ export function PublishToPortalsDialog({
   onClose: () => void;
 }) {
   const { loading, statusOf, serverError } = usePortalConnections();
+  const { agency, replacePropertyPhotos } = useStore();
   const sample = isSample(property);
-  const synced = !!property.app_property_id && !sample;
+  const kind = meliTargetKind(property);
+  const blockReason = meliBlockReason(property, agency.id);
+  // App o solo-CRM: se puede salvo ejemplo o cuenta sin inmobiliaria.
+  const synced = !blockReason;
   const [selected, setSelected] = useState<PortalId[]>(["mercadolibre"]);
   const [busy, setBusy] = useState<"check" | "publish" | null>(null);
   const [results, setResults] = useState<PortalResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const ml = useMemo(() => meliInput(property), [property]);
-  const publicPhotos = useMemo(() => photos.filter((u) => /^https:\/\//.test(u)), [photos]);
+  const publicPhotos = useMemo(() => photosForValidation(property, photos), [property, photos]);
   const mlChannel = channels.find((c) => c.channel === "mercadolibre");
   const mlLive = !!mlChannel?.externalId && mlChannel.status !== "removed" && mlChannel.status !== "error";
   // Si ya hay aviso vivo, la ubicación no se vuelve a mandar (igual que el panel de ML).
@@ -100,12 +119,35 @@ export function PublishToPortalsDialog({
     if (!synced || chosen.length === 0) return;
     setBusy(mode);
     setError(null);
-    const body = { propertyId: property.app_property_id!, portals: chosen, inputs: { mercadolibre: ml }, isSample: sample };
+    const target = meliTargetBody(property, agency.id);
+    let mlInput: Record<string, unknown> = { ...ml, previous: target.previous };
+    if (kind === "crm" && chosen.includes("mercadolibre")) {
+      try {
+        mlInput = { ...mlInput, photos: await prepareCrmPhotos(property, agency.id, photos, replacePropertyPhotos) };
+      } catch {
+        setBusy(null);
+        return setError(CRM_PHOTO_UPLOAD_ERROR);
+      }
+    }
+    const body = {
+      ...(target.propertyId ? { propertyId: target.propertyId } : {}),
+      crmPropertyId: target.crmPropertyId,
+      portals: chosen,
+      inputs: { mercadolibre: mlInput },
+      isSample: sample,
+    };
     const r = mode === "check" ? await integrationsApi.check(body) : await integrationsApi.publish(body);
     setBusy(null);
     if (!r.ok) return setError(r.message);
-    setResults(r.data.results);
-    for (const x of r.data.results) if (x.row && onRow) onRow(x.row);
+    const results = r.data.results.map((x) =>
+      x.portal === "mercadolibre" && x.row?.local_only ? { ...x, warnings: [...x.warnings, LOCAL_ONLY_NOTICE] } : x,
+    );
+    setResults(results);
+    for (const x of results) {
+      if (!x.row) continue;
+      if (x.portal === "mercadolibre" && (kind === "crm" || x.row.local_only)) saveCrmPublication(agency.id, property.id, x.row);
+      onRow?.(x.row);
+    }
   };
 
   const toggle = (id: PortalId) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -138,9 +180,13 @@ export function PublishToPortalsDialog({
 
         <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
           {sample && <SampleNotice>{SAMPLE_PUBLISH_BLOCKED} en ningún portal.</SampleNotice>}
-          {!synced && !sample && (
-            <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>
-              Esta propiedad todavía no está sincronizada con la app: sin eso no hay fotos públicas ni dónde guardar la publicación.
+          {blockReason && !sample && (
+            <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#FFF1F2", color: "#BE123C" }}>{blockReason}</p>
+          )}
+          {!blockReason && kind === "crm" && (
+            <p className="text-sm px-4 py-3 rounded-xl" style={{ background: "#F5F3FF", color: "#5B21B6" }}>
+              {property.currency === "ARS" ? "Precio en pesos: " : ""}la propiedad no está en la app de PropMatch. Mercado Libre la publica
+              igual (las fotos se suben a la carpeta de tu inmobiliaria); los portales que todavía necesitan la app te lo van a avisar.
             </p>
           )}
           {serverError && (

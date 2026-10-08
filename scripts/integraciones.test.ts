@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_PORTALS, SAMPLE_MESSAGE, runEngine, type EngineDeps } from "../api/_lib/integrations/engine.ts";
+import { CRM_ONLY_MESSAGE, MAX_PORTALS, SAMPLE_MESSAGE, runEngine, type EngineDeps } from "../api/_lib/integrations/engine.ts";
 import { meliOutcome } from "../api/_lib/integrations/meliOutcome.ts";
 import { buildReturnUrl, parseReturnTarget } from "../api/_lib/integrations/returnTo.ts";
 import { isMissingColumn, resetSchemaFlags, schemaFlags, withOptionalColumns } from "../api/_lib/integrations/dbCompat.ts";
@@ -20,6 +20,7 @@ const scope: AgencyScope = { agencyId: "agency-A", userId: "user-1", role: "agen
 
 interface FakeOpts {
   id: PortalId;
+  crmOnly?: boolean;
   state?: ConnectionStatus["state"];
   available?: boolean;
   /** Avisos ya publicados por propiedad (para probar idempotencia). */
@@ -44,6 +45,7 @@ function fakeAdapter(o: FakeOpts) {
     name: o.id,
     authMethod: "oauth",
     channels: [o.id],
+    supportsCrmOnly: o.crmOnly,
     availability: () => (o.available === false ? { state: "coming_soon", reason: "no hay conector" } : { state: "available" }),
     async status(s) {
       calls.push({ kind: "status", agencyId: s.agencyId });
@@ -68,7 +70,7 @@ function fakeAdapter(o: FakeOpts) {
       return res("ready", true);
     },
     async publish(r: PublishRequest) {
-      calls.push({ kind: "publish", agencyId: r.scope.agencyId, propertyId: r.propertyId });
+      calls.push({ kind: "publish", agencyId: r.scope.agencyId, propertyId: r.propertyId || `crm:${r.crmPropertyId}` });
       if (o.throws) throw new Error("boom");
       if (existing.has(r.propertyId)) return res("updated", true);
       existing.add(r.propertyId);
@@ -272,4 +274,34 @@ test("registro del cliente: un portal por adapter del servidor, sin claves técn
   assert.equal(portalMeta("mercadolibre")?.authMethod, "oauth");
   assert.equal(portalMeta("argenprop")?.authMethod, "credentials");
   assert.equal(portalMeta("nada"), null);
+});
+
+/* ── propiedades solo-CRM (pesos o sin sincronizar) ───────────────────── */
+
+test("solo-CRM: va a los adapters que lo soportan, sin buscar en la app", async () => {
+  const ml = fakeAdapter({ id: "mercadolibre", crmOnly: true });
+  const ap = fakeAdapter({ id: "argenprop" });
+  let looked = 0;
+  const d = deps([ml.adapter, ap.adapter]);
+  const r = await runEngine(
+    { scope, mode: "publish", body: { crmPropertyId: "p_abc123", portals: ["mercadolibre", "argenprop"] } },
+    { ...d, loadProperty: async (a, p) => (looked++, d.loadProperty(a, p)) },
+  );
+  assert.equal(r.http, 200);
+  assert.equal(looked, 0);
+  const by = Object.fromEntries(r.body.results!.map((x) => [x.portal, x]));
+  assert.equal(by.mercadolibre.outcome, "published");
+  assert.deepEqual(ml.calls.filter((c) => c.kind === "publish").map((c) => c.propertyId), ["crm:p_abc123"]);
+  assert.equal(by.argenprop.outcome, "property_not_found");
+  assert.equal(by.argenprop.message, CRM_ONLY_MESSAGE);
+  assert.equal(ap.calls.length, 0);
+});
+
+test("solo-CRM: id inválido o de ejemplo se corta antes", async () => {
+  const ml = fakeAdapter({ id: "mercadolibre", crmOnly: true });
+  const bad = await runEngine({ scope, mode: "publish", body: { crmPropertyId: "../x", portals: ["mercadolibre"] } }, deps([ml.adapter]));
+  assert.equal(bad.http, 400);
+  const sample = await runEngine({ scope, mode: "publish", body: { crmPropertyId: "p_1", portals: ["mercadolibre"], isSample: true } }, deps([ml.adapter]));
+  assert.equal(sample.http, 422);
+  assert.equal(ml.calls.length, 0);
 });

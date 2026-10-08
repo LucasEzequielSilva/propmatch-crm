@@ -15,7 +15,8 @@ import {
   MatchesSolidIcon,
   StarIcon,
 } from "@/components/ui/icons";
-import { useStore } from "@/data/store";
+import { useStore, isLinkedAgencyId } from "@/data/store";
+import { MeliImportButton } from "@/features/integraciones/MeliImportDialog";
 import { ZONES } from "@/data/seed";
 import {
   PROPERTY_STATUS_LABEL,
@@ -50,7 +51,7 @@ const ROOM_OPTIONS = [
 
 export default function PropiedadesPage() {
   const navigate = useNavigate();
-  const { properties, matches, coverPhoto, updateProperty } = useStore();
+  const { properties, matches, coverPhoto, updateProperty, agency } = useStore();
 
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -118,6 +119,12 @@ export default function PropiedadesPage() {
         >
           Importar Excel
         </button>
+        {isLinkedAgencyId(agency.id) && (
+          <MeliImportButton
+            className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+          />
+        )}
       </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">

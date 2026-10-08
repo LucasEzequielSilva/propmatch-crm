@@ -24,11 +24,25 @@
  *         (JPG/JPEG/PNG, hasta 10 MB, mínimo 500 px, máx. por categoría).
  *  [SYNC] "Sync listings": https://developers.mercadolibre.com.ar/en_us/real-estate-sync-listings
  *         (PUT /items/{id} con status paused/active/closed; closed no vuelve).
+ *  [CUR]  Monedas de Inmuebles: GET https://api.mercadolibre.com/categories/MLA1459 →
+ *         settings.currencies = ["USD","ARS"] (y lo mismo en cada hoja, p. ej. MLA1473),
+ *         consultado el 2026-10-07. MAINTENANCE_FEE (number_unit) acepta ARS, USD y UVA.
  */
 
 export type MeliPropertyType = "casa" | "departamento" | "ph" | "terreno" | "local" | "oficina";
 export type MeliOperation = "venta" | "alquiler" | "alquiler_temporal";
 export type MeliCurrency = "ARS" | "USD";
+
+/**
+ * Moneda del CRM → currency_id de Mercado Libre [CUR]. Inmuebles en MLA acepta
+ * pesos y dólares: el código del CRM ya es el de ML ("ARS"/"USD"). Cualquier
+ * otra cosa (vacío, "U$S", "UVA") devuelve null y la validación lo bloquea.
+ */
+export function meliCurrency(code: unknown): MeliCurrency | null {
+  if (typeof code !== "string") return null;
+  const c = code.trim().toUpperCase();
+  return c === "ARS" || c === "USD" ? c : null;
+}
 export type MeliListingType = "silver" | "gold" | "gold_premium";
 
 export const MELI_LISTING_TYPES: { id: MeliListingType; label: string }[] = [
@@ -99,7 +113,7 @@ export const MELI_ATTRIBUTE_LABEL: Record<string, string> = {
  * que no esté marcado no significa "No". "Luminoso" y "Cochera" no tienen
  * booleano equivalente (las cocheras van por PARKING_LOTS).
  */
-const FEATURE_TO_BOOLEAN: Record<string, string> = {
+export const FEATURE_TO_BOOLEAN: Record<string, string> = {
   "Jardín": "HAS_GARDEN",
   "Balcón": "HAS_BALCONY",
   "Piscina": "HAS_SWIMMING_POOL",
@@ -107,6 +121,14 @@ const FEATURE_TO_BOOLEAN: Record<string, string> = {
   "Seguridad": "HAS_SECURITY",
   "Mascotas": "IS_SUITABLE_FOR_PETS",
   "Parrilla": "HAS_GRILL",
+  // Sumados el 2026-10-07 (ids verificados en GET /categories/MLA1473/attributes) [CAT].
+  "Gimnasio": "HAS_GYM",
+  "SUM": "HAS_MULTIPURPOSE_ROOM",
+  "Lavadero": "HAS_LAUNDRY",
+  "Aire acondicionado": "HAS_AIR_CONDITIONING",
+  "Ascensor": "HAS_LIFT",
+  "Placards": "HAS_CLOSETS",
+  "Apto profesional": "PROFESSIONAL_USE_ALLOWED",
 };
 /** value_id de "Sí" en todos los booleanos de inmuebles [CAT]. */
 const YES_VALUE_ID = "242085";
@@ -119,8 +141,10 @@ export interface MeliListingInput {
   description: string | null;
   price: number | null;
   currency: string;
-  /** Expensas mensuales en ARS. */
+  /** Expensas mensuales. */
   expenses: number | null;
+  /** Moneda de las expensas (ARS o USD). Sin definir = ARS, lo que se asumía antes. */
+  expensesCurrency?: string | null;
   surfaceTotal: number | null;
   surfaceCovered: number | null;
   rooms: number | null;
@@ -234,7 +258,7 @@ export function validateMeliListing(
   else if (desc.length > MELI_LIMITS.descriptionMax) block("description", `La descripción supera los ${MELI_LIMITS.descriptionMax} caracteres.`);
 
   if (!isPos(p.price)) block("price", "Falta el precio.");
-  if (p.currency !== "ARS" && p.currency !== "USD") block("currency", "La moneda tiene que ser pesos (ARS) o dólares (USD).");
+  if (!meliCurrency(p.currency)) block("currency", "La moneda tiene que ser pesos (ARS) o dólares (USD).");
 
   for (const attr of required ?? MELI_REQUIRED[categoryId] ?? []) {
     const v = requiredValue(attr, p);
@@ -253,7 +277,7 @@ export function validateMeliListing(
   const hasCoords = typeof p.lat === "number" && typeof p.lng === "number";
   if (!hasCoords) warn("coords", "Sin coordenadas: Mercado Libre ubica el aviso por barrio, no en el punto exacto.");
 
-  if (pictureUrls.length === 0) block("pictures", "Hace falta al menos una foto con URL pública (la propiedad tiene que estar sincronizada con la app).");
+  if (pictureUrls.length === 0) block("pictures", "Hace falta al menos una foto de la propiedad.");
   else {
     if (pictureUrls.length > MELI_LIMITS.picturesMax) warn("pictures", `Hay ${pictureUrls.length} fotos; se van a mandar las primeras ${MELI_LIMITS.picturesMax}.`);
     const min = recommendedPictures(p.type);
@@ -290,8 +314,11 @@ export function buildMeliAttributes(p: MeliListingInput, allowed?: Set<string>):
   if (isPos(p.guests ?? null)) add({ id: "GUESTS", value_name: String(Math.round(p.guests!)) });
   if (p.landAccess && MELI_LAND_ACCESS.some((a) => a.id === p.landAccess)) add({ id: "LAND_ACCESS", value_id: p.landAccess });
   if (isNonNeg(p.ageYears)) add({ id: "PROPERTY_AGE", value_name: `${Math.round(p.ageYears)} años` });
-  // Expensas: number_unit con unidad de moneda; en el CRM se cargan en pesos.
-  if (isNonNeg(p.expenses) && p.expenses > 0) add({ id: "MAINTENANCE_FEE", value_name: `${Math.round(p.expenses)} ARS` });
+  // Expensas: number_unit con unidad de moneda (ARS o USD) [CUR].
+  if (isNonNeg(p.expenses) && p.expenses > 0) {
+    const unit = meliCurrency(p.expensesCurrency ?? "ARS") ?? "ARS";
+    add({ id: "MAINTENANCE_FEE", value_name: `${Math.round(p.expenses)} ${unit}` });
+  }
   if (p.propertyCode) add({ id: "PROPERTY_CODE", value_name: p.propertyCode.slice(0, 60) });
   for (const f of p.features) {
     const id = FEATURE_TO_BOOLEAN[f];
@@ -346,7 +373,7 @@ export function buildMeliItem(
     title: p.title.trim().slice(0, MELI_LIMITS.titleMax),
     category_id: categoryId,
     price: p.price,
-    currency_id: p.currency,
+    currency_id: meliCurrency(p.currency) ?? p.currency,
     available_quantity: 1,
     buying_mode: "classified",
     listing_type_id: listingTypeId,
@@ -358,16 +385,40 @@ export function buildMeliItem(
   };
 }
 
+/** Foto que ya tiene el aviso en Mercado Libre (GET /items/{id} → pictures). */
+export interface MeliExistingPicture {
+  id: string;
+  url?: string;
+  secure_url?: string;
+}
+
+/**
+ * Fotos para PUT /items/{id}: las que ya están en el aviso van por `{ id }` (así
+ * Mercado Libre no las vuelve a descargar) y las nuevas por `{ source }` [PIC
+ * "Agregar o reemplazar imágenes": se mezclan `source` e `id` en el mismo PUT].
+ */
+export function picturePayload(pictureUrls: string[], existing: MeliExistingPicture[] = []) {
+  return pictureUrls.slice(0, MELI_LIMITS.picturesMax).map((source) => {
+    const same = existing.find((e) => e.id && (e.secure_url === source || e.url === source));
+    return same ? { id: same.id } : { source };
+  });
+}
+
 /**
  * Cuerpo de PUT /items/{id} para sincronizar cambios [SYNC]: título, precio,
  * fotos y atributos. La categoría y la moneda no se tocan (la categoría no se
  * puede cambiar por API) y la ubicación solo si se eligió una.
  */
-export function buildMeliUpdate(p: MeliListingInput, pictureUrls: string[], allowedAttributes?: Set<string>) {
+export function buildMeliUpdate(
+  p: MeliListingInput,
+  pictureUrls: string[],
+  allowedAttributes?: Set<string>,
+  existingPictures?: MeliExistingPicture[],
+) {
   const body: Record<string, unknown> = {
     title: p.title.trim().slice(0, MELI_LIMITS.titleMax),
     price: p.price,
-    pictures: pictureUrls.slice(0, MELI_LIMITS.picturesMax).map((source) => ({ source })),
+    pictures: picturePayload(pictureUrls, existingPictures),
     attributes: buildMeliAttributes(p, allowedAttributes),
   };
   if (p.location?.neighborhoodId || p.location?.cityId) body.location = buildLocation(p);

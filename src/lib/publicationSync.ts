@@ -14,8 +14,17 @@ import type { PropertyPublication, PublicationChannel, PublicationStatus } from 
 const COLUMNS =
   "id, agency_id, property_id, channel, status, external_id, external_url, error_message, published_at, last_synced_at, created_at, updated_at";
 
-/** `null` = la tabla no está disponible (modo local). */
+/**
+ * `null` = la tabla no está disponible (modo local). Pide también
+ * `crm_property_id` (publicaciones de propiedades solo-CRM, migración
+ * 20261007120000); si la base todavía no la tiene, repite sin esa columna.
+ */
 export async function fetchAgencyPublications(agencyId: string): Promise<PropertyPublication[] | null> {
+  const withCrm = await supabase
+    .from("property_publications")
+    .select(`${COLUMNS}, crm_property_id`)
+    .eq("agency_id", agencyId);
+  if (!withCrm.error) return withCrm.data as unknown as PropertyPublication[];
   const { data, error } = await supabase
     .from("property_publications")
     .select(COLUMNS)

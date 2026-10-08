@@ -1,0 +1,301 @@
+{
+ "id": "MLA839018613",
+ "site_id": "MLA",
+ "title": "Property Title",
+ "subtitle": null,
+ "seller_id": 526655030,
+ "category_id": "MLA401686",
+ "official_store_id": null,
+ "price": 100000,
+ "base_price": 100000,
+ "original_price": null,
+ "currency_id": "ARS",
+ "initial_quantity": 1,
+ "available_quantity": 1,
+ "sold_quantity": 0,
+ "sale_terms": [],
+ "buying_mode": "classified",
+ "listing_type_id": "silver",
+ "start_time": "2020-02-13T19:29:01.000Z",
+ "stop_time": "2020-05-14T04:00:00.000Z",
+ "condition": "not_specified",
+ "permalink": "https://departamento.mercadolibre.com.ar/MLA-839018613-property-title-_JM",
+ "thumbnail": "http://mla-s2-p.mlstatic.com/910707-MLA40763776324_022020-I.jpg",
+ "secure_thumbnail": "https://mla-s2-p.mlstatic.com/910707-MLA40763776324_022020-I.jpg",
+ "pictures": [
+  {
+   "id": "910707-MLA40763776324_022020",
+   "url": "http://mla-s2-p.mlstatic.com/910707-MLA40763776324_022020-O.jpg",
+   "secure_url": "https://mla-s2-p.mlstatic.com/910707-MLA40763776324_022020-O.jpg",
+   "size": "500x438",
+   "max_size": "548x481",
+   "quality": ""
+  }
+ ],
+ "video_id": "gqkEN9poKM;matterport",
+ "descriptions": [
+  {
+   "id": "MLA839018613-2516619253"
+  }
+ ],
+ "accepts_mercadopago": false,
+ "non_mercado_pago_payment_methods": [],
+ "shipping": {
+  "mode": "not_specified",
+  "methods": [],
+  "tags": [],
+  "dimensions": null,
+  "local_pick_up": false,
+  "free_shipping": false,
+  "logistic_type": null,
+  "store_pick_up": false
+ },
+ "international_delivery_mode": "none",
+ "seller_address": {
+  "city": {
+   "id": "TUxBQlNBQTM3Mzda",
+   "name": "Saavedra"
+  },
+  "state": {
+   "id": "AR-C",
+   "name": "Capital Federal"
+  },
+  "country": {
+   "id": "AR",
+   "name": "Argentina"
+  },
+  "search_location": {
+   "neighborhood": {
+    "id": "TUxBQlNBQTM3Mzda",
+    "name": "Saavedra"
+   },
+   "city": {
+    "id": "TUxBQ0NBUGZlZG1sYQ",
+    "name": "Capital Federal"
+   },
+   "state": {
+    "id": "TUxBUENBUGw3M2E1",
+    "name": "Capital Federal"
+   }
+  },
+  "latitude": -34.556595,
+  "longitude": -58.48787,
+  "id": 1087750186
+ },
+ "seller_contact": {
+  "contact": "",
+  "other_info": "",
+  "country_code": "",
+  "area_code": "",
+  "phone": "",
+  "country_code2": "",
+  "area_code2": "",
+  "phone2": "",
+  "email": "",
+  "webpage": ""
+ },
+ "location": {
+  "address_line": "My property address NEW 111",
+  "zip_code": "5000",
+  "neighborhood": {
+   "id": "TUxBQlBBTDI1MTVa",
+   "name": "Palermo"
+  },
+  "city": {
+   "id": "TUxBQ0NBUGZlZG1sYQ",
+   "name": "Capital Federal"
+  },
+  "state": {
+   "id": "TUxBUENBUGw3M2E1",
+   "name": "Capital Federal"
+  },
+  "country": {
+   "id": "AR",
+   "name": "Argentina"
+  },
+  "latitude": -34.5780655,
+  "longitude": -58.4265317
+ },
+ "geolocation": {
+  "latitude": -34.5780655,
+  "longitude": -58.4265317
+ },
+ "coverage_areas": [],
+ "attributes": [
+  {
+   "id": "BEDROOMS",
+   "name": "Dormitorios",
+   "value_id": null,
+   "value_name": "4",
+   "value_struct": null,
+   "values": [
+    {
+     "id": null,
+     "name": "4",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "COVERED_AREA",
+   "name": "Superficie cubierta",
+   "value_id": null,
+   "value_name": "30 m²",
+   "value_struct": {
+    "number": 30,
+    "unit": "m²"
+   },
+   "values": [
+    {
+     "id": null,
+     "name": "30 m²",
+     "struct": {
+      "number": 30,
+      "unit": "m²"
+     }
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "FULL_BATHROOMS",
+   "name": "Baños",
+   "value_id": null,
+   "value_name": "1",
+   "value_struct": null,
+   "values": [
+    {
+     "id": null,
+     "name": "1",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "PARKING_LOTS",
+   "name": "Cocheras",
+   "value_id": null,
+   "value_name": "1",
+   "value_struct": null,
+   "values": [
+    {
+     "id": null,
+     "name": "1",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "ROOMS",
+   "name": "Ambientes",
+   "value_id": null,
+   "value_name": "2",
+   "value_struct": null,
+   "values": [
+    {
+     "id": null,
+     "name": "2",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "TOTAL_AREA",
+   "name": "Superficie total",
+   "value_id": null,
+   "value_name": "40 m²",
+   "value_struct": {
+    "number": 40,
+    "unit": "m²"
+   },
+   "values": [
+    {
+     "id": null,
+     "name": "40 m²",
+     "struct": {
+      "number": 40,
+      "unit": "m²"
+     }
+    }
+   ],
+   "attribute_group_id": "FIND",
+   "attribute_group_name": "Ficha técnica"
+  },
+  {
+   "id": "OPERATION",
+   "name": "Operación",
+   "value_id": "242075",
+   "value_name": "Venta",
+   "value_struct": null,
+   "values": [
+    {
+     "id": "242075",
+     "name": "Venta",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "MAIN",
+   "attribute_group_name": "Principales"
+  },
+  {
+   "id": "OPERATION_SUBTYPE",
+   "name": "Subtipo de operación",
+   "value_id": "244562",
+   "value_name": "Propiedad individual",
+   "value_struct": null,
+   "values": [
+    {
+     "id": "244562",
+     "name": "Propiedad individual",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "MAIN",
+   "attribute_group_name": "Principales"
+  },
+  {
+   "id": "PROPERTY_TYPE",
+   "name": "Inmueble",
+   "value_id": "242062",
+   "value_name": "Departamento",
+   "value_struct": null,
+   "values": [
+    {
+     "id": "242062",
+     "name": "Departamento",
+     "struct": null
+    }
+   ],
+   "attribute_group_id": "MAIN",
+   "attribute_group_name": "Principales"
+  }
+ ],
+ "warnings": [],
+ "listing_source": "",
+ "variations": [],
+ "status": "active",
+ "sub_status": [],
+ "tags": [
+  "test_item"
+ ],
+ "warranty": null,
+ "catalog_product_id": null,
+ "domain_id": "MLA-INDIVIDUAL_APARTMENTS_FOR_SALE",
+ "parent_item_id": null,
+ "differential_pricing": null,
+ "deal_ids": [],
+ "automatic_relist": false,
+ "date_created": "2020-02-13T19:29:01.000Z",
+ "last_updated": "2020-02-13T19:49:09.226Z",
+ "health": null,
+ "catalog_listing": false
+}

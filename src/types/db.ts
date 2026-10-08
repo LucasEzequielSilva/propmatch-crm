@@ -599,7 +599,16 @@ export type PublicationStatus = "draft" | "pending" | "published" | "error" | "p
 export interface PropertyPublication {
   id: string;
   agency_id: string;
-  property_id: string;
+  /**
+   * uuid de la propiedad en la app. `null` en publicaciones de propiedades que
+   * solo viven en el CRM (pesos o sin sincronizar): esas usan `crm_property_id`
+   * (migración 20261007120000, ver docs/integraciones-multitenant.md).
+   */
+  property_id: string | null;
+  /** Id local del CRM (Property.id) cuando la propiedad no está en la app. */
+  crm_property_id?: string | null;
+  /** true = la base todavía no tiene la migración: la fila vive solo en este navegador. */
+  local_only?: boolean;
   channel: PublicationChannel;
   status: PublicationStatus;
   external_id: string | null;

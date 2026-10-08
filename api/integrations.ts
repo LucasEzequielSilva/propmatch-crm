@@ -7,6 +7,8 @@ import { saveArgenpropCredentials } from "./_lib/integrations/adapters/argenprop
 import { runEngine } from "./_lib/integrations/engine.js";
 import { ADAPTERS, PORTAL_IDS, adapterFor } from "./_lib/integrations/registry.js";
 import { parseReturnTarget } from "./_lib/integrations/returnTo.js";
+import { meliImportDetails, meliImportLink, meliImportList } from "./_lib/integrations/adapters/mercadolibreImport.js";
+import { parseImportCursor, parseImportLinks, parseItemIds } from "./_lib/integrations/meliRequest.js";
 
 /**
  * Una sola función para /api/integrations/* (Configuración → Integraciones y
@@ -18,6 +20,10 @@ import { parseReturnTarget } from "./_lib/integrations/returnTo.js";
  *   POST credentials  { portal: "argenprop", … } solo admins (credenciales emitidas por el portal)
  *   POST check        { propertyId, portals, inputs }  valida por portal
  *   POST publish      { propertyId, portals, inputs }  publica por portal
+ *                     (o { crmPropertyId, … } si la propiedad solo vive en el CRM: pesos o sin sincronizar)
+ *   POST import         { portal: "mercadolibre", cursor? }   una página de avisos de la cuenta conectada
+ *   POST import-details { portal: "mercadolibre", ids }       detalle con descripción (hasta 20)
+ *   POST import-link    { portal: "mercadolibre", links }     vincula propiedades importadas con su aviso
  *
  * Las URLs registradas en los portales (/api/meli/callback, /api/meli/notifications)
  * no cambian: siguen en api/meli.ts.
@@ -123,6 +129,43 @@ function engine(mode: "check" | "publish") {
   };
 }
 
+/**
+ * Importar avisos: por ahora solo Mercado Libre (el único portal con API de
+ * lectura de avisos propios). Cualquier miembro de la agencia: solo lee avisos
+ * y vincula propiedades de su propia agencia.
+ */
+function importAction(kind: "list" | "details" | "link") {
+  return async (req: VercelRequest, res: VercelResponse) => {
+    if (!allowMethod(req, res, "POST")) return;
+    try {
+      const ctx = await requireAgencyMember(req, res);
+      if (!ctx) return;
+      const b = body(req);
+      if (b.portal !== "mercadolibre") return fail(res, 400, "unknown_portal");
+      const av = ADAPTERS.mercadolibre.availability();
+      if (av.state !== "available") return json(res, 409, { error: "unavailable", message: av.reason });
+      let r;
+      if (kind === "list") {
+        const cursor = parseImportCursor(b.cursor);
+        if (!cursor) return fail(res, 400, "bad_request");
+        r = await meliImportList(ctx, cursor);
+      } else if (kind === "details") {
+        const ids = parseItemIds(b.ids);
+        if (!ids) return fail(res, 400, "bad_request");
+        r = await meliImportDetails(ctx, ids);
+      } else {
+        const links = parseImportLinks(b.links);
+        if (!links) return fail(res, 400, "bad_request");
+        r = await meliImportLink(ctx, links);
+      }
+      if ("error" in r) return json(res, r.http, { error: r.error, message: r.message });
+      json(res, 200, r);
+    } catch {
+      fail(res, 500, "server_error");
+    }
+  };
+}
+
 export default routeByAction("integrations", {
   list,
   connect,
@@ -130,4 +173,7 @@ export default routeByAction("integrations", {
   credentials,
   check: engine("check"),
   publish: engine("publish"),
+  import: importAction("list"),
+  "import-details": importAction("details"),
+  "import-link": importAction("link"),
 });

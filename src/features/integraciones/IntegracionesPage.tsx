@@ -19,6 +19,7 @@ import { integrationsApi, type PortalStatus } from "./api";
 import { usePortalConnections } from "./usePortalConnections";
 import { ArgenpropCredentialsForm } from "./ArgenpropCredentialsForm";
 import { PortalLogo } from "./PortalLogo";
+import { MeliImportButton } from "./MeliImportDialog";
 import { LABEL, stateLabel } from "./labels";
 
 const INK = "#1F0A3C";
@@ -277,6 +278,13 @@ function PortalCard({
         )}
       </div>
       {error && <p role="alert" className="text-xs mt-2" style={{ color: "#BE123C" }}>{error}</p>}
+
+      {p.id === "mercadolibre" && connected && !reconnect && !loading && (
+        <MeliImportButton
+          className="mt-2 w-full min-h-[44px] px-4 rounded-xl text-sm border bg-white hover:bg-violet-50"
+          style={{ borderColor: "#DDD6FE", color: "#5B21B6", fontWeight: 700 }}
+        />
+      )}
 
       {form && p.id === "argenprop" && (
         <ArgenpropCredentialsForm
