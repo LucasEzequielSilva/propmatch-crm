@@ -5,6 +5,8 @@ import { ChevronLeftIcon, HomeIcon, MapPinIcon } from "@/components/ui/icons";
 import { formatUsd, mapsLink, metaDescription, OPERATION_LABEL, TYPE_LABEL, type PublicProperty } from "../../../shared/publicSite";
 import { useSiteData } from "./useSiteData";
 import { useDocumentMeta } from "./useDocumentMeta";
+import { PhotoLogoOverlay } from "@/features/branding/PhotoLogoOverlay";
+import { resolvePhotoLogo, type ResolvedPhotoLogo } from "../../../shared/brand";
 import { ContactButtons, INK, SiteMessage, SiteShell, SOFT, useEmbed, useSiteHref } from "./SiteChrome";
 
 /**
@@ -77,7 +79,7 @@ export default function SitioPropiedadPage() {
 
         <div className="mt-2 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
           <div className="min-w-0">
-            <Gallery p={p} />
+            <Gallery p={p} photoLogo={resolvePhotoLogo(site.agency.brand)} />
 
             <section aria-labelledby="desc-h" className="mt-8">
               <h2 id="desc-h" className="text-lg" style={{ fontWeight: 800 }}>
@@ -162,7 +164,7 @@ export default function SitioPropiedadPage() {
   );
 }
 
-function Gallery({ p }: { p: PublicProperty }) {
+function Gallery({ p, photoLogo }: { p: PublicProperty; photoLogo: ResolvedPhotoLogo | null }) {
   const [i, setI] = useState(0);
   const n = p.photos.length;
   if (n === 0) {
@@ -190,6 +192,8 @@ function Gallery({ p }: { p: PublicProperty }) {
             </span>
           </>
         )}
+        {/* Logo de la inmobiliaria: capa CSS decorativa (esquiva el contador). */}
+        <PhotoLogoOverlay logo={photoLogo} context="hero" avoid={n > 1 ? ["bottom-right"] : []} />
       </div>
       {n > 1 && (
         <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
