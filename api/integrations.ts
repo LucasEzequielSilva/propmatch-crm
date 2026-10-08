@@ -14,6 +14,7 @@ import { MAX_IMAGE_BYTES, copyPhotos, parseCopyRequest, sniffImage } from "./_li
 import { env } from "./_lib/env.js";
 import { parseWatermarkRequest, photosPublicBase, watermarkPhotos } from "../shared/appWatermark.js";
 import { downloadImage } from "./_lib/photoCopy/download.js";
+import { gcalCallback, gcalConnect, gcalDelete, gcalDisconnect, gcalPull, gcalStatus, gcalUpsert } from "./_lib/gcal/routes.js";
 import { feedCreate, feedPush, feedRevoke, feedRotate, feedServe, feedStatus } from "./_lib/gcal/feed.js";
 
 /**
@@ -41,6 +42,11 @@ import { feedCreate, feedPush, feedRevoke, feedRotate, feedServe, feedStatus } f
  *
  * Google Calendar (por agente: cada usuario lo suyo; ver docs/google-calendar.md
  * y api/_lib/gcal/*):
+ *   GET  gcal-status · POST gcal-connect · GET gcal-callback · POST gcal-disconnect
+ *        conexión directa por OAuth + PKCE (opción A); callback registrado en Google:
+ *        <APP_URL>/api/integrations/gcal-callback
+ *   POST gcal-upsert { items } · gcal-delete { items } · gcal-pull { syncToken?, pageToken?, busy?, titles? }
+ *        CRM ↔ Google (id determinístico por ítem, gana el último cambio)
  *   GET  gcal-feed-status · POST gcal-feed-create | gcal-feed-rotate | gcal-feed-revoke | gcal-feed-push
  *        link de suscripción .ics (opción B)
  *   GET  calendar-feed  ← /api/integrations/calendar/<token>.ics (rewrite en vercel.json), PÚBLICO
@@ -277,6 +283,13 @@ export default routeByAction("integrations", {
   "import-link": importAction("link"),
   "copy-photos": copyPhotosAction,
   "watermark-photos": watermarkPhotosAction,
+  "gcal-status": gcalStatus,
+  "gcal-connect": gcalConnect,
+  "gcal-callback": gcalCallback,
+  "gcal-disconnect": gcalDisconnect,
+  "gcal-upsert": gcalUpsert,
+  "gcal-delete": gcalDelete,
+  "gcal-pull": gcalPull,
   "gcal-feed-status": feedStatus,
   "gcal-feed-create": feedCreate,
   "gcal-feed-rotate": feedRotate,

@@ -19,6 +19,7 @@ import { allowMethod, fail, json, noStore } from "../http.js";
 import { crmDb } from "../inbox/db.js";
 import { appBaseUrl, authConfigured, crmDbConfigured } from "./env.js";
 import { hashFeedToken, newFeedToken } from "./feedToken.js";
+import { NO_DB_MESSAGE, NoDb, missingTable } from "./db.js";
 import { buildIcsCalendar } from "../../../shared/ics.js";
 import {
   FEED_FUTURE_DAYS,
@@ -34,15 +35,7 @@ import {
 
 const TABLE = "calendar_feeds";
 
-export const NO_DB_MESSAGE = "Falta configurar la base del CRM.";
-
 const body = (req: VercelRequest) => (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
-
-/** Tabla sin crear (migración sin aplicar): mismo aviso que sin base. */
-const missingTable = (e: { code?: string; message?: string } | null) =>
-  !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|schema cache/i.test(e.message ?? ""));
-
-class NoDb extends Error {}
 
 function feedUrl(token: string): string | null {
   const base = appBaseUrl();
