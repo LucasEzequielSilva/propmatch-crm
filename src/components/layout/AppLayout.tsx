@@ -5,6 +5,7 @@ import { MobileNav } from "./MobileNav";
 import { ProppiPanel } from "@/features/proppi/ProppiPanel";
 import { SampleBanner } from "./SampleBanner";
 import { BulkAppSyncHost } from "@/features/appSync/PublishAllToApp";
+import { GoogleCalendarProvider } from "@/lib/gcal/GoogleCalendarProvider";
 
 /**
  * Marco de la aplicación: sidebar fijo + área de contenido.
@@ -21,6 +22,8 @@ export function AppLayout() {
   const { persistFailed } = useStore();
 
   return (
+    // Google Calendar: los cambios de cualquier pantalla llegan a Google (ver src/lib/gcal).
+    <GoogleCalendarProvider>
     <div className="flex h-full" style={{ background: "white" }}>
       <Sidebar />
       {/* En celular el lugar de la barra inferior se descuenta del contenido. */}
@@ -48,5 +51,6 @@ export function AppLayout() {
       {/* «Publicar todas en la app»: sigue corriendo aunque se cambie de pantalla. */}
       <BulkAppSyncHost />
     </div>
+    </GoogleCalendarProvider>
   );
 }

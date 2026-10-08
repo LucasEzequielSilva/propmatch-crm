@@ -22,6 +22,7 @@ import { PortalLogo } from "./PortalLogo";
 import { MeliImportButton } from "./MeliImportDialog";
 import { LABEL, stateLabel } from "./labels";
 import { AppPropMatchCard } from "@/features/appSync/PublishAllToApp";
+import { GoogleCalendarCard } from "./GoogleCalendarCard";
 
 const INK = "#1F0A3C";
 const MUTED = "#6B5A8E";
@@ -110,6 +111,8 @@ export default function IntegracionesPage() {
           </Card>
 
           <AppPropMatchCard />
+
+          <GoogleCalendarCard />
 
           <ul className="grid gap-4 grid-cols-1 lg:grid-cols-2 items-start" aria-busy={loading}>
             {PORTALS.map((p) => {

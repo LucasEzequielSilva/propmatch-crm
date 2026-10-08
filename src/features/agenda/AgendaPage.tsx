@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, MapPinIcon } from "@/components/ui/icons";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, MapPinIcon } from "@/components/ui/icons";
 import { WhatsAppModal, type Template } from "@/components/share/WhatsAppModal";
 import { useStore } from "@/data/store";
 import { buildIcsCalendar } from "@/lib/ics";
@@ -12,6 +12,9 @@ import { RouteSheetModal } from "./RouteSheetModal";
 import { TasksCard } from "./TasksCard";
 import { VisitPanel, type ScheduleDefaults } from "./VisitPanel";
 import { useAppVisits } from "./useAppVisits";
+import { GoogleCalendarDialog } from "./GoogleCalendarDialog";
+import { useGoogleCalendar } from "@/lib/gcal/GoogleCalendarProvider";
+import { appVisitItems } from "@/lib/gcal/items";
 import {
   STATUS_META,
   STATUS_ORDER,
@@ -58,8 +61,11 @@ export default function AgendaPage() {
     appVisitChecklist,
     contactById,
     propertyById,
+    currentUserId,
   } = useStore();
   const appVisits = useAppVisits();
+  const gcal = useGoogleCalendar();
+  const [gcalOpen, setGcalOpen] = useState(false);
   const now = useNow();
 
   const [view, setView] = useState<AgendaView>("semana");
@@ -80,6 +86,19 @@ export default function AgendaPage() {
     const ctx = { properties, contacts, opportunities, feedback: appVisitFeedback, checklist: appVisitChecklist };
     return [...events.map(fromEvent), ...appVisits.visits.map((v) => fromAppVisit(v, ctx))];
   }, [events, appVisits.visits, properties, contacts, opportunities, appVisitFeedback, appVisitChecklist]);
+
+  // Google Calendar: al abrir la Agenda se reenvía el link (.ics) y se le pasan
+  // las visitas de la app del agente (las otras pantallas no las cargan).
+  const { agendaOpened, reportAppVisits } = gcal;
+  const feedState = gcal.feed.state;
+  useEffect(() => {
+    if (feedState === "active") agendaOpened();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedState]);
+  useEffect(() => {
+    if (!currentUserId || !appVisits.loaded || appVisits.error) return;
+    reportAppVisits(appVisitItems(allItems, { contacts, properties, userId: currentUserId }));
+  }, [allItems, appVisits.loaded, appVisits.error, contacts, properties, currentUserId, reportAppVisits]);
 
   const contactName = useCallback(
     (i: AgendaItem) => contactById(i.contactId)?.full_name ?? i.contactFallback,
@@ -386,6 +405,15 @@ export default function AgendaPage() {
                 <DownloadIcon size={13} />
                 Exportar agenda (.ics)
               </button>
+              <button
+                type="button"
+                onClick={() => setGcalOpen(true)}
+                className="min-h-11 md:min-h-9 px-3 rounded-lg text-xs border flex items-center gap-1.5 hover:bg-violet-50"
+                style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700, background: "white" }}
+              >
+                <CalendarIcon size={13} />
+                Google Calendar
+              </button>
             </div>
           </section>
 
@@ -421,6 +449,7 @@ export default function AgendaPage() {
           onClose={() => setForm(null)}
         />
       )}
+      {gcalOpen && <GoogleCalendarDialog onClose={() => setGcalOpen(false)} />}
       {routeOpen && (
         <RouteSheetModal
           items={items}
