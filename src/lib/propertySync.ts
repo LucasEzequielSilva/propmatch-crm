@@ -110,6 +110,9 @@ export function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string } {
  * `{agencyId}/{propertyId}/...` — la policy de Storage habilita esa carpeta
  * para cualquier miembro de la agencia, no solo para el owner_id de la fila.
  * Las que ya son una URL (sincronizadas antes) se dejan igual.
+ * Se suben tal cual, sin el logo de la inmobiliaria: el «logo sobre las
+ * fotos» es solo visual (CSS) y la app PropMatch recibe la foto limpia (ver
+ * shared/brand.ts).
  */
 export async function uploadPropertyPhotos(
   agencyId: string,
