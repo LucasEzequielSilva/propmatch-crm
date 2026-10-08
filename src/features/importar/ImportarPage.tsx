@@ -35,7 +35,7 @@ export default function ImportarPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const kind: Kind = params.get("tipo") === "propiedades" ? "propiedades" : "contactos";
-  const { contacts, properties, profiles, profile, agency, importContacts, importProperties, undoImport } = useStore();
+  const { contacts, properties, profiles, profile, agency, importContacts, importProperties, undoImport, photos, replacePropertyPhotos } = useStore();
 
   const [step, setStep] = useState<Step>("archivo");
   const [fileName, setFileName] = useState("");
@@ -46,7 +46,7 @@ export default function ImportarPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [result, setResult] = useState<{ ids: string[]; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ ids: string[]; skipped: number; photosFilled?: number } | null>(null);
   const [undone, setUndone] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -110,7 +110,19 @@ export default function ImportarPage() {
       kind === "contactos"
         ? importContacts(inputs as Parameters<typeof importContacts>[0])
         : importProperties(inputs as Parameters<typeof importProperties>[0]);
-    setResult({ ids, skipped: drafts.length - ids.length });
+    // Repetidos de algo ya cargado que quedó sin fotos (p. ej. una importación anterior
+    // que no las tomó): se completan las fotos en vez de duplicar la propiedad.
+    let photosFilled = 0;
+    if (kind === "propiedades") {
+      for (const d of drafts) {
+        const input = d.input as { photos?: string[] } | null;
+        if (!d.existingId || !input?.photos?.length) continue;
+        if ((photos[d.existingId] ?? []).length > 0) continue;
+        replacePropertyPhotos(d.existingId, input.photos);
+        photosFilled++;
+      }
+    }
+    setResult({ ids, skipped: drafts.length - ids.length, photosFilled });
     setStep("listo");
   }
 
@@ -379,7 +391,7 @@ export default function ImportarPage() {
           <div className="pm-enter mt-10 max-w-xl mx-auto text-center">
             <p className="text-5xl">{undone ? "↩︎" : "✅"}</p>
             <p className="text-2xl mt-4 tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              {undone ? "Importación deshecha" : `Se importaron ${result.ids.length} ${label}`}
+              {undone ? "Importación deshecha" : `Se importaron ${result.ids.length} ${label}${result.photosFilled ? ` y se completaron las fotos de ${result.photosFilled} que ya estaban` : ""}`}
             </p>
             <p className="text-sm mt-2" style={{ color: "#7C6A99" }}>
               {undone
