@@ -14,6 +14,7 @@ import { MAX_IMAGE_BYTES, copyPhotos, parseCopyRequest, sniffImage } from "./_li
 import { env } from "./_lib/env.js";
 import { parseWatermarkRequest, photosPublicBase, watermarkPhotos } from "../shared/appWatermark.js";
 import { downloadImage } from "./_lib/photoCopy/download.js";
+import { feedCreate, feedPush, feedRevoke, feedRotate, feedServe, feedStatus } from "./_lib/gcal/feed.js";
 
 /**
  * Una sola función para /api/integrations/* (Configuración → Integraciones y
@@ -36,6 +37,13 @@ import { downloadImage } from "./_lib/photoCopy/download.js";
  *                       miembros de la agencia: copia con el logo quemado de fotos de la
  *                       agencia (hasta 12) en property-photos/<agencia>/<crmPropertyId>/app/
  *                       → { results, skipped } (ver docs/marca-de-agua-app.md)
+ *
+ *
+ * Google Calendar (por agente: cada usuario lo suyo; ver docs/google-calendar.md
+ * y api/_lib/gcal/*):
+ *   GET  gcal-feed-status · POST gcal-feed-create | gcal-feed-rotate | gcal-feed-revoke | gcal-feed-push
+ *        link de suscripción .ics (opción B)
+ *   GET  calendar-feed  ← /api/integrations/calendar/<token>.ics (rewrite en vercel.json), PÚBLICO
  *
  * Las URLs registradas en los portales (/api/meli/callback, /api/meli/notifications)
  * no cambian: siguen en api/meli.ts.
@@ -269,4 +277,10 @@ export default routeByAction("integrations", {
   "import-link": importAction("link"),
   "copy-photos": copyPhotosAction,
   "watermark-photos": watermarkPhotosAction,
+  "gcal-feed-status": feedStatus,
+  "gcal-feed-create": feedCreate,
+  "gcal-feed-rotate": feedRotate,
+  "gcal-feed-revoke": feedRevoke,
+  "gcal-feed-push": feedPush,
+  "calendar-feed": feedServe,
 });
