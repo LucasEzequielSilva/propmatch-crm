@@ -336,6 +336,7 @@ export const PROPERTY_FIELDS: FieldDef[] = [
   { key: "province", label: "Provincia", synonyms: ["provincia"] },
   { key: "surface_total", label: "Sup. total (m²)", synonyms: ["superficie total", "sup total", "m2 totales", "superficie", "metros", "m2"] },
   { key: "surface_covered", label: "Sup. cubierta (m²)", synonyms: ["superficie cubierta", "sup cubierta", "m2 cubiertos", "cubierta"] },
+  { key: "rooms", label: "Ambientes", synonyms: ["ambientes", "amb", "cantidad de ambientes"] },
   { key: "bedrooms", label: "Dormitorios", synonyms: ["dormitorios", "habitaciones", "cuartos", "dorm"] },
   { key: "bathrooms", label: "Baños", synonyms: ["banos", "bano"] },
   { key: "garages", label: "Cocheras", synonyms: ["cocheras", "cochera", "garage", "garajes"] },
@@ -402,6 +403,7 @@ export function buildPropertyDrafts(
     const statusRaw = get("status");
     const status = parsePropertyStatus(statusRaw) ?? "disponible";
     const bedrooms = parseNumber(get("bedrooms"));
+    const rooms = parseNumber(get("rooms"));
     const photos = splitUrls(get("photo")).filter((u) => /^https?:\/\//.test(u));
 
     const k = key(street, street_number, title, price, get("description") || null);
@@ -429,6 +431,8 @@ export function buildPropertyDrafts(
           commission_pct: null,
           surface_total: parseNumber(get("surface_total")),
           surface_covered: parseNumber(get("surface_covered")),
+          // Sin columna de ambientes se deja sin definir: el store estima dormitorios + 1.
+          ...(rooms !== null && rooms > 0 ? { rooms: Math.round(rooms) } : {}),
           bedrooms: bedrooms !== null ? Math.round(bedrooms) : 0,
           bathrooms: Math.round(parseNumber(get("bathrooms")) ?? 0),
           garages: Math.round(parseNumber(get("garages")) ?? 0),

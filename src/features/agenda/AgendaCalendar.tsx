@@ -2,14 +2,17 @@ import { useEffect, useState } from "react";
 import { SampleBadge } from "@/components/ui/SampleBadge";
 import { EventTypeIcon } from "@/components/ui/icons";
 import {
+  BUSY_COLORS,
   STATUS_META,
   TYPE_COLOR,
   TYPE_LABEL,
   addDays,
+  busyOnDay,
   fmtHour,
   mondayOf,
   sameDay,
   type AgendaItem,
+  type BusyBlock,
 } from "./agendaModel";
 
 /**
@@ -121,6 +124,7 @@ export function TimeGrid({
   onSelect,
   contactName,
   now,
+  busy = [],
 }: {
   days: Date[];
   items: AgendaItem[];
@@ -128,6 +132,8 @@ export function TimeGrid({
   onSelect: (item: AgendaItem) => void;
   contactName: (i: AgendaItem) => string | null;
   now: Date;
+  /** «Ocupado» de Google Calendar (se dibuja de fondo, no se puede tocar). */
+  busy?: BusyBlock[];
 }) {
   const nowDecimal = decimalHour(now);
   const showNow = days.some((d) => sameDay(d, now)) && nowDecimal >= START_HOUR && nowDecimal <= END_HOUR;
@@ -213,6 +219,12 @@ export function TimeGrid({
                 </div>
               )}
 
+              {busy
+                .filter((b) => !b.allDay && sameDay(b.start, day))
+                .map((b) => (
+                  <BusyGridBlock key={b.id} block={b} />
+                ))}
+
               {layoutDay(dayItems).map(({ item, col, cols }) => (
                 <GridBlock
                   key={item.key}
@@ -228,6 +240,28 @@ export function TimeGrid({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function BusyGridBlock({ block: b }: { block: BusyBlock }) {
+  const startH = Math.max(decimalHour(b.start), START_HOUR);
+  const endH = Math.min(sameDay(b.start, b.end) ? decimalHour(b.end) : END_HOUR, END_HOUR);
+  if (endH <= START_HOUR || startH >= END_HOUR) return null;
+  const top = (startH - START_HOUR) * HOUR_HEIGHT + 1;
+  const height = Math.max((endH - startH) * HOUR_HEIGHT - 2, 14);
+  const label = b.title ?? "Ocupado";
+  return (
+    <div
+      role="note"
+      aria-label={`${label} en Google Calendar, ${fmtHour(b.start)} a ${fmtHour(b.end)}`}
+      title={`${label} (Google Calendar) · ${fmtHour(b.start)}–${fmtHour(b.end)}`}
+      className="absolute rounded-md overflow-hidden pointer-events-none"
+      style={{ top, height, left: 2, right: 2, background: BUSY_COLORS.stripes, border: `1px dashed ${BUSY_COLORS.border}`, zIndex: 5 }}
+    >
+      <span className="block truncate px-1.5 pt-0.5 text-[10px]" style={{ color: BUSY_COLORS.text, fontWeight: 600 }}>
+        {fmtHour(b.start)} {label}
+      </span>
     </div>
   );
 }
@@ -308,6 +342,7 @@ export function MonthGrid({
   onSelect,
   onPickDay,
   now,
+  busy = [],
 }: {
   monthStart: Date;
   items: AgendaItem[];
@@ -315,6 +350,7 @@ export function MonthGrid({
   onSelect: (item: AgendaItem) => void;
   onPickDay: (day: Date) => void;
   now: Date;
+  busy?: BusyBlock[];
 }) {
   const gridStart = mondayOf(monthStart);
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
@@ -385,6 +421,22 @@ export function MonthGrid({
                     </button>
                   );
                 })}
+                {(() => {
+                  const dayBusy = busy.filter((b) => busyOnDay(b, day));
+                  if (dayBusy.length === 0) return null;
+                  const first = dayBusy[0];
+                  return (
+                    <span
+                      className="w-full truncate px-1.5 py-0.5 rounded-md text-[10px]"
+                      style={{ background: BUSY_COLORS.stripes, color: BUSY_COLORS.text, fontWeight: 600 }}
+                      title="Ocupado en Google Calendar"
+                    >
+                      {first.allDay ? "" : `${fmtHour(first.start)} `}
+                      {first.title ?? "Ocupado"}
+                      {dayBusy.length > 1 ? ` +${dayBusy.length - 1}` : ""}
+                    </span>
+                  );
+                })()}
                 {dayItems.length > shown.length && (
                   <button
                     type="button"
@@ -415,6 +467,7 @@ export function ListView({
   propertyTitle,
   now,
   hideEmptyDays = false,
+  busy = [],
 }: {
   days: Date[];
   items: AgendaItem[];
@@ -424,6 +477,7 @@ export function ListView({
   propertyTitle: (i: AgendaItem) => string | null;
   now: Date;
   hideEmptyDays?: boolean;
+  busy?: BusyBlock[];
 }) {
   const groups = days
     .map((day) => ({
@@ -461,7 +515,28 @@ export function ListView({
               <p className="text-xs pl-1" style={{ color: "#7C6A99" }}>
                 Sin eventos
               </p>
-            ) : (
+            ) : null}
+            {busy.some((b) => busyOnDay(b, day)) && (
+              <ul className="space-y-1 mt-2" aria-label="Ocupado en Google Calendar">
+                {busy
+                  .filter((b) => busyOnDay(b, day))
+                  .map((b) => (
+                    <li
+                      key={b.id}
+                      className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs"
+                      style={{ background: BUSY_COLORS.stripes, color: BUSY_COLORS.text, border: `1px dashed ${BUSY_COLORS.border}` }}
+                    >
+                      <span className="w-12 flex-shrink-0" style={{ fontWeight: 700 }}>
+                        {b.allDay ? "Día" : fmtHour(b.start)}
+                      </span>
+                      <span className="truncate" style={{ fontWeight: 600 }}>
+                        {b.title ?? "Ocupado"} <span style={{ fontWeight: 400 }}>· Google Calendar</span>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            {dayItems.length > 0 && (
               <ul className="space-y-2">
                 {dayItems.map((i) => {
                   const c = itemColors(i);

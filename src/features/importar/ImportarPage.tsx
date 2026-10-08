@@ -35,7 +35,7 @@ export default function ImportarPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const kind: Kind = params.get("tipo") === "propiedades" ? "propiedades" : "contactos";
-  const { contacts, properties, profiles, profile, agency, importContacts, importProperties, undoImport, photos, replacePropertyPhotos } = useStore();
+  const { contacts, properties, profiles, profile, agency, importContacts, importProperties, undoImport, photos, replacePropertyPhotos, updateProperty } = useStore();
 
   const [step, setStep] = useState<Step>("archivo");
   const [fileName, setFileName] = useState("");
@@ -46,7 +46,7 @@ export default function ImportarPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [result, setResult] = useState<{ ids: string[]; skipped: number; photosFilled?: number } | null>(null);
+  const [result, setResult] = useState<{ ids: string[]; skipped: number; photosFilled?: number; roomsFilled?: number } | null>(null);
   const [undone, setUndone] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -112,17 +112,29 @@ export default function ImportarPage() {
         : importProperties(inputs as Parameters<typeof importProperties>[0]);
     // Repetidos de algo ya cargado que quedó sin fotos (p. ej. una importación anterior
     // que no las tomó): se completan las fotos en vez de duplicar la propiedad.
+    // Igual con los ambientes: si el archivo los trae y la propiedad cargada no
+    // los tiene, se completan (no se pisa un dato que ya está).
     let photosFilled = 0;
+    let roomsFilled = 0;
     if (kind === "propiedades") {
       for (const d of drafts) {
-        const input = d.input as { photos?: string[] } | null;
-        if (!d.existingId || !input?.photos?.length) continue;
-        if ((photos[d.existingId] ?? []).length > 0) continue;
-        replacePropertyPhotos(d.existingId, input.photos);
-        photosFilled++;
+        const input = d.input as { photos?: string[]; rooms?: number; bedrooms?: number } | null;
+        if (!d.existingId || !input) continue;
+        if (input.photos?.length && (photos[d.existingId] ?? []).length === 0) {
+          replacePropertyPhotos(d.existingId, input.photos);
+          photosFilled++;
+        }
+        const existing = properties.find((p) => p.id === d.existingId);
+        if (existing && input.rooms && (existing.rooms === null || existing.rooms === undefined)) {
+          updateProperty(d.existingId, {
+            rooms: input.rooms,
+            ...(!existing.bedrooms && input.bedrooms ? { bedrooms: input.bedrooms } : {}),
+          });
+          roomsFilled++;
+        }
       }
     }
-    setResult({ ids, skipped: drafts.length - ids.length, photosFilled });
+    setResult({ ids, skipped: drafts.length - ids.length, photosFilled, roomsFilled });
     setStep("listo");
   }
 
@@ -391,7 +403,7 @@ export default function ImportarPage() {
           <div className="pm-enter mt-10 max-w-xl mx-auto text-center">
             <p className="text-5xl">{undone ? "↩︎" : "✅"}</p>
             <p className="text-2xl mt-4 tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-              {undone ? "Importación deshecha" : `Se importaron ${result.ids.length} ${label}${result.photosFilled ? ` y se completaron las fotos de ${result.photosFilled} que ya estaban` : ""}`}
+              {undone ? "Importación deshecha" : `Se importaron ${result.ids.length} ${label}${result.photosFilled ? ` · se completaron las fotos de ${result.photosFilled} que ya estaban` : ""}${result.roomsFilled ? ` · se completaron los ambientes de ${result.roomsFilled}` : ""}`}
             </p>
             <p className="text-sm mt-2" style={{ color: "#7C6A99" }}>
               {undone
