@@ -12,9 +12,16 @@
     },
     "api/marketing.ts": {
       "maxDuration": 60
+    },
+    "api/crm.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
+    {
+      "source": "/api/crm/:action",
+      "destination": "/api/crm?action=:action"
+    },
     {
       "source": "/api/meli/:action",
       "destination": "/api/meli?action=:action"

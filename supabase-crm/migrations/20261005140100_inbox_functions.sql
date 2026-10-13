@@ -1,5 +1,6 @@
 -- Inbox unificado: funciones atómicas que usan las funciones de Vercel.
--- Aplicar DESPUÉS de 20261005140000_inbox_schema.sql. SIN APLICAR.
+-- Aplicar DESPUÉS de 20261005140000_inbox_schema.sql. APLICADA el 2026-10-09 en ktltjpwetvdoxcaayvkh (vía MCP),
+-- salvo inbox_purge: el MCP rechaza funciones con DELETE; pegarla a mano en el SQL Editor.
 --
 -- Todas son SECURITY INVOKER y solo las puede ejecutar service_role.
 
@@ -96,6 +97,7 @@ $$;
 create or replace function public.inbox_status_rank(p text)
 returns integer
 language sql immutable
+set search_path = public, pg_temp
 as $$
   select case p when 'pending' then 0 when 'sent' then 1 when 'delivered' then 2 when 'read' then 3 else -1 end;
 $$;

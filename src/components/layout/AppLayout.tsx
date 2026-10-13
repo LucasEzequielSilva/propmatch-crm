@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { useStore } from "@/data/store";
+import type { RemoteStatus } from "@/data/remote";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { ProppiPanel } from "@/features/proppi/ProppiPanel";
@@ -17,9 +18,20 @@ import { GoogleCalendarProvider } from "@/lib/gcal/GoogleCalendarProvider";
  * que dispara la animación de entrada. Sin eso el contenido se reemplaza de
  * golpe y la app se siente entrecortada.
  */
+/**
+ * Avisos de la sincronización con la base propia del CRM (src/data/remote.ts).
+ * «pending» y «loading» no se avisan: son el funcionamiento normal.
+ */
+const REMOTE_NOTICE: Partial<Record<RemoteStatus, string>> = {
+  offline: "Sin conexión con la base: seguís trabajando acá y los cambios se suben solos cuando vuelva.",
+  no_db: "La base del CRM no está configurada en el servidor: lo que cargues queda solo en este navegador.",
+  unauthorized: "Tu sesión venció: cerrá sesión y volvé a entrar para seguir guardando en la base.",
+};
+
 export function AppLayout() {
   const { pathname } = useLocation();
-  const { persistFailed } = useStore();
+  const { persistFailed, remoteStatus } = useStore();
+  const remoteNotice = REMOTE_NOTICE[remoteStatus];
 
   return (
     // Google Calendar: los cambios de cualquier pantalla llegan a Google (ver src/lib/gcal).
@@ -36,6 +48,15 @@ export function AppLayout() {
           >
             No se pudo guardar en este navegador (probablemente por espacio, las fotos ocupan mucho). Lo
             último que cargaste se pierde al recargar la página.
+          </div>
+        )}
+        {remoteNotice && (
+          <div
+            role="status"
+            className="px-4 md:px-8 py-2.5 text-sm border-b"
+            style={{ background: "#FFFBEB", color: "#92400E", borderColor: "#FDE68A", fontWeight: 600 }}
+          >
+            {remoteNotice}
           </div>
         )}
         <SampleBanner />

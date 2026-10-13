@@ -1,7 +1,7 @@
 -- Conexión directa con Google Calendar, una por agente (opción A).
 --
 -- OJO: va en el Supabase PROPIO del CRM (el de 20261005140000_inbox_schema.sql),
--- NO en el de la app. SIN APLICAR: lo aplica el usuario siguiendo
+-- NO en el de la app. APLICADA el 2026-10-09 en ktltjpwetvdoxcaayvkh (vía MCP). Antes: lo aplica el usuario siguiendo
 -- docs/google-calendar.md (después de 20261008120000_calendar_feeds.sql).
 --
 -- Mismo modelo de acceso que el inbox: el navegador nunca habla con esta base.

@@ -1,7 +1,7 @@
 -- Marketing por email y WhatsApp: campañas, destinatarios, bajas y consentimientos.
 --
 -- OJO: va en el Supabase PROPIO del CRM (el mismo de 20261005140000_inbox_schema.sql),
--- NO en el de la app (jhtkvcxvgjwnuzfhbale). SIN APLICAR: lo aplica el usuario
+-- NO en el de la app (jhtkvcxvgjwnuzfhbale). APLICADA el 2026-10-09 en ktltjpwetvdoxcaayvkh (vía MCP). Antes: lo aplica el usuario
 -- siguiendo docs/marketing-puesta-en-marcha.md, DESPUÉS de las migraciones del inbox
 -- (usa channel_accounts y api_rate_limits).
 --
