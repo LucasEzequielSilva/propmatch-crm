@@ -47,3 +47,39 @@ async function resolve(req: VercelRequest, res: VercelResponse, adminOnly: boole
 
 export const requireAgencyAdmin = (req: VercelRequest, res: VercelResponse) => resolve(req, res, true);
 export const requireAgencyMember = (req: VercelRequest, res: VercelResponse) => resolve(req, res, false);
+
+export interface UserContext {
+  userId: string;
+  /** `null` = cuenta sin inmobiliaria todavía (trabaja en su propio ámbito). */
+  agencyId: string | null;
+  role: string | null;
+}
+
+/**
+ * Como `requireAgencyMember`, pero una cuenta sin membresía también pasa
+ * (lo usan los datos del CRM: hasta que la vinculen, guarda a su nombre).
+ * Responde 401 por sí misma y devuelve null en ese caso.
+ */
+export async function requireUser(req: VercelRequest, res: VercelResponse): Promise<UserContext | null> {
+  const header = req.headers.authorization ?? "";
+  const m = /^Bearer\s+(\S+)$/i.exec(header);
+  if (!m) {
+    fail(res, 401, "unauthorized");
+    return null;
+  }
+  const jwt = m[1];
+  const url = env("SUPABASE_URL");
+  const anon = env("SUPABASE_ANON_KEY");
+  const opts = { auth: { persistSession: false, autoRefreshToken: false } };
+
+  const { data: userData, error: userErr } = await createClient(url, anon, opts).auth.getUser(jwt);
+  if (userErr || !userData.user) {
+    fail(res, 401, "unauthorized");
+    return null;
+  }
+  const userId = userData.user.id;
+  const asUser = createClient(url, anon, { ...opts, global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const { data } = await asUser.from("agency_members").select("agency_id, role").eq("user_id", userId).limit(1);
+  const row = data?.[0] as { agency_id: string; role: string } | undefined;
+  return { userId, agencyId: row?.agency_id ?? null, role: row?.role ?? null };
+}

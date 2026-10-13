@@ -60,15 +60,16 @@ import { adoptSamples, markLegacySamples, restoreSamples, sampleSlices, SAMPLES_
 import { isSample } from "@/lib/samples";
 import { photosBase, photosForApp, watermarkNotice } from "@/lib/appWatermark";
 import { originalPhotos } from "../../shared/appWatermark";
+import { RemoteSync, applyRemote, reconcileInitial, swapPhotoUrls, type RemoteStatus } from "./remote";
 
 /**
  * Store del frontend.
  *
- * Mientras no haya backend, todo el estado del CRM vive acá y se persiste en
- * localStorage. Es deliberadamente la misma forma que va a tener la capa de
- * datos real: las pantallas piden `useStore()` y no saben de dónde salen los
- * datos, así que cuando se conecte Supabase se cambia este archivo y no las
- * nueve pantallas.
+ * Todo el estado del CRM vive acá. Con una cuenta real se guarda en la base
+ * propia del CRM (ver ./remote.ts y docs/datos-en-la-base.md) y localStorage
+ * queda como copia de trabajo (sirve sin conexión). En la demo, solo
+ * localStorage. Las pantallas piden `useStore()` y no saben de dónde salen
+ * los datos.
  */
 
 const STORAGE_KEY = "propmatch.store.v1";
@@ -460,6 +461,8 @@ interface StoreValue extends StoreData {
   reset: () => void;
   /** El último guardado en el navegador falló: lo nuevo no sobrevive a un refresh. */
   persistFailed: boolean;
+  /** Estado de la sincronización con la base propia del CRM (ver ./remote.ts). */
+  remoteStatus: RemoteStatus;
   /** Sesión de demo (sin cuenta): los ejemplos no se pueden ocultar. */
   isDemo: boolean;
   /** "Usar mis datos reales": quita los datos de ejemplo y guarda la preferencia (`samplesHidden`). */
@@ -482,7 +485,14 @@ function appErrorMessage(err: unknown): string {
   return msg ? `La app rechazó la propiedad: ${msg.slice(0, 160)}` : "La app rechazó la propiedad";
 }
 
-const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+/** Ids únicos entre navegadores: varios agentes de la misma inmobiliaria crean registros a la vez. */
+const uid = (prefix: string) => {
+  const rnd =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 14)
+      : Math.random().toString(36).slice(2, 9) + Math.random().toString(36).slice(2, 9);
+  return `${prefix}-${rnd}`;
+};
 
 /** `agency.id` de una cuenta sin inmobiliaria: no existe en Supabase, así que nada lo consulta allá. */
 export const UNLINKED_AGENCY_PREFIX = "local-";
@@ -506,7 +516,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // La app sigue andando, pero lo nuevo se pierde al recargar: hay que avisar.
       setPersistFailed(true);
     }
+    // Con una cuenta real, lo que cambió también va a la base (en tandas, con un pequeño retraso).
+    remoteRef.current?.track(data);
   }, [data, storageKey]);
+
+  /**
+   * Sincronización con la base propia del CRM. Se arma al abrir una sesión
+   * real y se desarma al salir. `remoteEpoch` sube con cada bajada inicial:
+   * los efectos que traen cosas de la app vuelven a correr sobre los datos
+   * ya reconciliados.
+   */
+  const remoteRef = useRef<RemoteSync | null>(null);
+  const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>("off");
+  const [remoteEpoch, setRemoteEpoch] = useState(0);
+
+  const stopRemote = useCallback(() => {
+    remoteRef.current?.stop();
+    remoteRef.current = null;
+    setRemoteStatus("off");
+  }, []);
+
+  const startRemote = useCallback(async (userId: string) => {
+    remoteRef.current?.stop();
+    const sync = new RemoteSync(userId, {
+      onInitial: (records, pending) => {
+        setData((d) => reconcileInitial(d, records, pending));
+        setRemoteEpoch((n) => n + 1);
+      },
+      onRecords: (records, skip) => setData((d) => applyRemote(d, records, skip)),
+      onPhotosUploaded: (propertyId, swap) => setData((d) => swapPhotoUrls(d, propertyId, swap)),
+      onStatus: setRemoteStatus,
+    });
+    remoteRef.current = sync;
+    const initial = await sync.start();
+    // Cambió la sesión mientras bajaba: esta ya no va.
+    if (remoteRef.current !== sync) return;
+    if (initial) {
+      setData((d) => reconcileInitial(d, initial, sync.pendingKeys()));
+      sync.enableTracking();
+    }
+    setRemoteEpoch((n) => n + 1);
+  }, []);
 
   /**
    * Los matches no se guardan: se derivan. Es lo que en la base hace el
@@ -609,14 +659,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
 
     setCurrentUserId(userId);
+    // Baja los datos de la inmobiliaria antes de dar la sesión por abierta.
+    await startRemote(userId);
     return null;
-  }, []);
+  }, [startRemote]);
 
   /**
    * Demo para mostrar el CRM sin cuenta: datos de ejemplo (`seed.ts`) en su
    * propia clave del navegador y sin tocar Supabase (sin `agencyContext`).
    */
   const enterDemo = useCallback(() => {
+    stopRemote();
     setDemoFlag(true);
     if (storageKeyRef.current !== DEMO_STORAGE_KEY) {
       setStorageKey(DEMO_STORAGE_KEY);
@@ -628,7 +681,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPendingLinkEmail(null);
     setAgencyContext(null);
     setCurrentUserId(DEMO_USER_ID);
-  }, []);
+  }, [stopRemote]);
 
   // Restaura la sesión de Supabase si ya había una (refresh de la página).
   useEffect(() => {
@@ -650,8 +703,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // Trae las propiedades de agencia que ya existen en Supabase y todavía no
   // están en este navegador (ej. las creó otro agente desde otra máquina).
+  // Corre después de cada bajada inicial de la base (`remoteEpoch`), así no
+  // duplica lo que otro agente ya trajo.
   useEffect(() => {
-    if (!agencyContext) return;
+    if (!agencyContext || remoteEpoch === 0) return;
     let cancelled = false;
 
     (async () => {
@@ -726,7 +781,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [agencyContext]);
+  }, [agencyContext, remoteEpoch]);
 
   /**
    * Leads reales: cuando alguien de la app le da like, matchea, propone una
@@ -739,7 +794,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * tarjeta del pipeline. Poll cada 30s mientras haya sesión.
    */
   useEffect(() => {
-    if (!agencyContext) return;
+    if (!agencyContext || remoteEpoch === 0) return;
     let cancelled = false;
 
     const run = async () => {
@@ -924,7 +979,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [agencyContext]);
+  }, [agencyContext, remoteEpoch]);
 
   const signIn = useCallback<StoreValue["signIn"]>(async (email, password) => {
     if (email.trim() === "valen@propmatch.com" && password === "123456") {
@@ -996,6 +1051,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const dismissPendingLink = useCallback(() => setPendingLinkEmail(null), []);
 
   const signOut = useCallback(() => {
+    stopRemote();
     void supabase.auth.signOut();
     setAgencyContext(null);
     setCurrentUserId(null);
@@ -1003,7 +1059,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setDemoFlag(false);
     setStorageKey(ANON_STORAGE_KEY);
     setData(loadData(ANON_STORAGE_KEY));
-  }, []);
+  }, [stopRemote]);
 
   /**
    * Quién hace cada acción. Ref y no dependencia: así las acciones no cambian
@@ -2042,7 +2098,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setData((d) => restoreSamples(d, actorRef.current));
   }, []);
 
+  /** Solo este navegador: lo guardado en la base no se toca (al volver a entrar se baja de nuevo). */
   const reset = useCallback(() => {
+    stopRemote();
     try {
       localStorage.removeItem(storageKeyRef.current);
     } catch {
@@ -2050,7 +2108,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     setData(seedData());
     setCurrentUserId(null);
-  }, []);
+  }, [stopRemote]);
 
   const value = useMemo<StoreValue>(() => {
     const contactIndex = new Map(data.contacts.map((c) => [c.id, c]));
@@ -2116,6 +2174,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeDeal,
       reset,
       persistFailed,
+      remoteStatus,
       sessionLoading,
       isDemo: storageKey === DEMO_STORAGE_KEY,
       hideSamples,
@@ -2175,6 +2234,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     removeDeal,
     reset,
     persistFailed,
+    remoteStatus,
     storageKey,
     hideSamples,
     showSamples,

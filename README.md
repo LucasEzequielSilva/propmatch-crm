@@ -19,32 +19,33 @@ conservando el sistema visual completo.
     npm install
     npm run dev     # http://localhost:5180
 
-No necesita backend ni variables de entorno.
+Variables de entorno: copiar `.env.example` a `.env.local` (las `VITE_*` del
+Supabase de la app). La demo («Probar la demo» en el login) anda sin nada.
 
 ## Inicio de sesion
 
-La pantalla de login existe, pero NO es seguridad: sin backend no hay
-contrasenas guardadas ni tokens, y alcanza con el mail de un agente para
-entrar. Sirve para que el flujo este completo y para saber que agente esta
-usando el CRM (de eso dependen "a cargo de", el avatar del header y el ranking
-del equipo).
-
-La pantalla lista los agentes del equipo: un click completa el formulario.
-La sesion se guarda en `localStorage` bajo `propmatch.session.v1`.
+Auth real de Supabase (el mismo proyecto que la app). El agente queda atado a
+su inmobiliaria por `agency_members`; una cuenta sin inmobiliaria entra igual
+y trabaja a su nombre hasta que la vinculen. «Probar la demo» entra con datos
+de ejemplo, sin cuenta.
 
 ## Como funcionan los datos
 
 Todo el estado vive en `src/data/`:
 
-- `seed.ts` — contactos, propiedades, oportunidades, agenda y tareas de arranque.
-  Es una sola fuente de verdad: en el prototipo cada pantalla tenia su propio
-  array y no coincidian entre si.
-- `store.tsx` — el estado de la app, con persistencia en localStorage. Es el
-  unico archivo que las pantallas tocan para leer o escribir.
+- `seed.ts` — contactos, propiedades, oportunidades, agenda y tareas de ejemplo.
+- `store.tsx` — el estado de la app. Es el unico archivo que las pantallas
+  tocan para leer o escribir.
+- `remote.ts` — con una cuenta real, guarda cada cambio en la base propia del
+  CRM (Supabase `ktltjpwetvdoxcaayvkh`, tabla `crm_records`) a traves de
+  `/api/crm/*`, y baja lo que cambiaron los demas agentes. localStorage queda
+  como copia de trabajo: sirve sin conexion y lo pendiente se sube al volver.
+  Ver `docs/datos-en-la-base.md`.
 
-Los cambios sobreviven al refresh. Para volver a los datos de ejemplo:
-Configuracion > "Volver a los datos de ejemplo" (tambien cierra la sesion).
-Los datos de la inmobiliaria y el perfil propio se editan en la misma pantalla.
+Los datos de ejemplo (`is_sample`) nunca salen del navegador. Para volver a
+los datos de ejemplo en este navegador: Configuracion > "Volver a los datos de
+ejemplo" (no toca la base). Los datos de la inmobiliaria y el perfil propio se
+editan en la misma pantalla.
 
 ## Animaciones
 

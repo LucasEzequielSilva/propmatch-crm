@@ -1,7 +1,7 @@
 -- Inbox unificado: esquema base del Supabase PROPIO del CRM.
 --
 -- OJO: esto NO va en el Supabase de la app (jhtkvcxvgjwnuzfhbale). Va en el
--- proyecto nuevo del CRM. SIN APLICAR: lo aplica el usuario siguiendo
+-- proyecto nuevo del CRM. APLICADA el 2026-10-09 en ktltjpwetvdoxcaayvkh (vía MCP). Antes: lo aplica el usuario siguiendo
 -- docs/inbox-unificado-puesta-en-marcha.md.
 --
 -- Modelo de acceso: el navegador NUNCA habla con esta base. Todo pasa por las

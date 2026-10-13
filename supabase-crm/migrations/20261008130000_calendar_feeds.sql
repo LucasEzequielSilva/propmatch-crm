@@ -1,7 +1,7 @@
 -- Link de suscripción iCal por agente (Agenda → «Suscribir en Google Calendar»).
 --
 -- OJO: va en el Supabase PROPIO del CRM (el de 20261005140000_inbox_schema.sql),
--- NO en el de la app. SIN APLICAR: lo aplica el usuario siguiendo
+-- NO en el de la app. APLICADA el 2026-10-09 en ktltjpwetvdoxcaayvkh (vía MCP). Antes: lo aplica el usuario siguiendo
 -- docs/google-calendar.md.
 --
 -- Modelo de acceso igual que el inbox: el navegador nunca habla con esta base.
