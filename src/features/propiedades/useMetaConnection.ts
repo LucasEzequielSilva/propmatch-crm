@@ -44,10 +44,10 @@ export function useMetaConnection() {
       setNotice(null);
       setBusy(true);
       try {
-        const code = await launchPublishLogin();
+        const { code, redirectUri } = await launchPublishLogin();
         const r = await metaApi<{ ok: boolean; choosePage?: PageChoice[]; page?: { name: string }; instagram?: { username: string | null } | null; missingScopes?: string[] }>(
           "publish-connect",
-          { method: "POST", body: { code, pageId } },
+          { method: "POST", body: { code, pageId, redirectUri } },
         );
         if (!r.ok || !r.data) {
           setError(metaPublishErrorText(r.error));

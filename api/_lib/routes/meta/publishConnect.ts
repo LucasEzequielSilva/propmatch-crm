@@ -36,13 +36,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const b = jsonBody(req);
   const code = str(b.code, 2048);
   const pageId = str(b.pageId, 64);
+  const redirectUri = str(b.redirectUri, 512);
   if (!code) return fail(res, 400, "bad_request");
 
   const appId = process.env.META_APP_ID as string;
   const secret = process.env.META_APP_SECRET as string;
   let step = "exchange";
   try {
-    const short = await graph<{ access_token?: string }>("oauth/access_token", { query: { client_id: appId, client_secret: secret, code } });
+    const exchangeQuery: Record<string, string> = { client_id: appId, client_secret: secret, code };
+    if (redirectUri) exchangeQuery.redirect_uri = redirectUri;
+    const short = await graph<{ access_token?: string }>("oauth/access_token", { query: exchangeQuery });
     if (!short.access_token) throw new Error("no_token");
     const long = await graph<{ access_token?: string }>("oauth/access_token", {
       query: { grant_type: "fb_exchange_token", client_id: appId, client_secret: secret, fb_exchange_token: short.access_token },

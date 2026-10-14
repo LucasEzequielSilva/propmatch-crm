@@ -175,15 +175,20 @@ export async function launchMessagingLogin(): Promise<string> {
  * Abre un popup al diálogo de OAuth de Facebook y escucha el code por postMessage
  * desde la página de callback (/oauth/meta/callback). No requiere config_id.
  */
-export async function launchPublishLogin(): Promise<string> {
+export interface PublishLoginResult {
+  code: string;
+  redirectUri?: string;
+}
+
+export async function launchPublishLogin(): Promise<PublishLoginResult> {
   if (metaEnv.publishConfigId) {
     // Si hay config_id configurado, usar el flujo FB.login for Business.
     const FB = await loadFacebookSdk(metaEnv.appId);
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<PublishLoginResult>((resolve, reject) => {
       FB.login(
         (r) => {
           const c = r.authResponse?.code;
-          if (c) resolve(c);
+          if (c) resolve({ code: c });
           else reject(new SignupCancelled("login"));
         },
         { config_id: metaEnv.publishConfigId, response_type: "code", override_default_response_type: true },
@@ -192,11 +197,12 @@ export async function launchPublishLogin(): Promise<string> {
   }
 
   // Fallback: popup OAuth estándar (no requiere config_id).
-  return new Promise<string>((resolve, reject) => {
+  const redirectUri = `${window.location.origin}/oauth/meta/callback`;
+  return new Promise<PublishLoginResult>((resolve, reject) => {
     const state = crypto.randomUUID();
     const params = new URLSearchParams({
       client_id: metaEnv.appId,
-      redirect_uri: `${window.location.origin}/oauth/meta/callback`,
+      redirect_uri: redirectUri,
       scope: "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management",
       response_type: "code",
       state,
@@ -213,7 +219,7 @@ export async function launchPublishLogin(): Promise<string> {
       if (ev.data?.type !== "META_OAUTH_CODE") return;
       window.removeEventListener("message", onMessage);
       clearInterval(pollClosed);
-      if (ev.data.code) resolve(ev.data.code);
+      if (ev.data.code) resolve({ code: ev.data.code, redirectUri });
       else reject(new SignupCancelled("cancelled"));
     }
     window.addEventListener("message", onMessage);
