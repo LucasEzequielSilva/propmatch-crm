@@ -36,7 +36,7 @@ export function useMetaConnection() {
     void refresh();
   }, [refresh]);
 
-  const clientReady = !!metaEnv.appId && !!metaEnv.publishConfigId;
+  const clientReady = !!metaEnv.appId;
 
   const connect = useCallback(
     async (pageId?: string) => {
