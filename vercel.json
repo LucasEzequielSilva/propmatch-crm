@@ -23,6 +23,10 @@
       "destination": "/api/crm?action=:action"
     },
     {
+      "source": "/api/saas/:action",
+      "destination": "/api/saas?action=:action"
+    },
+    {
       "source": "/api/meli/:action",
       "destination": "/api/meli?action=:action"
     },

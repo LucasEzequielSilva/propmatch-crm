@@ -1,20 +1,26 @@
 import { isSample } from "@/lib/samples";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { OnboardingChecklist } from "./OnboardingChecklist";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { StatCard } from "@/components/ui/StatCard";
-import { Card, SectionHeader, Badge } from "@/components/ui/Card";
+import { Card, SectionHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/states";
 import {
   ActivityIcon,
+  AgendaIcon,
+  AlertTriangleIcon,
   ContactsIcon,
   HomeIcon,
-  MapPinIcon,
+  InboxIcon,
   MatchesSolidIcon,
   OpportunitiesIcon,
-  StarOutlineIcon,
+  PropertiesIcon,
+  WhatsAppIcon,
 } from "@/components/ui/icons";
 import { useStore, STAGE_LABEL } from "@/data/store";
+import { useFollowUps } from "@/data/useFollowUps";
+import { WhatsAppButton, WhatsAppModal } from "@/components/share/WhatsAppModal";
+import { authorizationState, AUTHORIZATION_WARNING_DAYS } from "@/lib/authorization";
 import {
   avatarGradient,
   greeting,
@@ -23,8 +29,9 @@ import {
   moneyCompact,
   relativeTime,
 } from "@/lib/format";
+import { firstName } from "@/lib/whatsapp";
+import type { FollowUp } from "@/lib/followups";
 import type { OpportunityStage } from "@/types/db";
-import { FollowUpsCard } from "./FollowUpsCard";
 
 const STAGE_BADGE: Record<OpportunityStage, { bg: string; text: string; border: string }> = {
   nuevos: { bg: "#F5F3FF", text: "#7C3AED", border: "#DDD6FE" },
@@ -35,6 +42,8 @@ const STAGE_BADGE: Record<OpportunityStage, { bg: string; text: string; border: 
   perdida: { bg: "#FFF1F2", text: "#E11D48", border: "#FECDD3" },
 };
 
+const STAGES: OpportunityStage[] = ["nuevos", "contactados", "visita", "negociacion", "cierre"];
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const {
@@ -42,31 +51,111 @@ export default function DashboardPage() {
     properties,
     contacts,
     opportunities,
-    matches,
     activities,
-    contactById,
+    events,
     propertyById,
     coverPhoto,
     appOffers,
+    logActivity,
+    snoozeFollowUp,
   } = useStore();
 
-  const pendingOffers = appOffers.filter((o) => o.status === "pending");
-
+  const followUps = useFollowUps();
   const [query, setQuery] = useState("");
-  const firstName = profile.full_name.split(" ")[0];
+  const [writing, setWriting] = useState<FollowUp | null>(null);
+  const [doneFlash, setDoneFlash] = useState<string | null>(null);
+  const [todayExpanded, setTodayExpanded] = useState(false);
 
+  const userFirstName = profile.full_name.split(" ")[0];
+
+  /* ── KPIs ─────────────────────────────────────────────────────────────── */
   const kpis = useMemo(() => {
-    const monthAgo = Date.now() - 30 * 86_400_000;
     const weekAgo = Date.now() - 7 * 86_400_000;
-    const activeProps = properties.filter((p) => p.status === "disponible");
-    const newContacts = contacts.filter((c) => new Date(c.created_at).getTime() > monthAgo);
-    const newContactsWeek = contacts.filter((c) => new Date(c.created_at).getTime() > weekAgo);
-    const openOpps = opportunities.filter((o) => o.stage !== "perdida");
-    const pipelineValue = openOpps.reduce((s, o) => s + (o.value ?? 0), 0);
-    return { activeProps, newContacts, newContactsWeek, openOpps, pipelineValue };
-  }, [properties, contacts, opportunities]);
+    const activeProps = properties.filter((p) => !isSample(p) && p.status === "disponible");
+    const openOpps = opportunities.filter((o) => !isSample(o) && o.stage !== "perdida");
+    const newContactsWeek = contacts.filter((c) => !isSample(c) && new Date(c.created_at).getTime() > weekAgo);
+    const pendingOffers = appOffers.filter((o) => o.status === "pending");
 
-  /** Búsqueda global: cruza propiedades, contactos y oportunidades. */
+    const pipelineUSD = openOpps.filter((o) => o.currency === "USD").reduce((s, o) => s + (o.value ?? 0), 0);
+    const pipelineARS = openOpps.filter((o) => o.currency === "ARS").reduce((s, o) => s + (o.value ?? 0), 0);
+    const hasUSD = openOpps.some((o) => o.currency === "USD");
+    const hasARS = openOpps.some((o) => o.currency === "ARS");
+
+    return { activeProps, openOpps, newContactsWeek, pendingOffers, pipelineUSD, pipelineARS, hasUSD, hasARS };
+  }, [properties, opportunities, contacts, appOffers]);
+
+  /* ── Sección Hoy ─────────────────────────────────────────────────────── */
+  const todayItems = useMemo(() => {
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+    const offerItems = kpis.pendingOffers.map((o) => ({
+      kind: "offer" as const,
+      id: o.id,
+      label: `Oferta de USD ${Math.round(o.amount_usd ?? 0).toLocaleString("es-AR")}`,
+      detail: "Pendiente de revisión",
+      priority: 0,
+    }));
+
+    const followUpItems = followUps.map((f) => ({
+      kind: "followup" as const,
+      id: f.contact.id,
+      followUp: f,
+      label: f.contact.full_name,
+      detail: f.reason,
+      priority: f.priority,
+    }));
+
+    const visitItems = events
+      .filter((e) => e.type === "visita" && e.starts_at?.startsWith(todayStr))
+      .map((e) => ({
+        kind: "visit" as const,
+        id: e.id,
+        label: e.title,
+        detail: e.starts_at
+          ? new Date(e.starts_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+          : "Hoy",
+        priority: 1,
+      }));
+
+    const authItems = properties
+      .filter((p) => !isSample(p) && p.status === "disponible")
+      .map((p) => {
+        const state = authorizationState(p.authorization_type, p.authorization_expires_at);
+        if (state.tone !== "warning" && state.tone !== "expired") return null;
+        if (state.daysLeft !== null && state.daysLeft > AUTHORIZATION_WARNING_DAYS) return null;
+        return {
+          kind: "auth" as const,
+          id: p.id,
+          label: p.title,
+          detail: state.label,
+          priority: state.tone === "expired" ? 0 : 2,
+        };
+      })
+      .filter(Boolean) as { kind: "auth"; id: string; label: string; detail: string; priority: number }[];
+
+    return [...offerItems, ...followUpItems, ...visitItems, ...authItems].sort(
+      (a, b) => a.priority - b.priority,
+    );
+  }, [kpis.pendingOffers, followUps, events, properties]);
+
+  /* ── Pipeline por etapas ─────────────────────────────────────────────── */
+  const pipelineByStage = useMemo(() => {
+    const openOpps = opportunities.filter((o) => !isSample(o) && o.stage !== "perdida");
+    return STAGES.map((stage) => ({
+      stage,
+      count: openOpps.filter((o) => o.stage === stage).length,
+    }));
+  }, [opportunities]);
+
+  /* ── Propiedades que necesitan atención ──────────────────────────────── */
+  const needsAttention = useMemo(() => {
+    return properties
+      .filter((p) => !isSample(p) && (coverPhoto(p.id) === null || p.status === "en_revision"))
+      .slice(0, 3);
+  }, [properties, coverPhoto]);
+
+  /* ── Búsqueda global ─────────────────────────────────────────────────── */
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return null;
@@ -76,53 +165,55 @@ export default function DashboardPage() {
     };
   }, [query, properties, contacts]);
 
-  const recentOpps = useMemo(
-    () =>
-      [...opportunities]
-        .filter((o) => o.stage !== "perdida")
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-        .slice(0, 4),
-    [opportunities],
-  );
-
-  const topMatches = useMemo(() => matches.slice(0, 3), [matches]);
+  /* ── Actividad reciente ───────────────────────────────────────────────── */
   const recentActivity = activities.slice(0, 5);
+
+  /* ── Estado vacío (onboarding) ───────────────────────────────────────── */
+  const isEmpty = properties.filter((p) => !isSample(p)).length === 0 &&
+    contacts.filter((c) => !isSample(c)).length === 0;
+
+  /* ── Helpers ─────────────────────────────────────────────────────────── */
+  function flash(name: string) {
+    setDoneFlash(name);
+    setTimeout(() => setDoneFlash(null), 2200);
+  }
+
+  function markFollowUpDone(f: FollowUp) {
+    logActivity({
+      type: "llamada",
+      title: `Seguimiento a ${firstName(f.contact.full_name)}`,
+      detail: f.reason,
+      contact_id: f.contact.id,
+      property_id: null,
+    });
+    flash(f.contact.full_name);
+  }
+
+  const QUICK_ACTIONS = [
+    { label: "Nueva propiedad", icon: <HomeIcon size={18} color="#7C3AED" />, path: "/propiedades/nueva", bg: "#F5F3FF" },
+    { label: "Subir y publicar", icon: <PropertiesIcon size={18} color="#EC4899" />, path: "/publicador", bg: "#FDF2F8" },
+    { label: "Nuevo contacto", icon: <ContactsIcon size={18} color="#0E7490" />, path: "/contactos/nuevo", bg: "#ECFEFF" },
+    { label: "Registrar visita", icon: <AgendaIcon size={18} color="#B45309" />, path: "/agenda", bg: "#FFFBEB" },
+    { label: "Nueva operación", icon: <OpportunitiesIcon size={18} color="#047857" />, path: "/operaciones/nueva", bg: "#F0FDF4" },
+    { label: "Abrir Inbox", icon: <InboxIcon size={18} color="#1D4ED8" />, path: "/inbox", bg: "#EFF6FF" },
+    { label: "Agenda de hoy", icon: <AgendaIcon size={18} color="#7C3AED" />, path: "/agenda", bg: "#F5F3FF" },
+    { label: "Multipublicador", icon: <MatchesSolidIcon size={18} color="#EC4899" />, path: "/publicador", bg: "#FDF2F8" },
+  ];
+
+  const COLLAPSED_TODAY = 6;
+  const visibleToday = todayExpanded ? todayItems : todayItems.slice(0, COLLAPSED_TODAY);
 
   return (
     <>
       <AppHeader
-        title={`${greeting()}, ${firstName}`}
+        title={`${greeting()}, ${userFirstName}`}
         titleAccent={<span className="text-gradient-brand-h"> ✦</span>}
-        subtitle="Así se mueve tu negocio hoy."
+        subtitle={`${todayItems.length > 0 ? `${todayItems.length} ${todayItems.length === 1 ? "cosa" : "cosas"} para hoy` : "Al día con todo."}`}
         search={{ placeholder: "Buscar...", value: query, onChange: setQuery }}
         action={{ label: "Agregar", onClick: () => navigate("/propiedades/nueva") }}
       />
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
-        {pendingOffers.length > 0 && (
-          <div
-            onClick={() => navigate("/ofertas")}
-            className="mt-6 md:mt-8 rounded-2xl p-4 flex items-center gap-3 cursor-pointer transition-all hover:opacity-95"
-            style={{ background: "linear-gradient(135deg, #FFF7ED, #FDE8F5)", border: "1px solid #FDE68A" }}
-          >
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--gradient-brand)" }}
-            >
-              <OpportunitiesIcon size={16} color="white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                {pendingOffers.length} {pendingOffers.length === 1 ? "oferta pendiente" : "ofertas pendientes"}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
-                {pendingOffers.every(isSample)
-                  ? "Ofertas de ejemplo, para que veas cómo llegan — click para revisarlas."
-                  : "Gente real hizo una oferta por tus propiedades — click para revisarlas."}
-              </p>
-            </div>
-          </div>
-        )}
         {searchResults ? (
           <SearchResults
             results={searchResults}
@@ -132,361 +223,485 @@ export default function DashboardPage() {
             onContact={(id) => navigate(`/contactos/${id}`)}
           />
         ) : (
-          <div className="flex flex-col">
-            {/* KPIs */}
-            <div className="order-2 md:order-1 mt-6 md:mt-8 grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
-              <StatCard
-                value={String(kpis.activeProps.length)}
-                label="Propiedades activas"
-                sub={`${properties.length} en cartera`}
-                icon={<HomeIcon size={22} color="#7C3AED" />}
-                iconBg="#F5F3FF"
-                badge={`${properties.length - kpis.activeProps.length} no disponibles`}
-                badgeBg="#F5F3FF"
-                badgeText="#7C3AED"
-                bar="linear-gradient(90deg, #7C3AED, #A855F7)"
-                barWidth={(kpis.activeProps.length / Math.max(1, properties.length)) * 100}
-              />
-              <StatCard
-                value={String(kpis.newContacts.length)}
-                label="Nuevos contactos"
-                sub={`${kpis.newContactsWeek.length} esta semana`}
-                icon={<ContactsIcon size={22} color="#EC4899" />}
-                iconBg="#FDF2F8"
-                badge={`+${kpis.newContactsWeek.length}`}
-                bar="linear-gradient(90deg, #EC4899, #F472B6)"
-                barWidth={(kpis.newContacts.length / Math.max(1, contacts.length)) * 100}
-              />
-              <StatCard
-                value={String(kpis.openOpps.length)}
-                label="Oportunidades activas"
-                sub={`${matches.length} matches disponibles`}
-                icon={<OpportunitiesIcon size={22} color="#8B5CF6" />}
-                iconBg="#F5F3FF"
-                badge={`${matches.length} matches`}
-                badgeBg="#F5F3FF"
-                badgeText="#7C3AED"
-                bar="linear-gradient(90deg, #8B5CF6, #C084FC)"
-                barWidth={72}
-              />
-              <StatCard
-                value={moneyCompact(kpis.pipelineValue)}
-                label="Valor del pipeline"
-                sub="Operaciones abiertas"
-                icon={<StarOutlineIcon size={22} />}
-                iconBg="#FAF5FF"
-                badge="Activo"
-                badgeBg="#F0FDF4"
-                badgeText="#15803D"
-                bar="linear-gradient(90deg, #A855F7, #EC4899)"
-                barWidth={90}
-              />
+          <>
+            {/* Accesos directos */}
+            <div className="mt-5 md:mt-6 -mx-1">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide px-1">
+                {QUICK_ACTIONS.map((a) => (
+                  <button
+                    key={a.label}
+                    onClick={() => navigate(a.path)}
+                    className="flex-shrink-0 flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border transition-all hover:shadow-sm hover:border-violet-200"
+                    style={{ borderColor: "#EDE9FE", background: "white", minWidth: 80, height: 64 }}
+                  >
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: a.bg }}
+                    >
+                      {a.icon}
+                    </div>
+                    <span className="text-[10px] text-center leading-tight whitespace-nowrap" style={{ color: "#374151", fontWeight: 600 }}>
+                      {a.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Seguimiento: lo primero que hay que hacer hoy. En celular, antes que los números. */}
-            <div className="order-1 md:order-2 mt-4 md:mt-8">
-              <FollowUpsCard />
-            </div>
-
-            <div className="order-3 mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
-              {/* Oportunidades recientes */}
-              <div className="xl:col-span-2 min-w-0">
-                <Card>
-                  <SectionHeader
-                    inCard
-                    title="Oportunidades recientes"
-                    subtitle={`${kpis.openOpps.length} oportunidades activas`}
-                    action={{ label: "Ver todas", onClick: () => navigate("/oportunidades") }}
+            {isEmpty ? (
+              /* Estado vacío: checklist de onboarding */
+              <OnboardingChecklist
+                hasProperties={false}
+                hasContacts={false}
+                hasMeli={false}
+                hasAppPublications={false}
+              />
+            ) : (
+              <>
+                {/* KPIs compactos */}
+                <div
+                  className="mt-4 rounded-2xl border flex flex-wrap gap-0 overflow-hidden"
+                  style={{ borderColor: "#EDE9FE", background: "white" }}
+                >
+                  <MiniStat
+                    value={String(kpis.activeProps.length)}
+                    label="Propiedades activas"
+                    icon={<HomeIcon size={14} color="#7C3AED" />}
                   />
-                  {recentOpps.length === 0 ? (
-                    <EmptyState
-                      compact
-                      title="Todavía no hay oportunidades"
-                      description="Convertí un match en oportunidad para verlas acá."
-                      action={{ label: "Ver matches", onClick: () => navigate("/matches") }}
+                  <MiniStat
+                    value={String(kpis.openOpps.length)}
+                    label="Oportunidades abiertas"
+                    icon={<OpportunitiesIcon size={14} color="#EC4899" />}
+                  />
+                  <MiniStat
+                    value={`+${kpis.newContactsWeek.length}`}
+                    label="Contactos esta semana"
+                    icon={<ContactsIcon size={14} color="#0E7490" />}
+                  />
+                  {kpis.pendingOffers.length > 0 && (
+                    <MiniStat
+                      value={String(kpis.pendingOffers.length)}
+                      label="Ofertas pendientes"
+                      icon={<AlertTriangleIcon size={14} color="#B45309" />}
+                      highlight
+                      onClick={() => navigate("/ofertas")}
                     />
-                  ) : (
-                    <div className="bg-white overflow-x-auto">
-                      <table className="w-full" style={{ minWidth: 620 }}>
-                        <thead>
-                          <tr style={{ background: "#FDFCFF", borderBottom: "1px solid #F3F0FF" }}>
-                            {["Cliente", "Propiedad", "Etapa", "Valor", "Actividad"].map((h) => (
-                              <th
-                                key={h}
-                                className="text-left px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap"
-                                style={{ color: "#7458C4", letterSpacing: "0.06em", fontWeight: 600 }}
-                              >
-                                {h}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recentOpps.map((opp, idx) => {
-                            const contact = contactById(opp.contact_id);
-                            const property = propertyById(opp.property_id);
-                            const badge = STAGE_BADGE[opp.stage];
-                            return (
-                              <tr
-                                key={opp.id}
-                                onClick={() => navigate("/oportunidades")}
-                                className="transition-all hover:bg-violet-50 cursor-pointer"
-                                style={{
-                                  borderBottom:
-                                    idx < recentOpps.length - 1 ? "1px solid #F9F7FF" : undefined,
-                                }}
-                              >
-                                <td className="px-5 py-3.5">
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarGradient(contact?.full_name)} flex items-center justify-center text-xs text-white flex-shrink-0`}
-                                      style={{ fontWeight: 700 }}
-                                    >
-                                      {initials(contact?.full_name)}
-                                    </div>
+                  )}
+                  {kpis.hasUSD && (
+                    <MiniStat
+                      value={moneyCompact(kpis.pipelineUSD, "USD")}
+                      label="Pipeline USD"
+                      icon={<span style={{ fontSize: 11, fontWeight: 700, color: "#047857" }}>$</span>}
+                    />
+                  )}
+                  {kpis.hasARS && (
+                    <MiniStat
+                      value={moneyCompact(kpis.pipelineARS, "ARS")}
+                      label="Pipeline ARS"
+                      icon={<span style={{ fontSize: 11, fontWeight: 700, color: "#047857" }}>$</span>}
+                    />
+                  )}
+                </div>
+
+                {/* Cuerpo principal */}
+                <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+                  {/* Hoy (2/3) */}
+                  <div className="xl:col-span-2 min-w-0">
+                    <Card>
+                      <div
+                        className="px-5 py-4 border-b flex items-center justify-between gap-3"
+                        style={{ borderColor: "#F3F0FF" }}
+                      >
+                        <div>
+                          <h2 className="text-base" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+                            Hoy
+                          </h2>
+                          <p className="text-xs mt-0.5" style={{ color: "#7458C4" }}>
+                            {todayItems.length === 0
+                              ? "Sin pendientes — estás al día"
+                              : `${todayItems.length} ${todayItems.length === 1 ? "acción pendiente" : "acciones pendientes"}`}
+                          </p>
+                        </div>
+                        {doneFlash && (
+                          <span
+                            className="text-xs px-3 py-1.5 rounded-lg"
+                            style={{ background: "#F0FDF4", color: "#15803D", fontWeight: 600 }}
+                          >
+                            ✓ {firstName(doneFlash)} listo
+                          </span>
+                        )}
+                      </div>
+
+                      {todayItems.length === 0 ? (
+                        <div className="px-5 py-10 text-center">
+                          <p className="text-sm" style={{ color: "#7C6A99" }}>
+                            No hay seguimientos, visitas ni autorizaciones por vencer hoy.
+                          </p>
+                          <button
+                            onClick={() => navigate("/propiedades/nueva")}
+                            className="mt-4 text-xs px-4 py-2 rounded-xl border transition-all hover:bg-violet-50"
+                            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600 }}
+                          >
+                            Cargar una propiedad
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-2">
+                          {visibleToday.map((item) => (
+                            <TodayRow
+                              key={`${item.kind}-${item.id}`}
+                              item={item}
+                              onNavigate={navigate}
+                              onWrite={setWriting}
+                              onMarkDone={markFollowUpDone}
+                              onSnooze={(id) => snoozeFollowUp(id, 3)}
+                            />
+                          ))}
+                          {todayItems.length > COLLAPSED_TODAY && (
+                            <button
+                              onClick={() => setTodayExpanded((v) => !v)}
+                              className="w-full mt-1 py-2 rounded-xl text-xs transition-all hover:bg-violet-50"
+                              style={{ color: "#7C3AED", fontWeight: 600 }}
+                            >
+                              {todayExpanded
+                                ? "Ver menos"
+                                : `Ver los ${todayItems.length - COLLAPSED_TODAY} restantes`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+
+                  {/* Columna lateral (1/3) */}
+                  <div className="xl:col-span-1 min-w-0 flex flex-col gap-6">
+                    {/* Pipeline por etapas */}
+                    <Card>
+                      <SectionHeader
+                        inCard
+                        title="Pipeline"
+                        subtitle={`${kpis.openOpps.length} oportunidades abiertas`}
+                        action={{ label: "Ver todas", onClick: () => navigate("/oportunidades") }}
+                      />
+                      <div className="px-5 pb-4">
+                        {pipelineByStage.every((s) => s.count === 0) ? (
+                          <p className="text-xs py-4 text-center" style={{ color: "#7C6A99" }}>
+                            Sin oportunidades activas todavía
+                          </p>
+                        ) : (
+                          <>
+                            {/* Barra segmentada */}
+                            <div className="flex h-2.5 rounded-full overflow-hidden mb-3">
+                              {pipelineByStage
+                                .filter((s) => s.count > 0)
+                                .map((s, _i, arr) => {
+                                  const total = arr.reduce((sum, x) => sum + x.count, 0);
+                                  return (
+                                    <button
+                                      key={s.stage}
+                                      onClick={() => navigate("/oportunidades")}
+                                      title={`${STAGE_LABEL[s.stage]}: ${s.count}`}
+                                      className="h-full transition-opacity hover:opacity-80"
+                                      style={{
+                                        width: `${(s.count / total) * 100}%`,
+                                        background: STAGE_BADGE[s.stage].text,
+                                        minWidth: 4,
+                                      }}
+                                    />
+                                  );
+                                })}
+                            </div>
+                            {/* Conteos por etapa */}
+                            <div className="space-y-1.5">
+                              {pipelineByStage.map((s) => (
+                                <button
+                                  key={s.stage}
+                                  onClick={() => navigate("/oportunidades")}
+                                  className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg transition-all hover:bg-violet-50 text-left"
+                                >
+                                  <div className="flex items-center gap-2">
                                     <span
-                                      className="text-sm whitespace-nowrap"
-                                      style={{ color: "#1F2937", fontWeight: 500 }}
-                                    >
-                                      {contact?.full_name ?? "—"}
+                                      className="w-2 h-2 rounded-full flex-shrink-0"
+                                      style={{ background: STAGE_BADGE[s.stage].text }}
+                                    />
+                                    <span className="text-xs" style={{ color: "#374151", fontWeight: 500 }}>
+                                      {STAGE_LABEL[s.stage]}
                                     </span>
                                   </div>
-                                </td>
-                                <td className="px-5 py-3.5">
-                                  <p className="text-sm" style={{ color: "#374151", fontWeight: 500 }}>
-                                    {property?.title ?? "—"}
-                                  </p>
-                                  <p className="text-xs" style={{ color: "#7C6A99" }}>
-                                    {property?.zone ?? ""}
-                                  </p>
-                                </td>
-                                <td className="px-5 py-3.5">
-                                  <Badge bg={badge.bg} text={badge.text} border={badge.border}>
-                                    {STAGE_LABEL[opp.stage]}
-                                  </Badge>
-                                </td>
-                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                  <span className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                                    {money(opp.value, opp.currency)}
-                                  </span>
-                                </td>
-                                <td className="px-5 py-3.5 whitespace-nowrap">
-                                  <span className="text-xs" style={{ color: "#7458C4" }}>
-                                    {relativeTime(opp.updated_at)}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Card>
-              </div>
-
-              {/* Actividad */}
-              <div className="xl:col-span-1 min-w-0">
-                <Card className="h-full">
-                  <SectionHeader
-                    inCard
-                    title="Actividad reciente"
-                    subtitle="Últimas acciones del equipo"
-                  />
-                  <div className="p-5 space-y-4">
-                    {recentActivity.map((a, idx) => (
-                      <div key={a.id} className="flex gap-3 relative">
-                        {idx < recentActivity.length - 1 && (
-                          <div
-                            className="absolute left-[18px] top-8 w-px"
-                            style={{ height: "calc(100% + 8px)", background: "#EDE9FE" }}
-                          />
-                        )}
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 z-10"
-                          style={{ background: "#F5F3FF", color: "#7C3AED" }}
-                        >
-                          <ActivityIcon type={iconFor(a.type)} />
-                        </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                          <p className="text-sm" style={{ color: "#374151", fontWeight: 500 }}>
-                            {a.title}
-                          </p>
-                          {a.detail && (
-                            <p
-                              className="text-xs mt-0.5 truncate"
-                              style={{ color: "#1F0A3C", fontWeight: 600 }}
-                            >
-                              {a.detail}
-                            </p>
-                          )}
-                          <p className="text-xs mt-1" style={{ color: "#7C6A99" }}>
-                            {relativeTime(a.created_at)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
-            </div>
-
-            {/* Matches */}
-            <div className="order-4 mt-8">
-              <SectionHeader
-                title="Matches para revisar"
-                subtitle="Clientes con alta compatibilidad de propiedades"
-                action={{ label: "Ver todos", onClick: () => navigate("/matches") }}
-              />
-              {topMatches.length === 0 ? (
-                <Card>
-                  <EmptyState
-                    compact
-                    title="Todavía no hay matches"
-                    description="Cargá propiedades y qué busca cada contacto para que el sistema los cruce."
-                  />
-                </Card>
-              ) : (
-                <div className="pm-stagger grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {topMatches.map((match) => {
-                    const contact = contactById(match.contact_id);
-                    const property = propertyById(match.property_id);
-                    if (!contact || !property) return null;
-                    return (
-                      <div
-                        key={match.id}
-                        onClick={() => navigate(`/matches/${match.id}`)}
-                        className="rounded-2xl border overflow-hidden transition-all hover:shadow-lg cursor-pointer"
-                        style={{
-                          borderColor: "#EDE9FE",
-                          background: "white",
-                          boxShadow: "var(--shadow-card)",
-                        }}
-                      >
-                        <div
-                          className="px-5 pt-5 pb-4 relative overflow-hidden"
-                          style={{ background: "var(--gradient-soft)" }}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="flex items-baseline gap-1">
-                                <span
-                                  className="text-4xl leading-none text-gradient-brand"
-                                  style={{ fontWeight: 800 }}
-                                >
-                                  {match.score}%
-                                </span>
-                                <span className="text-sm" style={{ color: "#7C3AED", fontWeight: 600 }}>
-                                  MATCH
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1 mt-1">
-                                {[...Array(5)].map((_, i) => (
-                                  <div
-                                    key={i}
-                                    className="h-1.5 rounded-full"
+                                  <span
+                                    className="text-xs px-2 py-0.5 rounded-full"
                                     style={{
-                                      width: i < Math.round((match.score / 100) * 5) ? "18px" : "10px",
-                                      background:
-                                        i < Math.round((match.score / 100) * 5)
-                                          ? "var(--gradient-brand-h)"
-                                          : "#E9D5FF",
+                                      background: STAGE_BADGE[s.stage].bg,
+                                      color: STAGE_BADGE[s.stage].text,
+                                      fontWeight: 600,
                                     }}
-                                  />
-                                ))}
-                              </div>
+                                  >
+                                    {s.count}
+                                  </span>
+                                </button>
+                              ))}
                             </div>
-                            <div
-                              className="w-20 h-20 rounded-full opacity-10 absolute -right-6 -top-6"
-                              style={{ background: "#EC4899" }}
-                            />
-                          </div>
-                        </div>
+                          </>
+                        )}
+                      </div>
+                    </Card>
 
-                        <div className="p-5">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div
-                              className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarGradient(contact.full_name)} flex items-center justify-center text-sm text-white flex-shrink-0`}
-                              style={{ fontWeight: 700 }}
+                    {/* Propiedades que necesitan atención */}
+                    {needsAttention.length > 0 && (
+                      <Card>
+                        <SectionHeader
+                          inCard
+                          title="Necesitan atención"
+                          subtitle="Sin fotos o en revisión"
+                        />
+                        <div className="px-3 pb-3 space-y-1">
+                          {needsAttention.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => navigate(`/propiedades/${p.id}`)}
+                              className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-violet-50 text-left"
                             >
-                              {initials(contact.full_name)}
+                              <div
+                                className="w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center"
+                                style={{ background: "#F5F3FF" }}
+                              >
+                                <HomeIcon size={16} color="#A78BFA" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+                                  {p.title}
+                                </p>
+                                <p className="text-[11px]" style={{ color: coverPhoto(p.id) === null ? "#B45309" : "#2563EB" }}>
+                                  {coverPhoto(p.id) === null ? "Sin fotos" : "En revisión"}
+                                </p>
+                              </div>
+                              <span className="text-[11px]" style={{ color: "#7C3AED", fontWeight: 600 }}>
+                                Ver →
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actividad reciente */}
+                {recentActivity.length > 0 && (
+                  <div className="mt-6">
+                    <Card>
+                      <SectionHeader
+                        inCard
+                        title="Actividad reciente"
+                        subtitle="Últimas acciones del equipo"
+                      />
+                      <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                        {recentActivity.map((a) => (
+                          <div key={a.id} className="flex items-start gap-3 py-1">
+                            <div
+                              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                              style={{ background: "#F5F3FF", color: "#7C3AED" }}
+                            >
+                              <ActivityIcon type={iconFor(a.type)} size={13} />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                                {contact.full_name}
+                              <p className="text-xs truncate" style={{ color: "#374151", fontWeight: 500 }}>
+                                {a.title}
                               </p>
-                              <p className="text-xs" style={{ color: "#7458C4" }}>
-                                Busca su propiedad ideal
-                              </p>
-                            </div>
-                          </div>
-
-                          <div
-                            className="rounded-xl p-3 mb-4"
-                            style={{ background: "#FDFCFF", border: "1px solid #EDE9FE" }}
-                          >
-                            <div className="flex items-start gap-2">
-                              <HomeIcon size={14} color="#7C3AED" />
-                              <div className="min-w-0">
-                                <p className="text-sm truncate" style={{ color: "#1F2937", fontWeight: 500 }}>
-                                  {property.title}
+                              {a.detail && (
+                                <p className="text-[11px] truncate mt-0.5" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+                                  {a.detail}
                                 </p>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <MapPinIcon size={10} />
-                                  <p className="text-xs" style={{ color: "#9CA3AF" }}>
-                                    {property.zone}
-                                  </p>
-                                </div>
-                              </div>
+                              )}
+                              <p className="text-[11px] mt-0.5" style={{ color: "#9CA3AF" }}>
+                                {relativeTime(a.created_at)}
+                              </p>
                             </div>
                           </div>
-
-                          <div className="flex flex-wrap gap-1.5 mb-4">
-                            {match.reasons.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag}
-                                className="text-xs px-2.5 py-1 rounded-full"
-                                style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 500 }}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
-                              {money(property.price, property.currency)}
-                            </span>
-                            <span
-                              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg text-white"
-                              style={{ background: "var(--gradient-brand)", fontWeight: 600 }}
-                            >
-                              <MatchesSolidIcon size={11} />
-                              Ver match
-                            </span>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
+                    </Card>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
       </div>
+
+      {writing && (
+        <WhatsAppModal
+          key={writing.contact.id}
+          contact={writing.contact}
+          property={propertyById(writing.propertyId)}
+          template={writing.template}
+          onClose={() => setWriting(null)}
+          onSent={() => flash(writing.contact.full_name)}
+        />
+      )}
     </>
   );
 }
 
-function iconFor(type: string): string {
-  if (type.startsWith("contacto")) return "contact";
-  if (type === "propiedad_publicada") return "property";
-  if (type === "visita_programada") return "calendar";
-  if (type === "etapa_avanzada") return "arrow";
-  if (type === "llamada") return "eye";
-  return "match";
+/* ── Fila de "Hoy" ───────────────────────────────────────────────────────── */
+
+type TodayItemBase = { kind: string; id: string; label: string; detail: string; priority: number };
+type TodayItem =
+  | (TodayItemBase & { kind: "offer" })
+  | (TodayItemBase & { kind: "followup"; followUp: FollowUp })
+  | (TodayItemBase & { kind: "visit" })
+  | (TodayItemBase & { kind: "auth" });
+
+function TodayRow({
+  item,
+  onNavigate,
+  onWrite,
+  onMarkDone,
+  onSnooze,
+}: {
+  item: TodayItem;
+  onNavigate: (path: string) => void;
+  onWrite: (f: FollowUp) => void;
+  onMarkDone: (f: FollowUp) => void;
+  onSnooze: (id: string) => void;
+}) {
+  const PRIORITY_DOT: Record<number, string> = { 0: "#E11D48", 1: "#E11D48", 2: "#F59E0B", 3: "#A78BFA" };
+  const dot = PRIORITY_DOT[item.priority] ?? "#A78BFA";
+
+  const icon =
+    item.kind === "offer" ? <span style={{ fontSize: 14 }}>💰</span>
+    : item.kind === "visit" ? <span style={{ fontSize: 14 }}>🏠</span>
+    : item.kind === "auth" ? <AlertTriangleIcon size={14} color="#B45309" />
+    : <WhatsAppIcon size={14} color="#7C3AED" />;
+
+  return (
+    <div
+      className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 px-3 py-2.5 rounded-xl transition-all hover:bg-violet-50"
+      style={{ minHeight: 44 }}
+    >
+      {/* Ícono con dot de prioridad */}
+      <div className="relative flex-shrink-0">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: "#F5F3FF" }}
+        >
+          {icon}
+        </div>
+        {item.priority <= 1 && (
+          <span
+            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white"
+            style={{ background: dot }}
+          />
+        )}
+      </div>
+
+      {/* Texto */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+          {item.label}
+        </p>
+        <p className="text-xs truncate" style={{ color: item.priority <= 1 ? "#BE123C" : "#7C6A99", fontWeight: item.priority <= 1 ? 600 : 400 }}>
+          {item.detail}
+        </p>
+      </div>
+
+      {/* Acciones */}
+      <div className="flex items-center gap-1 flex-shrink-0 pl-11 sm:pl-0">
+        {item.kind === "offer" && (
+          <button
+            onClick={() => onNavigate("/ofertas")}
+            className="h-9 px-3 rounded-xl text-xs border transition-all hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "#FDFCFF" }}
+          >
+            Revisar
+          </button>
+        )}
+        {item.kind === "followup" && (
+          <>
+            <WhatsAppButton compact label={`WhatsApp a ${item.followUp.contact.full_name}`} onClick={() => onWrite(item.followUp)} />
+            <button
+              onClick={() => onMarkDone(item.followUp)}
+              className="h-9 px-2.5 rounded-xl text-xs border transition-all hover:bg-white"
+              style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "#FDFCFF" }}
+            >
+              ✓ Hecho
+            </button>
+            <button
+              onClick={() => onSnooze(item.followUp.contact.id)}
+              className="h-9 px-2.5 rounded-xl text-xs transition-all hover:bg-white"
+              style={{ color: "#7458C4", fontWeight: 600 }}
+            >
+              Posponer
+            </button>
+          </>
+        )}
+        {item.kind === "visit" && (
+          <button
+            onClick={() => onNavigate("/agenda")}
+            className="h-9 px-3 rounded-xl text-xs border transition-all hover:bg-violet-50"
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "#FDFCFF" }}
+          >
+            Agenda
+          </button>
+        )}
+        {item.kind === "auth" && (
+          <button
+            onClick={() => onNavigate(`/propiedades/${item.id}`)}
+            className="h-9 px-3 rounded-xl text-xs border transition-all hover:bg-amber-50"
+            style={{ borderColor: "#FDE68A", color: "#B45309", fontWeight: 600, background: "#FFFBEB" }}
+          >
+            Abrir
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
+
+/* ── Mini stat (fila de KPIs) ────────────────────────────────────────────── */
+
+function MiniStat({
+  value,
+  label,
+  icon,
+  highlight,
+  onClick,
+}: {
+  value: string;
+  label: string;
+  icon: React.ReactNode;
+  highlight?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      className={`flex items-center gap-2.5 px-4 py-3 border-r last:border-r-0 flex-1 min-w-0 transition-all ${onClick ? "hover:bg-violet-50 cursor-pointer" : "cursor-default"}`}
+      style={{
+        borderColor: "#F3F0FF",
+        background: highlight ? "#FFFBEB" : "transparent",
+      }}
+    >
+      <div
+        className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
+        style={{ background: highlight ? "#FDE68A" : "#F5F3FF" }}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm leading-none" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+          {value}
+        </p>
+        <p className="text-[10px] mt-0.5 truncate" style={{ color: "#7C6A99" }}>
+          {label}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+/* ── Búsqueda global ─────────────────────────────────────────────────────── */
 
 function SearchResults({
   results,
@@ -531,19 +746,12 @@ function SearchResults({
                       onClick={() => onProperty(p.id)}
                       className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-all hover:bg-violet-50 text-left"
                     >
-                      <div
-                        className="w-11 h-11 rounded-lg overflow-hidden flex-shrink-0"
-                        style={{ background: "#F5F3FF" }}
-                      >
+                      <div className="w-11 h-11 rounded-lg overflow-hidden flex-shrink-0" style={{ background: "#F5F3FF" }}>
                         {photo && <img src={photo} alt="" className="w-full h-full object-cover" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                          {p.title}
-                        </p>
-                        <p className="text-xs" style={{ color: "#7458C4" }}>
-                          {p.zone}
-                        </p>
+                        <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>{p.title}</p>
+                        <p className="text-xs" style={{ color: "#7458C4" }}>{p.zone}</p>
                       </div>
                       <span className="text-sm whitespace-nowrap" style={{ color: "#1F0A3C", fontWeight: 700 }}>
                         {money(p.price)}
@@ -554,7 +762,6 @@ function SearchResults({
               </div>
             </Card>
           )}
-
           {results.contacts.length > 0 && (
             <Card>
               <SectionHeader inCard title="Contactos" />
@@ -572,12 +779,8 @@ function SearchResults({
                       {initials(c.full_name)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
-                        {c.full_name}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: "#7458C4" }}>
-                        {c.email}
-                      </p>
+                      <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>{c.full_name}</p>
+                      <p className="text-xs truncate" style={{ color: "#7458C4" }}>{c.email}</p>
                     </div>
                   </button>
                 ))}
@@ -588,4 +791,13 @@ function SearchResults({
       )}
     </div>
   );
+}
+
+function iconFor(type: string): string {
+  if (type.startsWith("contacto")) return "contact";
+  if (type === "propiedad_publicada") return "property";
+  if (type === "visita_programada") return "calendar";
+  if (type === "etapa_avanzada") return "arrow";
+  if (type === "llamada") return "eye";
+  return "match";
 }

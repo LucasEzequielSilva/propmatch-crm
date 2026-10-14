@@ -21,19 +21,22 @@ import { processMessagingEntry, type MessagingEntry } from "../../inbox/meta.js"
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   noStore(res);
-  if (!metaConfigured()) return res.status(503).send("not_configured");
 
   if (req.method === "GET") {
+    const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    if (!verifyToken) return res.status(503).send("not_configured");
     const q = req.query;
     const mode = String(q["hub.mode"] ?? "");
     const token = String(q["hub.verify_token"] ?? "");
     const challenge = String(q["hub.challenge"] ?? "");
-    if (mode === "subscribe" && token && safeEqualStr(token, ienv("META_WEBHOOK_VERIFY_TOKEN")) && /^[\w-]{1,128}$/.test(challenge)) {
+    if (mode === "subscribe" && token && safeEqualStr(token, verifyToken) && /^[\w-]{1,128}$/.test(challenge)) {
       res.setHeader("Content-Type", "text/plain");
       return res.status(200).send(challenge);
     }
     return res.status(403).send("forbidden");
   }
+
+  if (!metaConfigured()) return res.status(503).send("not_configured");
 
   if (req.method !== "POST") {
     res.setHeader("Allow", "GET, POST");

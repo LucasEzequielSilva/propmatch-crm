@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { customDomainSlug } from "@/features/sitio/customDomain";
 
 import LoginPage from "@/features/auth/LoginPage";
+import RegistroPage from "@/features/registro/RegistroPage";
 import { PasswordRecovery } from "@/features/auth/PasswordRecovery";
 import { EmailChangeNotice } from "@/features/auth/EmailChangeNotice";
 import DashboardPage from "@/features/dashboard/DashboardPage";
@@ -71,6 +72,9 @@ export default function App() {
 
           <Route path="/login" element={<PublicOnly />}>
             <Route index element={<LoginPage />} />
+          </Route>
+          <Route path="/registro" element={<PublicOnly />}>
+            <Route index element={<RegistroPage />} />
           </Route>
 
           <Route element={<RequireSession />}>
