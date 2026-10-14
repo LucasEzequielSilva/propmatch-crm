@@ -1,81 +1,29 @@
-import { useId, useRef, useState } from "react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { supabase } from "@/lib/supabase";
 import BrandPanel, { LogoMark } from "./BrandPanel";
 
-/**
- * Acceso: ingresar, crear cuenta y continuar con Google.
- *
- * Auth real contra el mismo Supabase que usa la app. Una cuenta recién creada
- * (o de Google) entra aunque no pertenezca a ninguna inmobiliaria, en modo
- * local (ver `applySession` del store). Si hay que confirmar el email, se
- * muestran los pasos (`pendingLinkEmail` del store). El alta real de la
- * agencia es una decisión pendiente.
- */
-
-type Mode = "login" | "signup";
-
 export default function LoginPage() {
-  const { signIn, signUp, signInWithGoogle, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
+  const { signIn, signInWithGoogle, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
 
-  const [mode, setMode] = useState<Mode>("login");
-  const [name, setName] = useState("");
-  const [agencyName, setAgencyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [needsConfirm, setNeedsConfirm] = useState(false);
-  /** Error que Supabase deja en la URL al volver de un link de email (vencido o ya usado). */
   const [linkError, setLinkError] = useState<LinkErrorKind | null>(readLinkErrorFromUrl);
-  const tabRefs = useRef<Record<Mode, HTMLButtonElement | null>>({ login: null, signup: null });
-  const uid = useId();
 
-  const isSignup = mode === "signup";
-  const strength = passwordStrength(password);
   const anyBusy = busy || googleBusy;
-
-  function changeMode(next: Mode) {
-    setMode(next);
-    setError(null);
-  }
-
-  function onTabKey(e: React.KeyboardEvent) {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
-    e.preventDefault();
-    const next: Mode = e.key === "ArrowLeft" || e.key === "Home" ? "login" : "signup";
-    changeMode(next);
-    tabRefs.current[next]?.focus();
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (anyBusy) return;
     setError(null);
-
-    if (!isSignup) {
-      setBusy(true);
-      setError(await signIn(email, password));
-      setBusy(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setError("La contraseña tiene que tener al menos 8 caracteres.");
-      return;
-    }
-    if (!accepted) {
-      setError("Aceptá los términos para crear tu cuenta.");
-      return;
-    }
     setBusy(true);
-    const res = await signUp({ name, agencyName, email, password });
+    setError(await signIn(email, password));
     setBusy(false);
-    if (res.error) setError(res.error);
-    else setNeedsConfirm(res.needsEmailConfirmation);
   }
 
   async function handleGoogle() {
@@ -83,7 +31,6 @@ export default function LoginPage() {
     setError(null);
     setGoogleBusy(true);
     const message = await signInWithGoogle();
-    // Si salió bien el navegador ya está yendo a Google: dejamos el estado de carga.
     if (message) {
       setError(message);
       setGoogleBusy(false);
@@ -95,13 +42,7 @@ export default function LoginPage() {
       <Shell>
         <PendingLink
           email={pendingLinkEmail}
-          needsConfirm={needsConfirm}
-          onBack={() => {
-            dismissPendingLink();
-            setNeedsConfirm(false);
-            setPassword("");
-            setMode("login");
-          }}
+          onBack={dismissPendingLink}
         />
       </Shell>
     );
@@ -136,54 +77,13 @@ export default function LoginPage() {
       )}
 
       <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
-        {isSignup ? "Creá tu cuenta" : "Entrá a PropMatch"}
+        Entrá a PropMatch
       </h2>
       <p className="text-sm mt-1.5" style={{ color: "#7C6A99" }}>
-        {isSignup
-          ? "Empezá a ordenar tu cartera en un minuto."
-          : "Qué bueno verte de nuevo."}
+        Qué bueno verte de nuevo.
       </p>
 
-      {/* Switch de pestañas */}
-      <div
-        role="tablist"
-        aria-label="Acceso"
-        onKeyDown={onTabKey}
-        className="relative grid grid-cols-2 p-1 mt-7 rounded-xl"
-        style={{ background: "#F5F3FF" }}
-      >
-        <span
-          aria-hidden="true"
-          className="absolute top-1 bottom-1 left-1 rounded-lg bg-white"
-          style={{
-            width: "calc(50% - 4px)",
-            transform: isSignup ? "translateX(100%)" : "none",
-            transition: "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-            boxShadow: "0 1px 3px rgba(31,10,60,0.12), 0 0 0 1px #EDE9FE",
-          }}
-        />
-        {(["login", "signup"] as const).map((m) => (
-          <button
-            key={m}
-            ref={(el) => {
-              tabRefs.current[m] = el;
-            }}
-            type="button"
-            role="tab"
-            id={`${uid}-tab-${m}`}
-            aria-selected={mode === m}
-            aria-controls={`${uid}-panel`}
-            tabIndex={mode === m ? 0 : -1}
-            onClick={() => changeMode(m)}
-            className="relative z-10 py-2 text-sm rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
-            style={{ color: mode === m ? "#1F0A3C" : "#7C6A99", fontWeight: 600 }}
-          >
-            {m === "login" ? "Ingresar" : "Crear cuenta"}
-          </button>
-        ))}
-      </div>
-
-      <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${mode}`} className="mt-6">
+      <div className="mt-7 space-y-2.5">
         <button
           type="button"
           onClick={handleGoogle}
@@ -199,7 +99,7 @@ export default function LoginPage() {
           type="button"
           onClick={enterDemo}
           disabled={anyBusy}
-          className="mt-2.5 w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
+          className="w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
           style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700 }}
         >
           Entrar a la demo
@@ -207,120 +107,85 @@ export default function LoginPage() {
             Sin cuenta, con datos de ejemplo
           </span>
         </button>
-
-        <div className="flex items-center gap-3 my-5" aria-hidden="true">
-          <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-          <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
-            o continuá con email
-          </span>
-          <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
-          {isSignup && (
-            <div className="pm-enter space-y-4">
-              <Field label="Nombre completo">
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  autoComplete="name"
-                  placeholder="Tu nombre y apellido"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Nombre de la inmobiliaria">
-                <input
-                  value={agencyName}
-                  onChange={(e) => setAgencyName(e.target.value)}
-                  required
-                  autoComplete="organization"
-                  placeholder="Cómo se llama tu inmobiliaria"
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-          )}
-
-          <Field label="Email">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-              placeholder="vos@inmobiliaria.com"
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Contraseña">
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={isSignup ? 8 : undefined}
-                autoComplete={isSignup ? "new-password" : "current-password"}
-                placeholder={isSignup ? "Mínimo 8 caracteres" : "Tu contraseña"}
-                className={inputClass + " pr-11"}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-                aria-pressed={showPassword}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
-                style={{ color: "#7C6A99" }}
-              >
-                <EyeIcon off={showPassword} />
-              </button>
-            </div>
-            {isSignup && password.length > 0 && <StrengthMeter level={strength} />}
-            {!isSignup && <ForgotPassword email={email} />}
-          </Field>
-
-          {isSignup && (
-            <label className="pm-enter flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={accepted}
-                onChange={(e) => setAccepted(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded flex-shrink-0 cursor-pointer"
-                style={{ accentColor: "#7C3AED" }}
-              />
-              <span className="text-xs leading-relaxed" style={{ color: "#7C6A99" }}>
-                Acepto los términos de uso y la política de privacidad de PropMatch.
-              </span>
-            </label>
-          )}
-
-          {error && (
-            <p
-              role="alert"
-              className="pm-enter text-xs rounded-xl px-3 py-2.5"
-              style={{ background: "#FFF1F2", color: "#E11D48", border: "1px solid #FECDD3" }}
-            >
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={anyBusy}
-            className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD6FE]"
-            style={{
-              background: "var(--gradient-brand)",
-              fontWeight: 600,
-              boxShadow: "var(--shadow-cta)",
-            }}
-          >
-            {busy && <Spinner />}
-            {busy ? "Un momento…" : isSignup ? "Crear cuenta" : "Ingresar"}
-          </button>
-        </form>
       </div>
+
+      <div className="flex items-center gap-3 my-5" aria-hidden="true">
+        <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
+        <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+          o continuá con email
+        </span>
+        <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
+        <Field label="Email">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            placeholder="vos@inmobiliaria.com"
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="Contraseña">
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder="Tu contraseña"
+              className={inputClass + " pr-11"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-pressed={showPassword}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
+              style={{ color: "#7C6A99" }}
+            >
+              <EyeIcon off={showPassword} />
+            </button>
+          </div>
+          <ForgotPassword email={email} />
+        </Field>
+
+        {error && (
+          <p
+            role="alert"
+            className="pm-enter text-xs rounded-xl px-3 py-2.5"
+            style={{ background: "#FFF1F2", color: "#E11D48", border: "1px solid #FECDD3" }}
+          >
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={anyBusy}
+          className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD6FE]"
+          style={{
+            background: "var(--gradient-brand)",
+            fontWeight: 600,
+            boxShadow: "var(--shadow-cta)",
+          }}
+        >
+          {busy && <Spinner />}
+          {busy ? "Un momento…" : "Ingresar"}
+        </button>
+      </form>
+
+      <p className="text-sm mt-6 text-center" style={{ color: "#7C6A99" }}>
+        ¿No tenés cuenta?{" "}
+        <Link to="/registro" style={{ color: "#7C3AED", fontWeight: 600 }}>
+          Crear inmobiliaria gratis →
+        </Link>
+      </p>
     </Shell>
   );
 }
@@ -336,14 +201,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Cuenta creada pero sin inmobiliaria: estado de espera, no un error. */
 function PendingLink({
   email,
-  needsConfirm,
   onBack,
 }: {
   email: string;
-  needsConfirm: boolean;
   onBack: () => void;
 }) {
   return (
@@ -364,17 +226,15 @@ function PendingLink({
       </p>
 
       <ul className="mt-6 space-y-3 text-left">
-        {needsConfirm && (
-          <Step
-            title="Confirmá tu email"
-            text={
-              <>
-                Te mandamos un mensaje a <strong style={{ color: "#1F0A3C" }}>{email}</strong>. Abrilo y
-                tocá el enlace para activar la cuenta.
-              </>
-            }
-          />
-        )}
+        <Step
+          title="Confirmá tu email"
+          text={
+            <>
+              Te mandamos un mensaje a <strong style={{ color: "#1F0A3C" }}>{email}</strong>. Abrilo y
+              tocá el enlace para activar la cuenta.
+            </>
+          }
+        />
         <Step
           title="Ingresá"
           text={
@@ -401,7 +261,6 @@ function PendingLink({
   );
 }
 
-/** Manda el email de "restablecer contraseña"; al volver, `PasswordRecovery` pide la nueva. */
 function ForgotPassword({ email }: { email: string }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error" | "need_email">("idle");
 
@@ -446,11 +305,6 @@ function ForgotPassword({ email }: { email: string }) {
 
 type LinkErrorKind = "expired" | "other";
 
-/**
- * Al volver de un link de email (confirmación de cuenta) con error, Supabase
- * deja `#error=...&error_code=otp_expired` en la URL. Se lee una vez y se
- * limpia la URL para que no quede ahí.
- */
 function readLinkErrorFromUrl(): LinkErrorKind | null {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
   const params = new URLSearchParams(hash);
@@ -561,38 +415,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** 0 = vacía, 1 = débil, 2 = media, 3 = fuerte. Orientativo, no una política. */
-function passwordStrength(pw: string): 0 | 1 | 2 | 3 {
-  if (!pw) return 0;
-  if (pw.length < 8) return 1;
-  let extras = 0;
-  if (pw.length >= 12) extras++;
-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) extras++;
-  if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) extras++;
-  return extras >= 2 ? 3 : 2;
-}
-
-function StrengthMeter({ level }: { level: 0 | 1 | 2 | 3 }) {
-  const labels = ["", "Débil", "Aceptable", "Fuerte"];
-  const colors = ["", "#E11D48", "#D97706", "#16A34A"];
-  return (
-    <div className="mt-2" aria-live="polite">
-      <div className="flex gap-1.5" aria-hidden="true">
-        {[1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="flex-1 h-1 rounded-full transition-colors duration-300"
-            style={{ background: i <= level ? colors[level] : "#EDE9FE" }}
-          />
-        ))}
-      </div>
-      <p className="text-[11px] mt-1" style={{ color: colors[level], fontWeight: 600 }}>
-        Seguridad: {labels[level]}
-      </p>
-    </div>
-  );
-}
-
 function Spinner({ dark = false }: { dark?: boolean }) {
   return (
     <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -612,7 +434,6 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-/** Logo "G" de Google con sus colores de marca, según su guía de botones. */
 function GoogleLogo() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
@@ -626,5 +447,5 @@ function GoogleLogo() {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
-  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#7C6A99] " +
-  "hover:border-[#DDD6FE] focus:border-[#7C3AED] focus:ring-4 focus:ring-[#EDE9FE]";
+  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] " +
+  "focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
