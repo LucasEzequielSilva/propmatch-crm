@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Conectando…</title></head>
+<body>
+<p style="font-family:sans-serif;color:#6B5A8E;padding:2rem">Conectando con Meta…</p>
+<script>
+  var params = new URLSearchParams(location.search);
+  var code = params.get('code');
+  if (window.opener) {
+    window.opener.postMessage({ type: 'META_OAUTH_CODE', code: code || null }, window.location.origin);
+  }
+  window.close();
+</script>
+</body>
+</html>

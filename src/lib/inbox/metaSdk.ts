@@ -170,17 +170,60 @@ export async function launchMessagingLogin(): Promise<string> {
   });
 }
 
-/** Facebook Login for Business con permisos de publicación (Página + Instagram) → code. */
+/**
+ * OAuth estándar de Facebook para publicación (Página + Instagram).
+ * Abre un popup al diálogo de OAuth de Facebook y escucha el code por postMessage
+ * desde la página de callback (/oauth/meta/callback). No requiere config_id.
+ */
 export async function launchPublishLogin(): Promise<string> {
-  const FB = await loadFacebookSdk(metaEnv.appId);
+  if (metaEnv.publishConfigId) {
+    // Si hay config_id configurado, usar el flujo FB.login for Business.
+    const FB = await loadFacebookSdk(metaEnv.appId);
+    return new Promise<string>((resolve, reject) => {
+      FB.login(
+        (r) => {
+          const c = r.authResponse?.code;
+          if (c) resolve(c);
+          else reject(new SignupCancelled("login"));
+        },
+        { config_id: metaEnv.publishConfigId, response_type: "code", override_default_response_type: true },
+      );
+    });
+  }
+
+  // Fallback: popup OAuth estándar (no requiere config_id).
   return new Promise<string>((resolve, reject) => {
-    FB.login(
-      (r) => {
-        const c = r.authResponse?.code;
-        if (c) resolve(c);
-        else reject(new SignupCancelled("login"));
-      },
-      { config_id: metaEnv.publishConfigId, response_type: "code", override_default_response_type: true },
+    const state = crypto.randomUUID();
+    const params = new URLSearchParams({
+      client_id: metaEnv.appId,
+      redirect_uri: `${window.location.origin}/oauth/meta/callback`,
+      scope: "pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish,business_management",
+      response_type: "code",
+      state,
+    });
+    const popup = window.open(
+      `https://www.facebook.com/v25.0/dialog/oauth?${params}`,
+      "meta_publish_login",
+      "width=600,height=700,left=400,top=100",
     );
+    if (!popup) return reject(new SignupCancelled("popup_blocked"));
+
+    function onMessage(ev: MessageEvent) {
+      if (ev.origin !== window.location.origin) return;
+      if (ev.data?.type !== "META_OAUTH_CODE") return;
+      window.removeEventListener("message", onMessage);
+      clearInterval(pollClosed);
+      if (ev.data.code) resolve(ev.data.code);
+      else reject(new SignupCancelled("cancelled"));
+    }
+    window.addEventListener("message", onMessage);
+
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed);
+        window.removeEventListener("message", onMessage);
+        reject(new SignupCancelled("popup_closed"));
+      }
+    }, 500);
   });
 }
