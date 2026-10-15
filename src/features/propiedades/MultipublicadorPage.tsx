@@ -98,7 +98,7 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
 const LILA = "#7458C4";
 const INK = "#1F0A3C";
 
-const CONNECTABLE_CHANNELS = new Set(["mercadolibre", "facebook", "instagram"]);
+const CONNECTABLE_CHANNELS = new Set(["facebook", "instagram"]);
 
 function scrollToId(id: string, focus?: boolean) {
     const el = document.getElementById(id);
@@ -500,6 +500,7 @@ function Metric({ value, label, sub, loading, danger }: { value: number; label: 
 type ChannelCounts = { published: number; paused: number; error: number };
 
 const PORTAL_NOTES: Partial<Record<string, string>> = {
+    mercadolibre: "Certificación de la app en proceso con MercadoLibre.",
     argenprop: "Solicitud de integración enviada · en análisis.",
     zonaprop: "Integración en negociación con el portal.",
     cabaprop: "Integración en gestión con el Colegio.",

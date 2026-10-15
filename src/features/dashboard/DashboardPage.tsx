@@ -45,8 +45,9 @@ const STAGE_BADGE: Record<OpportunityStage, { bg: string; text: string; border: 
 const STAGES: OpportunityStage[] = ["nuevos", "contactados", "visita", "negociacion", "cierre"];
 
 const ROADMAP_FEATURES = [
-  { emoji: "🏠", bg: "#FEF3C7", title: "Zonaprop", desc: "Publicá tus propiedades directo en el portal.", note: "Próximamente" },
-  { emoji: "🏡", bg: "#ECFDF5", title: "Argenprop", desc: "Integración en análisis técnico con el portal.", note: "En negociación" },
+  { emoji: "🟡", bg: "#FEF3C7", title: "Mercado Libre", desc: "Publicá tus propiedades en ML Inmuebles desde el CRM.", note: "En certificación" },
+  { emoji: "🏠", bg: "#ECFDF5", title: "Zonaprop", desc: "Publicá tus propiedades directo en el portal.", note: "Próximamente" },
+  { emoji: "🏡", bg: "#F0F9FF", title: "Argenprop", desc: "Integración en análisis técnico con el portal.", note: "En negociación" },
   { emoji: "🏛️", bg: "#EFF6FF", title: "CABAPROP", desc: "Portal oficial del Colegio de Martilleros de CABA.", note: "Próximamente" },
   { emoji: "💬", bg: "#F0FDF4", title: "WhatsApp Business API", desc: "Enviá campañas automáticas desde tu número oficial.", note: "Próximamente" },
   { emoji: "📅", bg: "#F5F3FF", title: "Google Calendar", desc: "Sincronizá tu agenda de visitas con Google.", note: "Próximamente" },
