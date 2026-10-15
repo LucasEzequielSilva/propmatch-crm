@@ -105,7 +105,11 @@ export default function LoginPage() {
           />
         </Field>
 
-        <Field label="Contraseña">
+        <label className="block">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs" style={{ color: "#7C6A99", fontWeight: 600 }}>Contraseña</span>
+            <ForgotPassword email={email} />
+          </div>
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
@@ -127,8 +131,7 @@ export default function LoginPage() {
               <EyeIcon off={showPassword} />
             </button>
           </div>
-          <ForgotPassword email={email} />
-        </Field>
+        </label>
 
         {error && (
           <p
@@ -252,27 +255,29 @@ function ForgotPassword({ email }: { email: string }) {
   }
 
   return (
-    <div className="mt-1.5 text-xs" aria-live="polite">
+    <div aria-live="polite">
       {state === "sent" ? (
-        <p style={{ color: "#166534", fontWeight: 600 }}>
-          Si {email.trim()} tiene cuenta, te llegó un email para elegir una contraseña nueva. Abrilo una sola vez.
-        </p>
+        <span className="text-xs" style={{ color: "#166534", fontWeight: 600 }}>
+          ¡Listo! Revisá tu casilla.
+        </span>
       ) : (
-        <>
+        <span className="inline-flex flex-col items-end gap-0.5">
           <button
             type="button"
             onClick={send}
             disabled={state === "sending"}
-            className="underline disabled:opacity-60"
-            style={{ color: "#6D28D9", fontWeight: 600 }}
+            className="text-xs underline decoration-dotted underline-offset-2 transition-colors hover:opacity-80 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] rounded"
+            style={{ color: "#7C3AED", fontWeight: 600 }}
           >
             {state === "sending" ? "Enviando…" : "¿Olvidaste tu contraseña?"}
           </button>
-          {state === "need_email" && <span style={{ color: "#E11D48" }}> Escribí tu email arriba primero.</span>}
-          {state === "error" && (
-            <span style={{ color: "#E11D48" }}> No se pudo enviar. Esperá un minuto y probá de nuevo.</span>
+          {state === "need_email" && (
+            <span className="text-xs" style={{ color: "#E11D48" }}>Escribí tu email primero.</span>
           )}
-        </>
+          {state === "error" && (
+            <span className="text-xs" style={{ color: "#E11D48" }}>No se pudo enviar. Intentá de nuevo.</span>
+          )}
+        </span>
       )}
     </div>
   );
