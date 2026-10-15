@@ -44,6 +44,17 @@ const STAGE_BADGE: Record<OpportunityStage, { bg: string; text: string; border: 
 
 const STAGES: OpportunityStage[] = ["nuevos", "contactados", "visita", "negociacion", "cierre"];
 
+const ROADMAP_FEATURES = [
+  { emoji: "🏠", bg: "#FEF3C7", title: "Zonaprop", desc: "Publicá tus propiedades directo en el portal.", note: "Próximamente" },
+  { emoji: "🏡", bg: "#ECFDF5", title: "Argenprop", desc: "Integración en análisis técnico con el portal.", note: "En negociación" },
+  { emoji: "🏛️", bg: "#EFF6FF", title: "CABAPROP", desc: "Portal oficial del Colegio de Martilleros de CABA.", note: "Próximamente" },
+  { emoji: "💬", bg: "#F0FDF4", title: "WhatsApp Business API", desc: "Enviá campañas automáticas desde tu número oficial.", note: "Próximamente" },
+  { emoji: "📅", bg: "#F5F3FF", title: "Google Calendar", desc: "Sincronizá tu agenda de visitas con Google.", note: "Próximamente" },
+  { emoji: "✍️", bg: "#FFF7ED", title: "Firma digital", desc: "Boletos y reservas firmados online desde el CRM.", note: "Próximamente" },
+  { emoji: "📊", bg: "#FDF4FF", title: "Reportes avanzados", desc: "Analytics de rendimiento, conversión y cartera.", note: "Próximamente" },
+  { emoji: "👥", bg: "#F0F9FF", title: "Equipo y roles", desc: "Múltiples asesores con permisos diferenciados.", note: "Próximamente" },
+];
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const {
@@ -527,6 +538,41 @@ export default function DashboardPage() {
             )}
           </>
         )}
+
+        {/* Lo que viene */}
+        <section className="mt-10 pb-2">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>Lo que viene</h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs" style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 700 }}>
+              En desarrollo
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {ROADMAP_FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="flex items-start gap-3 p-4 rounded-2xl border"
+                style={{ borderColor: "#EDE9FE", background: "white" }}
+              >
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                  style={{ background: f.bg, fontSize: 18 }}
+                >
+                  {f.emoji}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>{f.title}</p>
+                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#7C6A99" }}>{f.desc}</p>
+                  {f.note && (
+                    <span className="inline-block mt-1.5 text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 600 }}>
+                      {f.note}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
 
       {writing && (

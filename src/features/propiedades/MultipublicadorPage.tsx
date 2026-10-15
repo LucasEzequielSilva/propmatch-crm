@@ -98,6 +98,8 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
 const LILA = "#7458C4";
 const INK = "#1F0A3C";
 
+const CONNECTABLE_CHANNELS = new Set(["mercadolibre", "facebook", "instagram"]);
+
 function scrollToId(id: string, focus?: boolean) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -289,7 +291,7 @@ export default function MultipublicadorPage() {
                             : "Conectá Mercado Libre, Facebook e Instagram para publicar. El resto de los portales llega pronto."}
                     </p>
                     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
-                        {EXTERNAL_CHANNELS.map(info => (
+                        {EXTERNAL_CHANNELS.filter(info => CONNECTABLE_CHANNELS.has(info.channel)).map(info => (
                             <PlatformCard
                                 key={info.channel}
                                 info={info}
@@ -312,6 +314,16 @@ export default function MultipublicadorPage() {
                                 scrollToId("listado-propiedades");
                             }}
                         />
+                    </div>
+
+                    {/* Portales próximamente */}
+                    <div className="mt-6">
+                        <p className="text-sm mb-3" style={{ color: "#6B5A8E", fontWeight: 600 }}>Próximamente</p>
+                        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
+                            {EXTERNAL_CHANNELS.filter(info => !CONNECTABLE_CHANNELS.has(info.channel)).map(info => (
+                                <ComingSoonPortalCard key={info.channel} info={info} />
+                            ))}
+                        </div>
                     </div>
                 </section>
 
@@ -486,6 +498,47 @@ function Metric({ value, label, sub, loading, danger }: { value: number; label: 
 }
 
 type ChannelCounts = { published: number; paused: number; error: number };
+
+const PORTAL_NOTES: Partial<Record<string, string>> = {
+    argenprop: "Solicitud de integración enviada · en análisis.",
+    zonaprop: "Integración en negociación con el portal.",
+    cabaprop: "Integración en gestión con el Colegio.",
+};
+
+function ComingSoonPortalCard({ info }: { info: ChannelInfo }) {
+    const guide = INTEGRATION_GUIDES[info.channel];
+    const logoText = info.color === "#FFE600" ? "#1F2937" : "white";
+    return (
+        <Card padded>
+            <div className="flex items-start gap-3">
+                <span
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 text-sm opacity-70"
+                    style={{ background: info.color, color: logoText, fontWeight: 800 }}
+                    aria-hidden="true"
+                >
+                    {info.short}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-sm" style={{ color: INK, fontWeight: 700 }}>{info.name}</h3>
+                    <p className="text-xs mt-0.5" style={{ color: "#6B5A8E" }}>{guide.tagline}</p>
+                </div>
+            </div>
+            <div className="mt-3">
+                <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs"
+                    style={{ background: "#F5F3FF", color: "#7C3AED", fontWeight: 700 }}
+                >
+                    <span style={{ fontSize: 10 }}>⏳</span> Próximamente
+                </span>
+            </div>
+            {PORTAL_NOTES[info.channel] && (
+                <p className="text-xs mt-2" style={{ color: "#9CA3AF" }}>
+                    {PORTAL_NOTES[info.channel]}
+                </p>
+            )}
+        </Card>
+    );
+}
 
 function PlatformCard({
     info,
