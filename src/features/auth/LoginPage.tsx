@@ -5,36 +5,22 @@ import { supabase } from "@/lib/supabase";
 import BrandPanel, { LogoMark } from "./BrandPanel";
 
 export default function LoginPage() {
-  const { signIn, signInWithGoogle, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
+  const { signIn, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
   const [linkError, setLinkError] = useState<LinkErrorKind | null>(readLinkErrorFromUrl);
-
-  const anyBusy = busy || googleBusy;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (anyBusy) return;
+    if (busy) return;
     setError(null);
     setBusy(true);
     setError(await signIn(email, password));
     setBusy(false);
-  }
-
-  async function handleGoogle() {
-    if (anyBusy) return;
-    setError(null);
-    setGoogleBusy(true);
-    const message = await signInWithGoogle();
-    if (message) {
-      setError(message);
-      setGoogleBusy(false);
-    }
   }
 
   if (pendingLinkEmail !== null) {
@@ -83,22 +69,11 @@ export default function LoginPage() {
         Qué bueno verte de nuevo.
       </p>
 
-      <div className="mt-7 space-y-2.5">
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={anyBusy}
-          className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl text-sm bg-white border transition-all hover:bg-[#F8F9FA] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
-          style={{ borderColor: "#DADCE0", color: "#3C4043", fontWeight: 500 }}
-        >
-          {googleBusy ? <Spinner dark /> : <GoogleLogo />}
-          Continuar con Google
-        </button>
-
+      <div className="mt-7">
         <button
           type="button"
           onClick={enterDemo}
-          disabled={anyBusy}
+          disabled={busy}
           className="w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
           style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700 }}
         >
@@ -167,7 +142,7 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={anyBusy}
+          disabled={busy}
           className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD6FE]"
           style={{
             background: "var(--gradient-brand)",
@@ -430,17 +405,6 @@ function EyeIcon({ off }: { off: boolean }) {
       <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
       <circle cx="12" cy="12" r="3" />
       {off && <path d="M4 4l16 16" />}
-    </svg>
-  );
-}
-
-function GoogleLogo() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
     </svg>
   );
 }
