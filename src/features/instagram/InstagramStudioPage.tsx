@@ -96,7 +96,7 @@ function MonthCalendar({ posts, selected, onSelect }: { posts: InstagramPost[]; 
 
 export default function InstagramStudioPage() {
   const navigate = useNavigate();
-  const { removeEvent } = useStore();
+  const { removeEvent, isDemo } = useStore();
   const posts = usePosts();
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("fecha-asc");
@@ -165,9 +165,11 @@ export default function InstagramStudioPage() {
     <>
       <AppHeader title="Instagram" subtitle="Armá carruseles, fotos, stories y reels, programá el recordatorio y publicá." breadcrumb={["Publicaciones", "Instagram"]} action={{ label: "Nueva publicación", onClick: () => navigate("/instagram/nueva") }} />
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-10">
-        <p className="mt-4 text-xs" style={{ color: "#6B5A8A" }}>
-          Tus publicaciones se guardan en este navegador (no en un servidor): si borrás los datos del sitio o abrís PropMatch en otro equipo, no van a estar.
-        </p>
+        {!isDemo && (
+          <p className="mt-4 text-xs" style={{ color: "#6B5A8A" }}>
+            Tus publicaciones se guardan en este navegador (no en un servidor): si borrás los datos del sitio o abrís PropMatch en otro equipo, no van a estar.
+          </p>
+        )}
         <p role="status" aria-live="polite" className={notice ? "mt-3 text-sm px-4 py-2 rounded-xl" : "sr-only"} style={{ background: "#F0FDF4", color: "#15803D" }}>{notice}</p>
 
         {posts.length === 0 ? (

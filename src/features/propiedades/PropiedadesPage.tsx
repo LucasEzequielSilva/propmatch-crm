@@ -54,7 +54,7 @@ const ROOM_OPTIONS = [
 
 export default function PropiedadesPage() {
   const navigate = useNavigate();
-  const { properties, matches, coverPhoto, updateProperty, agency } = useStore();
+  const { properties, matches, coverPhoto, updateProperty, agency, isDemo } = useStore();
 
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -128,11 +128,12 @@ export default function PropiedadesPage() {
             style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
           />
         )}
-        {/* Sin cuenta vinculada (o sin ser admin) se ve deshabilitado, con el motivo. */}
-        <PublishAllToAppButton
-          className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
-          style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
-        />
+        {!isDemo && (
+          <PublishAllToAppButton
+            className="px-4 py-2.5 rounded-xl text-sm border transition-all hover:bg-violet-50 whitespace-nowrap"
+            style={{ borderColor: "#EDE9FE", color: "#7C3AED", fontWeight: 600, background: "white" }}
+          />
+        )}
       </AppHeader>
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 pb-8">
