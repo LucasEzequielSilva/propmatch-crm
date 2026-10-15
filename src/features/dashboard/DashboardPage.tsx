@@ -49,6 +49,8 @@ const ROADMAP_FEATURES = [
   { emoji: "🏠", bg: "#ECFDF5", title: "Zonaprop", desc: "Publicá tus propiedades directo en el portal.", note: "Próximamente" },
   { emoji: "🏡", bg: "#F0F9FF", title: "Argenprop", desc: "Integración en análisis técnico con el portal.", note: "En negociación" },
   { emoji: "🏛️", bg: "#EFF6FF", title: "CABAPROP", desc: "Portal oficial del Colegio de Martilleros de CABA.", note: "Próximamente" },
+  { emoji: "📘", bg: "#EFF6FF", title: "Facebook", desc: "Publicá propiedades en tu página de Facebook.", note: "App Review pendiente" },
+  { emoji: "📸", bg: "#FDF4FF", title: "Instagram", desc: "Publicá propiedades en tu cuenta de Instagram.", note: "App Review pendiente" },
   { emoji: "💬", bg: "#F0FDF4", title: "WhatsApp Business API", desc: "Enviá campañas automáticas desde tu número oficial.", note: "Próximamente" },
   { emoji: "📅", bg: "#F5F3FF", title: "Google Calendar", desc: "Sincronizá tu agenda de visitas con Google.", note: "Próximamente" },
   { emoji: "✍️", bg: "#FFF7ED", title: "Firma digital", desc: "Boletos y reservas firmados online desde el CRM.", note: "Próximamente" },

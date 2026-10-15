@@ -98,7 +98,7 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
 const LILA = "#7458C4";
 const INK = "#1F0A3C";
 
-const CONNECTABLE_CHANNELS = new Set(["facebook", "instagram"]);
+const CONNECTABLE_CHANNELS = new Set<string>([]);
 
 function scrollToId(id: string, focus?: boolean) {
     const el = document.getElementById(id);
@@ -286,9 +286,7 @@ export default function MultipublicadorPage() {
                         </Link>
                     </div>
                     <p className="text-sm mt-1 mb-4" style={{ color: "#6B5A8E" }}>
-                        {meli.connected || meta.connected
-                            ? "Publicá desde la tarjeta de cada plataforma conectada o desde cada propiedad."
-                            : "Conectá Mercado Libre, Facebook e Instagram para publicar. El resto de los portales llega pronto."}
+                        Publicá tus propiedades en múltiples portales desde un solo lugar. Las integraciones están en proceso de certificación y aprobación.
                     </p>
                     <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start">
                         {EXTERNAL_CHANNELS.filter(info => CONNECTABLE_CHANNELS.has(info.channel)).map(info => (
@@ -504,6 +502,8 @@ const PORTAL_NOTES: Partial<Record<string, string>> = {
     argenprop: "Solicitud de integración enviada · en análisis.",
     zonaprop: "Integración en negociación con el portal.",
     cabaprop: "Integración en gestión con el Colegio.",
+    facebook: "App Review de Meta pendiente de aprobación.",
+    instagram: "App Review de Meta pendiente de aprobación.",
 };
 
 function ComingSoonPortalCard({ info }: { info: ChannelInfo }) {
