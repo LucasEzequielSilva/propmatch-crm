@@ -237,6 +237,9 @@ export default function CampaignEditorPage() {
                 )}
               </Card>
 
+              {c.channel === "whatsapp" && template && audience && audience.eligible.length > 0 && (
+                <WaManualLinks audience={audience} template={template as WhatsAppTemplate} />
+              )}
               {live && <RecipientsLog recipients={recipients} channel={c.channel} />}
             </div>
 
@@ -380,6 +383,121 @@ function WaPreview({ t, contactId }: { t: WhatsAppTemplate; contactId: string })
       )}
       {r.missing.length > 0 && <p className="text-xs mt-2" style={{ color: "#B45309" }}>Faltan datos para {r.missing.join(", ")}: a este contacto le va a fallar.</p>}
     </div>
+  );
+}
+
+function WaManualLinks({
+  audience,
+  template,
+}: {
+  audience: NonNullable<ReturnType<typeof evaluateSegment>>;
+  template: WhatsAppTemplate;
+}) {
+  const { store, renderData } = useMarketingCtx();
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState<Set<string>>(() => new Set());
+
+  const links = useMemo(
+    () =>
+      audience.eligible.map((contact) => {
+        const r = renderWhatsApp(template, contact, renderData);
+        const digits = (contact.phone ?? "").replace(/\D/g, "");
+        const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(r.preview)}` : null;
+        return { contact, preview: r.preview, url, missing: r.missing };
+      }),
+    [audience.eligible, template, renderData],
+  );
+
+  const total = links.length;
+  const done = links.filter((l) => sent.has(l.contact.id)).length;
+
+  return (
+    <Card padded>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div>
+          <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 700 }}>
+            Enviar manualmente por WhatsApp
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "#7C6A99" }}>
+            Abrí el chat de cada contacto con el mensaje listo — sin servidor ni Meta.
+            {done > 0 && (
+              <span style={{ color: "#059669", fontWeight: 600 }}> {done}/{total} enviados</span>
+            )}
+          </p>
+        </div>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }}
+        >
+          <path d="M3 6l5 5 5-5" stroke="#7C6A99" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-2">
+          {links.map(({ contact, preview, url, missing }) => {
+            const isSent = sent.has(contact.id);
+            return (
+              <div
+                key={contact.id}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 border"
+                style={{
+                  borderColor: isSent ? "#A7F3D0" : "#EDE9FE",
+                  background: isSent ? "#F0FDF4" : "white",
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate" style={{ color: "#1F0A3C", fontWeight: 600 }}>
+                    {contact.full_name}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: "#7C6A99" }}>
+                    {contact.phone ?? "Sin teléfono"}
+                    {missing.length > 0 && (
+                      <span style={{ color: "#B45309" }}> · faltan: {missing.join(", ")}</span>
+                    )}
+                  </p>
+                </div>
+                {url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setSent((s) => new Set([...s, contact.id]))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all hover:opacity-80"
+                    style={{
+                      background: isSent ? "#D1FAE5" : "#25D366",
+                      color: isSent ? "#065F46" : "white",
+                      fontWeight: 600,
+                      textDecoration: "none",
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                      <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.998-1.318A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a7.946 7.946 0 01-4.073-1.115l-.291-.173-3.017.794.808-2.95-.19-.303A7.96 7.96 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z" />
+                    </svg>
+                    {isSent ? "Enviado ✓" : "Abrir chat"}
+                  </a>
+                ) : (
+                  <span className="text-xs px-3 py-1.5 rounded-lg" style={{ background: "#F3F4F6", color: "#9CA3AF" }}>
+                    Sin teléfono
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-xs pt-1" style={{ color: "#9CA3AF" }}>
+            Cada botón abre WhatsApp con el mensaje listo. El progreso se guarda mientras no recargues la página.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }
 
