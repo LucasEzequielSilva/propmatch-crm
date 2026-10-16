@@ -1,3 +1,5 @@
+import { BrandLogo } from "@/components/brand/BrandLogo";
+
 /**
  * Panel de marca del login (solo desktop). La mini-vista del producto es
  * decorativa y abstracta a propósito: sin cifras ni nombres que parezcan datos
@@ -92,15 +94,7 @@ export default function BrandPanel() {
       />
 
       <div className="relative z-10 flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: "rgba(255,255,255,0.2)" }}
-        >
-          <LogoMark />
-        </div>
-        <span className="text-white text-lg tracking-tight" style={{ fontWeight: 800 }}>
-          PropMatch
-        </span>
+        <BrandLogo size={32} light />
       </div>
 
       <div className="relative z-10">

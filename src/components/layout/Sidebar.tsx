@@ -18,6 +18,9 @@ import {
   type IconProps,
 } from "@/components/ui/icons";
 import { MercadoIcon } from "@/features/mercado/MercadoIcon";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import { usePromoGrant } from "@/features/promo/usePromoGrant";
+import { formatPromoDate } from "../../../shared/promo";
 
 interface NavItem {
   to: string;
@@ -48,6 +51,7 @@ export function Sidebar() {
   const pendingMatches = matches.filter((m) => !m.is_reviewed && !m.is_dismissed).length;
   const pendingOffers = appOffers.filter((o) => o.status === "pending").length;
   const unanswered = countUnanswered(useInboxFeed(agency.id));
+  const promo = usePromoGrant();
 
   return (
     <aside
@@ -55,31 +59,22 @@ export function Sidebar() {
       style={{ borderColor: "#E9E5DE", backgroundColor: "#FAF8F5" }}
     >
       {/* Logo */}
-      <div className="px-6 py-6 flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm"
-          style={{ background: "var(--gradient-brand)" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M3 12L12 3L21 12V21H15V15H9V21H3V12Z" fill="white" fillOpacity="0.9" />
-            <circle cx="16" cy="8" r="3" fill="white" fillOpacity="0.7" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <div>
-            <span className="text-lg tracking-tight" style={{ color: "#56148F", fontWeight: 800 }}>
-              Prop
-            </span>
-            <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
-              Match
-            </span>
-          </div>
-          {agency.name && (
-            <p className="text-xs truncate -mt-0.5" style={{ color: "#6B7280" }}>
-              {agency.name}
-            </p>
-          )}
-        </div>
+      <div className="px-6 py-6">
+        <BrandLogo size={28} />
+        {agency.name && (
+          <p className="text-xs truncate mt-1.5" style={{ color: "#6B7280" }}>
+            {agency.name}
+          </p>
+        )}
+        {promo && (
+          <span
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-white"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700 }}
+            title={`Promo de lanzamiento: ${promo.months} meses gratis, hasta el ${formatPromoDate(promo.until)}`}
+          >
+            {promo.plan} · hasta {formatPromoDate(promo.until)}
+          </span>
+        )}
       </div>
 
       {/* Etiqueta de sección */}

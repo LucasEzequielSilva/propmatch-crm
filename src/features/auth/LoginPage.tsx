@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "@/data/store";
 import { supabase } from "@/lib/supabase";
-import BrandPanel, { LogoMark } from "./BrandPanel";
+import BrandPanel from "./BrandPanel";
+import { BrandLogo } from "@/components/brand/BrandLogo";
+import PromoTicket from "@/features/promo/PromoTicket";
+import { LAUNCH_PROMO } from "../../../shared/promo";
 
 export default function LoginPage() {
   const { signIn, pendingLinkEmail, dismissPendingLink, enterDemo } = useStore();
@@ -11,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [busy, setBusy] = useState(false);
   const [linkError, setLinkError] = useState<LinkErrorKind | null>(readLinkErrorFromUrl);
 
@@ -18,6 +22,14 @@ export default function LoginPage() {
     e.preventDefault();
     if (busy) return;
     setError(null);
+    // Validación propia en castellano: antes era la del navegador, en inglés
+    // ("Please fill out this field.").
+    const errs: { email?: string; password?: string } = {};
+    if (!email.trim()) errs.email = "Ingresá tu email.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Ese email no parece válido. Revisalo.";
+    if (!password) errs.password = "Ingresá tu contraseña.";
+    setFieldErrors(errs);
+    if (errs.email || errs.password) return;
     setBusy(true);
     setError(await signIn(email, password));
     setBusy(false);
@@ -36,21 +48,8 @@ export default function LoginPage() {
 
   return (
     <Shell>
-      <div className="lg:hidden flex items-center gap-3 mb-10">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center"
-          style={{ background: "var(--gradient-brand)" }}
-        >
-          <LogoMark size={18} />
-        </div>
-        <div>
-          <span className="text-lg tracking-tight" style={{ color: "#56148F", fontWeight: 800 }}>
-            Prop
-          </span>
-          <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
-            Match
-          </span>
-        </div>
+      <div className="lg:hidden mb-6">
+        <BrandLogo size={30} />
       </div>
 
       {linkError && (
@@ -62,47 +61,47 @@ export default function LoginPage() {
         />
       )}
 
-      <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1A1A1A", fontWeight: 800 }}>
-        Entrá a PropMatch
+      {/* Promo de lanzamiento: el QR del banner del evento trae acá. */}
+      {LAUNCH_PROMO.active && (
+        <>
+          <PromoTicket compact />
+          <Link
+            to="/registro"
+            className="mt-4 w-full py-3.5 rounded-xl text-[15px] text-white transition-all hover:brightness-110 active:scale-[0.99] flex items-center justify-center gap-2"
+            style={{ background: "var(--gradient-brand)", fontWeight: 700, boxShadow: "var(--shadow-cta)" }}
+          >
+            Activar mis {LAUNCH_PROMO.months} meses gratis
+            <span aria-hidden="true">→</span>
+          </Link>
+
+          <div className="flex items-center gap-3 mt-8 mb-5" aria-hidden="true">
+            <span className="flex-1 h-px bg-lilac" />
+            <span className="text-xs text-ink-soft" style={{ fontWeight: 600 }}>
+              ¿Ya tenés cuenta?
+            </span>
+            <span className="flex-1 h-px bg-lilac" />
+          </div>
+        </>
+      )}
+
+      <h2 className="text-[1.4rem] leading-tight tracking-tight text-ink" style={{ fontWeight: 800 }}>
+        Ingresá a tu CRM
       </h2>
-      <p className="text-sm mt-1.5" style={{ color: "#6B7280" }}>
-        Qué bueno verte de nuevo.
-      </p>
+      <p className="text-sm mt-1 mb-5 text-ink-soft">Qué bueno verte de nuevo.</p>
 
-      <div className="mt-7">
-        <button
-          type="button"
-          onClick={enterDemo}
-          disabled={busy}
-          className="w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F7F0FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#E9E5DE] focus-visible:border-[#9B21FF]"
-          style={{ borderColor: "#DDD8CF", color: "#7C0BD8", fontWeight: 700 }}
-        >
-          Entrar a la demo
-          <span className="block text-xs" style={{ color: "#6B7280", fontWeight: 500 }}>
-            Sin cuenta, con datos de ejemplo
-          </span>
-        </button>
-      </div>
-
-      <div className="flex items-center gap-3 my-5" aria-hidden="true">
-        <span className="flex-1 h-px" style={{ background: "#E9E5DE" }} />
-        <span className="text-xs" style={{ color: "#6B7280", fontWeight: 500 }}>
-          o continuá con email
-        </span>
-        <span className="flex-1 h-px" style={{ background: "#E9E5DE" }} />
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <Field label="Email">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
             autoComplete="username"
+            inputMode="email"
             placeholder="vos@inmobiliaria.com"
-            className={inputClass}
+            aria-invalid={fieldErrors.email ? true : undefined}
+            className={inputClass + (fieldErrors.email ? " !border-[#FB7185]" : "")}
           />
+          {fieldErrors.email && <FieldError>{fieldErrors.email}</FieldError>}
         </Field>
 
         <label className="block">
@@ -115,10 +114,10 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
               autoComplete="current-password"
               placeholder="Tu contraseña"
-              className={inputClass + " pr-11"}
+              aria-invalid={fieldErrors.password ? true : undefined}
+              className={inputClass + " pr-11" + (fieldErrors.password ? " !border-[#FB7185]" : "")}
             />
             <button
               type="button"
@@ -131,6 +130,7 @@ export default function LoginPage() {
               <EyeIcon off={showPassword} />
             </button>
           </div>
+          {fieldErrors.password && <FieldError>{fieldErrors.password}</FieldError>}
         </label>
 
         {error && (
@@ -158,11 +158,28 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="text-sm mt-6 text-center" style={{ color: "#6B7280" }}>
-        ¿No tenés cuenta?{" "}
-        <Link to="/registro" style={{ color: "#9B21FF", fontWeight: 600 }}>
-          Crear inmobiliaria gratis →
-        </Link>
+      {!LAUNCH_PROMO.active && (
+        <p className="text-sm mt-6 text-center text-ink-soft">
+          ¿No tenés cuenta?{" "}
+          <Link to="/registro" className="text-violet-ink" style={{ fontWeight: 600 }}>
+            Crear inmobiliaria gratis →
+          </Link>
+        </p>
+      )}
+
+      {/* La demo queda, pero como opción secundaria: antes era el primer botón
+          y competía con registrarse. */}
+      <p className="text-sm mt-6 text-center text-ink-soft">
+        ¿Querés mirarlo primero?{" "}
+        <button
+          type="button"
+          onClick={enterDemo}
+          disabled={busy}
+          className="underline underline-offset-2 text-violet-ink disabled:opacity-60"
+          style={{ fontWeight: 600 }}
+        >
+          Ver la demo
+        </button>
       </p>
     </Shell>
   );
@@ -170,9 +187,9 @@ export default function LoginPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-full flex" style={{ background: "#FAF8F5" }}>
+    <div className="min-h-full flex bg-background">
       <BrandPanel />
-      <div className="flex-1 flex items-center justify-center px-5 py-10 sm:px-8">
+      <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-8 sm:px-8 lg:py-10">
         <div className="w-full max-w-[400px] pm-enter">{children}</div>
       </div>
     </div>
@@ -384,6 +401,14 @@ function Step({ title, text }: { title: string; text: React.ReactNode }) {
   );
 }
 
+function FieldError({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="block mt-1.5 text-xs" style={{ color: "#BE123C" }}>
+      {children}
+    </span>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
@@ -415,6 +440,6 @@ function EyeIcon({ off }: { off: boolean }) {
 }
 
 const inputClass =
-  "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
+  "w-full px-4 py-3 rounded-xl text-base border outline-none transition-all " +
   "border-[#E9E5DE] bg-white text-[#1A1A1A] placeholder:text-[#9CA3AF] " +
   "focus:border-[#BF7FFF] focus:ring-4 focus:ring-[#E9E5DE]";

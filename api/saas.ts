@@ -1,6 +1,7 @@
 import { routeByAction } from "./_lib/router.js";
 import { supabaseAdmin } from "./_lib/supabaseAdmin.js";
 import { allowMethod, json, fail } from "./_lib/http.js";
+import { LAUNCH_PROMO, promoGrant } from "../shared/promo.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 /**
@@ -27,12 +28,16 @@ async function signup(req: VercelRequest, res: VercelResponse) {
 
   const sb = supabaseAdmin();
 
+  // Promo de lanzamiento (6 meses gratis de Premium): queda en la metadata del
+  // usuario para saber quién la activó y hasta cuándo vale. Ver shared/promo.ts.
+  const promo = LAUNCH_PROMO.active ? promoGrant() : null;
+
   // 1. Crear usuario
   const { data: userData, error: userErr } = await sb.auth.admin.createUser({
     email: email.trim().toLowerCase(),
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName.trim() },
+    user_metadata: { full_name: fullName.trim(), ...(promo ? { promo } : {}) },
   });
   if (userErr) {
     if (userErr.message?.toLowerCase().includes("already")) {
@@ -64,7 +69,7 @@ async function signup(req: VercelRequest, res: VercelResponse) {
     return fail(res, 500, "create_member_failed");
   }
 
-  return json(res, 200, { ok: true });
+  return json(res, 200, { ok: true, promo });
 }
 
 export default routeByAction("saas", { signup });
