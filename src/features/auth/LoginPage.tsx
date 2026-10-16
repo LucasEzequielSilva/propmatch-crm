@@ -44,7 +44,7 @@ export default function LoginPage() {
           <LogoMark size={18} />
         </div>
         <div>
-          <span className="text-lg tracking-tight" style={{ color: "#3B0764", fontWeight: 800 }}>
+          <span className="text-lg tracking-tight" style={{ color: "#56148F", fontWeight: 800 }}>
             Prop
           </span>
           <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
@@ -62,10 +62,10 @@ export default function LoginPage() {
         />
       )}
 
-      <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+      <h2 className="text-[1.75rem] leading-tight tracking-tight" style={{ color: "#1A1A1A", fontWeight: 800 }}>
         Entrá a PropMatch
       </h2>
-      <p className="text-sm mt-1.5" style={{ color: "#7C6A99" }}>
+      <p className="text-sm mt-1.5" style={{ color: "#6B7280" }}>
         Qué bueno verte de nuevo.
       </p>
 
@@ -74,22 +74,22 @@ export default function LoginPage() {
           type="button"
           onClick={enterDemo}
           disabled={busy}
-          className="w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F5F3FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
-          style={{ borderColor: "#DDD6FE", color: "#6D28D9", fontWeight: 700 }}
+          className="w-full py-2.5 rounded-xl text-sm border transition-all hover:bg-[#F7F0FF] active:scale-[0.99] disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-[#E9E5DE] focus-visible:border-[#9B21FF]"
+          style={{ borderColor: "#DDD8CF", color: "#7C0BD8", fontWeight: 700 }}
         >
           Entrar a la demo
-          <span className="block text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+          <span className="block text-xs" style={{ color: "#6B7280", fontWeight: 500 }}>
             Sin cuenta, con datos de ejemplo
           </span>
         </button>
       </div>
 
       <div className="flex items-center gap-3 my-5" aria-hidden="true">
-        <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
-        <span className="text-xs" style={{ color: "#7458C4", fontWeight: 500 }}>
+        <span className="flex-1 h-px" style={{ background: "#E9E5DE" }} />
+        <span className="text-xs" style={{ color: "#6B7280", fontWeight: 500 }}>
           o continuá con email
         </span>
-        <span className="flex-1 h-px" style={{ background: "#EDE9FE" }} />
+        <span className="flex-1 h-px" style={{ background: "#E9E5DE" }} />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
@@ -107,7 +107,7 @@ export default function LoginPage() {
 
         <label className="block">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs" style={{ color: "#7C6A99", fontWeight: 600 }}>Contraseña</span>
+            <span className="text-xs" style={{ color: "#6B7280", fontWeight: 600 }}>Contraseña</span>
             <ForgotPassword email={email} />
           </div>
           <div className="relative">
@@ -125,8 +125,8 @@ export default function LoginPage() {
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               aria-pressed={showPassword}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F5F3FF] outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED]"
-              style={{ color: "#7C6A99" }}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F7F0FF] outline-none focus-visible:ring-2 focus-visible:ring-[#9B21FF]"
+              style={{ color: "#6B7280" }}
             >
               <EyeIcon off={showPassword} />
             </button>
@@ -146,7 +146,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={busy}
-          className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD6FE]"
+          className="w-full py-3 rounded-xl text-sm text-white transition-all hover:brightness-110 hover:-translate-y-px active:translate-y-0 active:scale-[0.99] disabled:opacity-60 disabled:hover:translate-y-0 flex items-center justify-center gap-2 outline-none focus-visible:ring-4 focus-visible:ring-[#DDD8CF]"
           style={{
             background: "var(--gradient-brand)",
             fontWeight: 600,
@@ -158,9 +158,9 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <p className="text-sm mt-6 text-center" style={{ color: "#7C6A99" }}>
+      <p className="text-sm mt-6 text-center" style={{ color: "#6B7280" }}>
         ¿No tenés cuenta?{" "}
-        <Link to="/registro" style={{ color: "#7C3AED", fontWeight: 600 }}>
+        <Link to="/registro" style={{ color: "#9B21FF", fontWeight: 600 }}>
           Crear inmobiliaria gratis →
         </Link>
       </p>
@@ -170,7 +170,7 @@ export default function LoginPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-full flex" style={{ background: "#FDFCFF" }}>
+    <div className="min-h-full flex" style={{ background: "#FAF8F5" }}>
       <BrandPanel />
       <div className="flex-1 flex items-center justify-center px-5 py-10 sm:px-8">
         <div className="w-full max-w-[400px] pm-enter">{children}</div>
@@ -196,10 +196,10 @@ function PendingLink({
           <path d="M5 12.5l4.5 4.5L19 7.5" stroke="white" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-      <h2 className="text-[1.75rem] leading-tight tracking-tight mt-6" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+      <h2 className="text-[1.75rem] leading-tight tracking-tight mt-6" style={{ color: "#1A1A1A", fontWeight: 800 }}>
         Cuenta creada
       </h2>
-      <p className="text-sm mt-2 leading-relaxed" style={{ color: "#7C6A99" }}>
+      <p className="text-sm mt-2 leading-relaxed" style={{ color: "#6B7280" }}>
         Confirmá tu email y ya podés ingresar.
       </p>
 
@@ -208,7 +208,7 @@ function PendingLink({
           title="Confirmá tu email"
           text={
             <>
-              Te mandamos un mensaje a <strong style={{ color: "#1F0A3C" }}>{email}</strong>. Abrilo y
+              Te mandamos un mensaje a <strong style={{ color: "#1A1A1A" }}>{email}</strong>. Abrilo y
               tocá el enlace para activar la cuenta.
             </>
           }
@@ -218,7 +218,7 @@ function PendingLink({
           text={
             email ? (
               <>
-                Volvé al inicio y entrá con <strong style={{ color: "#1F0A3C" }}>{email}</strong>.
+                Volvé al inicio y entrá con <strong style={{ color: "#1A1A1A" }}>{email}</strong>.
               </>
             ) : (
               "Volvé al inicio y entrá con tu cuenta."
@@ -230,8 +230,8 @@ function PendingLink({
       <button
         type="button"
         onClick={onBack}
-        className="mt-8 w-full py-3 rounded-xl text-sm border bg-white transition-all hover:bg-[#F5F3FF] active:scale-[0.99] outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE] focus-visible:border-[#7C3AED]"
-        style={{ borderColor: "#EDE9FE", color: "#3B0764", fontWeight: 600 }}
+        className="mt-8 w-full py-3 rounded-xl text-sm border bg-white transition-all hover:bg-[#F7F0FF] active:scale-[0.99] outline-none focus-visible:ring-4 focus-visible:ring-[#E9E5DE] focus-visible:border-[#9B21FF]"
+        style={{ borderColor: "#E9E5DE", color: "#56148F", fontWeight: 600 }}
       >
         Volver al inicio
       </button>
@@ -266,8 +266,8 @@ function ForgotPassword({ email }: { email: string }) {
             type="button"
             onClick={send}
             disabled={state === "sending"}
-            className="text-xs underline decoration-dotted underline-offset-2 transition-colors hover:opacity-80 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#7C3AED] rounded"
-            style={{ color: "#7C3AED", fontWeight: 600 }}
+            className="text-xs underline decoration-dotted underline-offset-2 transition-colors hover:opacity-80 disabled:opacity-50 outline-none focus-visible:ring-2 focus-visible:ring-[#9B21FF] rounded"
+            style={{ color: "#9B21FF", fontWeight: 600 }}
           >
             {state === "sending" ? "Enviando…" : "¿Olvidaste tu contraseña?"}
           </button>
@@ -343,7 +343,7 @@ function LinkErrorNotice({
             value={email}
             onChange={(e) => onEmailChange(e.target.value)}
             placeholder="tu@email.com"
-            className="flex-1 min-h-11 px-3 rounded-xl text-sm border bg-white outline-none focus-visible:ring-4 focus-visible:ring-[#EDE9FE]"
+            className="flex-1 min-h-11 px-3 rounded-xl text-sm border bg-white outline-none focus-visible:ring-4 focus-visible:ring-[#E9E5DE]"
             style={{ borderColor: "#FDE68A" }}
           />
           <button
@@ -370,15 +370,15 @@ function LinkErrorNotice({
 
 function Step({ title, text }: { title: string; text: React.ReactNode }) {
   return (
-    <li className="flex gap-3 rounded-xl p-3.5" style={{ background: "#F5F3FF" }}>
+    <li className="flex gap-3 rounded-xl p-3.5" style={{ background: "#F7F0FF" }}>
       <span
         className="mt-1 w-2 h-2 rounded-full flex-shrink-0"
         style={{ background: "var(--gradient-brand)" }}
         aria-hidden="true"
       />
       <div>
-        <p className="text-sm" style={{ color: "#1F0A3C", fontWeight: 600 }}>{title}</p>
-        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#7C6A99" }}>{text}</p>
+        <p className="text-sm" style={{ color: "#1A1A1A", fontWeight: 600 }}>{title}</p>
+        <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#6B7280" }}>{text}</p>
       </div>
     </li>
   );
@@ -387,7 +387,7 @@ function Step({ title, text }: { title: string; text: React.ReactNode }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+      <span className="block text-xs mb-1.5" style={{ color: "#6B7280", fontWeight: 600 }}>
         {label}
       </span>
       {children}
@@ -399,7 +399,7 @@ function Spinner({ dark = false }: { dark?: boolean }) {
   return (
     <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="9" stroke={dark ? "#DADCE0" : "rgba(255,255,255,0.35)"} strokeWidth="3" />
-      <path d="M21 12a9 9 0 0 0-9-9" stroke={dark ? "#7C3AED" : "white"} strokeWidth="3" strokeLinecap="round" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke={dark ? "#9B21FF" : "white"} strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -416,5 +416,5 @@ function EyeIcon({ off }: { off: boolean }) {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
-  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] " +
-  "focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "border-[#E9E5DE] bg-white text-[#1A1A1A] placeholder:text-[#9CA3AF] " +
+  "focus:border-[#BF7FFF] focus:ring-4 focus:ring-[#E9E5DE]";

@@ -39,7 +39,7 @@ export default function RegistroPage() {
   }
 
   return (
-    <div className="min-h-full flex" style={{ background: "#FDFCFF" }}>
+    <div className="min-h-full flex" style={{ background: "#FAF8F5" }}>
       {/* Panel de marca */}
       <div
         className="hidden lg:flex w-[46%] flex-col justify-between p-12 relative overflow-hidden"
@@ -93,7 +93,7 @@ export default function RegistroPage() {
               </svg>
             </div>
             <div>
-              <span className="text-lg tracking-tight" style={{ color: "#3B0764", fontWeight: 800 }}>Prop</span>
+              <span className="text-lg tracking-tight" style={{ color: "#56148F", fontWeight: 800 }}>Prop</span>
               <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>Match</span>
             </div>
           </div>
@@ -108,8 +108,8 @@ export default function RegistroPage() {
                   <path d="M5 13l4 4L19 7" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h2 className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>¡Listo!</h2>
-              <p className="text-sm mt-2 leading-relaxed" style={{ color: "#7C6A99" }}>
+              <h2 className="text-2xl tracking-tight" style={{ color: "#1A1A1A", fontWeight: 800 }}>¡Listo!</h2>
+              <p className="text-sm mt-2 leading-relaxed" style={{ color: "#6B7280" }}>
                 Tu cuenta está lista. Ya podés ingresar con tu email y contraseña.
               </p>
               <Link
@@ -122,16 +122,16 @@ export default function RegistroPage() {
             </div>
           ) : (
             <>
-              <h2 className="text-2xl tracking-tight" style={{ color: "#1F0A3C", fontWeight: 800 }}>
+              <h2 className="text-2xl tracking-tight" style={{ color: "#1A1A1A", fontWeight: 800 }}>
                 Crear inmobiliaria
               </h2>
-              <p className="text-sm mt-1" style={{ color: "#7C6A99" }}>
+              <p className="text-sm mt-1" style={{ color: "#6B7280" }}>
                 Es gratis para empezar.
               </p>
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 <label className="block">
-                  <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                  <span className="block text-xs mb-1.5" style={{ color: "#6B7280", fontWeight: 600 }}>
                     Nombre de la inmobiliaria
                   </span>
                   <input
@@ -145,7 +145,7 @@ export default function RegistroPage() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                  <span className="block text-xs mb-1.5" style={{ color: "#6B7280", fontWeight: 600 }}>
                     Tu nombre completo
                   </span>
                   <input
@@ -159,7 +159,7 @@ export default function RegistroPage() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                  <span className="block text-xs mb-1.5" style={{ color: "#6B7280", fontWeight: 600 }}>
                     Email
                   </span>
                   <input
@@ -174,7 +174,7 @@ export default function RegistroPage() {
                 </label>
 
                 <label className="block">
-                  <span className="block text-xs mb-1.5" style={{ color: "#7C6A99", fontWeight: 600 }}>
+                  <span className="block text-xs mb-1.5" style={{ color: "#6B7280", fontWeight: 600 }}>
                     Contraseña
                   </span>
                   <input
@@ -218,9 +218,9 @@ export default function RegistroPage() {
                 </button>
               </form>
 
-              <p className="text-sm mt-6 text-center" style={{ color: "#7C6A99" }}>
+              <p className="text-sm mt-6 text-center" style={{ color: "#6B7280" }}>
                 ¿Ya tenés cuenta?{" "}
-                <Link to="/login" style={{ color: "#7C3AED", fontWeight: 600 }}>
+                <Link to="/login" style={{ color: "#9B21FF", fontWeight: 600 }}>
                   Ingresar
                 </Link>
               </p>
@@ -234,5 +234,5 @@ export default function RegistroPage() {
 
 const inputClass =
   "w-full px-4 py-2.5 rounded-xl text-sm border outline-none transition-all " +
-  "border-[#EDE9FE] bg-white text-[#1F0A3C] placeholder:text-[#C4B5FD] " +
-  "focus:border-[#A78BFA] focus:ring-4 focus:ring-[#EDE9FE]";
+  "border-[#E9E5DE] bg-white text-[#1A1A1A] placeholder:text-[#9CA3AF] " +
+  "focus:border-[#BF7FFF] focus:ring-4 focus:ring-[#E9E5DE]";

@@ -52,7 +52,7 @@ export function Sidebar() {
   return (
     <aside
       className="hidden lg:flex w-64 flex-shrink-0 flex-col border-r overflow-y-auto"
-      style={{ borderColor: "#EDE9FE", backgroundColor: "#FDFCFF" }}
+      style={{ borderColor: "#E9E5DE", backgroundColor: "#FAF8F5" }}
     >
       {/* Logo */}
       <div className="px-6 py-6 flex items-center gap-3">
@@ -67,7 +67,7 @@ export function Sidebar() {
         </div>
         <div className="min-w-0">
           <div>
-            <span className="text-lg tracking-tight" style={{ color: "#3B0764", fontWeight: 800 }}>
+            <span className="text-lg tracking-tight" style={{ color: "#56148F", fontWeight: 800 }}>
               Prop
             </span>
             <span className="text-lg tracking-tight text-gradient-brand-h" style={{ fontWeight: 800 }}>
@@ -75,7 +75,7 @@ export function Sidebar() {
             </span>
           </div>
           {agency.name && (
-            <p className="text-xs truncate -mt-0.5" style={{ color: "#7458C4" }}>
+            <p className="text-xs truncate -mt-0.5" style={{ color: "#6B7280" }}>
               {agency.name}
             </p>
           )}
@@ -86,7 +86,7 @@ export function Sidebar() {
       <div className="px-6 mb-2">
         <span
           className="uppercase"
-          style={{ color: "#7458C4", fontSize: "10px", letterSpacing: "0.12em", fontWeight: 600 }}
+          style={{ color: "#6B7280", fontSize: "10px", letterSpacing: "0.12em", fontWeight: 600 }}
         >
           Menú principal
         </span>
@@ -115,7 +115,7 @@ export function Sidebar() {
                 isActive
                   ? {
                     background: "var(--gradient-nav-active)",
-                    color: "#7C3AED",
+                    color: "#9B21FF",
                     fontWeight: 600,
                   }
                   : { color: "#6B7280", fontWeight: 500 }
@@ -153,13 +153,13 @@ export function Sidebar() {
       </nav>
 
       {/* Pie */}
-      <div className="px-3 pb-4 space-y-0.5 border-t pt-4" style={{ borderColor: "#EDE9FE" }}>
+      <div className="px-3 pb-4 space-y-0.5 border-t pt-4" style={{ borderColor: "#E9E5DE" }}>
         <NavLink
           to="/configuracion"
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150"
           style={({ isActive }) =>
             isActive
-              ? { background: "var(--gradient-nav-active)", color: "#7C3AED", fontWeight: 600 }
+              ? { background: "var(--gradient-nav-active)", color: "#9B21FF", fontWeight: 600 }
               : { color: "#6B7280", fontWeight: 500 }
           }
         >
@@ -202,7 +202,7 @@ export function Sidebar() {
             aria-label="Cerrar sesión"
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-violet-100 flex-shrink-0"
           >
-            <LogoutIcon size={14} color="#C4B5FD" />
+            <LogoutIcon size={14} color="#D4AAFF" />
           </button>
         </div>
       </div>
