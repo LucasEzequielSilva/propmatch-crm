@@ -393,7 +393,7 @@ function WaManualLinks({
   audience: NonNullable<ReturnType<typeof evaluateSegment>>;
   template: WhatsAppTemplate;
 }) {
-  const { store, renderData } = useMarketingCtx();
+  const { renderData } = useMarketingCtx();
   const [open, setOpen] = useState(false);
   const [sent, setSent] = useState<Set<string>>(() => new Set());
 
@@ -442,7 +442,7 @@ function WaManualLinks({
 
       {open && (
         <div className="mt-4 space-y-2">
-          {links.map(({ contact, preview, url, missing }) => {
+          {links.map(({ contact, url, missing }) => {
             const isSent = sent.has(contact.id);
             return (
               <div
