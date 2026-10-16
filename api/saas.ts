@@ -37,7 +37,14 @@ async function signup(req: VercelRequest, res: VercelResponse) {
     email: email.trim().toLowerCase(),
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName.trim(), ...(promo ? { promo } : {}) },
+    // `name` lo lee el trigger handle_new_user de la app (public.users.name);
+    // `agency_name` lo usa el CRM si la cuenta queda sin inmobiliaria.
+    user_metadata: {
+      full_name: fullName.trim(),
+      name: fullName.trim(),
+      agency_name: agencyName.trim(),
+      ...(promo ? { promo } : {}),
+    },
   });
   if (userErr) {
     if (userErr.message?.toLowerCase().includes("already")) {
@@ -50,7 +57,10 @@ async function signup(req: VercelRequest, res: VercelResponse) {
   // 2. Crear agencia
   const { data: agencyData, error: agencyErr } = await sb
     .from("agencies")
-    .insert({ name: agencyName.trim() })
+    // owner_user_id es lo que el CRM usa para tratar la cuenta como vinculada
+    // (store.tsx, applySession). Sin él, cada alta nueva entraba en modo local,
+    // como una demo: sin Proppi, sin publicar en la app, sin inbox.
+    .insert({ name: agencyName.trim(), owner_user_id: userId })
     .select("id")
     .single();
   if (agencyErr || !agencyData) {

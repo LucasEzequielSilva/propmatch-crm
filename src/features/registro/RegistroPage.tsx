@@ -98,7 +98,12 @@ export default function RegistroPage() {
     setEntering(true);
     setEnterError(null);
     // Con sesión, <PublicOnly> redirige solo al Inicio del CRM.
-    const err = await signIn(email, password);
+    let err: string | null = null;
+    try {
+      err = await signIn(email, password);
+    } catch {
+      err = "error";
+    }
     if (err) {
       setEnterError("Tu cuenta quedó creada, pero no pudimos iniciar sesión automáticamente.");
       setEntering(false);
