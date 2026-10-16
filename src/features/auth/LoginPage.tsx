@@ -67,14 +67,14 @@ export default function LoginPage() {
           <PromoTicket compact />
           <Link
             to="/registro"
-            className="mt-4 w-full py-3.5 rounded-xl text-[15px] text-white transition-all hover:brightness-110 active:scale-[0.99] flex items-center justify-center gap-2"
+            className="mt-3 w-full py-3 rounded-xl text-[15px] text-white transition-all hover:brightness-110 active:scale-[0.99] flex items-center justify-center gap-2"
             style={{ background: "var(--gradient-brand)", fontWeight: 700, boxShadow: "var(--shadow-cta)" }}
           >
             Activar mis {LAUNCH_PROMO.months} meses gratis
             <span aria-hidden="true">→</span>
           </Link>
 
-          <div className="flex items-center gap-3 mt-8 mb-5" aria-hidden="true">
+          <div className="flex items-center gap-3 mt-5 mb-4" aria-hidden="true">
             <span className="flex-1 h-px bg-lilac" />
             <span className="text-xs text-ink-soft" style={{ fontWeight: 600 }}>
               ¿Ya tenés cuenta?
@@ -189,7 +189,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-full flex bg-background">
       <BrandPanel />
-      <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-8 sm:px-8 lg:py-10">
+      <div className="flex-1 flex items-start lg:items-center justify-center px-5 py-6 sm:px-8 lg:py-5">
         <div className="w-full max-w-[400px] pm-enter">{children}</div>
       </div>
     </div>
