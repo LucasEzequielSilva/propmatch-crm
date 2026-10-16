@@ -269,7 +269,8 @@ export default function RegistroPage() {
                     <Link to="/login" style={{ color: "#BE123C", fontWeight: 700 }}>
                       Ingresá desde acá
                     </Link>
-                    .
+                    . Si la creaste en la app o la web de PropMatch para buscar dónde vivir, registrá tu
+                    inmobiliaria con otro email.
                   </p>
                 ) : error ? (
                   <p
