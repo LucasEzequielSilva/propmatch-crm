@@ -263,3 +263,16 @@ Antes, Mercado Libre solo publicaba propiedades sincronizadas con la app (la app
 - **Pantallas**: el panel de ML (/publicador/:id), «Publicar en portales» y el selector de plataformas ya no bloquean pesos ni propiedades sin sincronizar (solo ejemplos o cuentas sin inmobiliaria). Facebook e Instagram siguen necesitando la propiedad en la app.
 
 Qué funciona hoy sin aplicar SQL: publicar/actualizar/pausar/reactivar/finalizar en ML propiedades en pesos o solo-CRM e importar avisos, con el vínculo guardado en el navegador de quien lo hizo. Qué requiere la migración: que ese vínculo y el estado del aviso se vean desde otros equipos y que las notificaciones de ML actualicen esas publicaciones.
+
+## 12. Feed XML (stock de la propia inmobiliaria)
+
+No es un crawl del mercado. Cada inmobiliaria pega una URL **https** que ella controla. PropMatch baja ese XML y actualiza **su** stock en el CRM.
+
+- Conexión: `POST /api/integrations/credentials { portal: "feed", url }`, solo admins. La URL se cifra en `access_token_enc` (`auth_method = 'feed'`). En la pantalla se ve solo el dominio. Una misma URL no puede estar en dos inmobiliarias.
+- Lectura: `POST /api/integrations/feed-sync`, solo admins. Anti-SSRF igual que la copia de fotos (https, sin red privada, DNS al conectar, tope 8 MB).
+- Formatos: `<Aviso>` (codigoAviso, tipoDePropiedad, tipoDeOperacion) y `<ad>` / `<property>` (id, property_type, operation_type). Lo que no trae código, título, tipo y operación se saltea.
+- Escritura: `crm_push` en la base del CRM. Id estable `fd_` + hash del código. Misma corrida con el mismo contenido no reescribe. Si el aviso desaparece, la propiedad pasa a **pausada** (`feed_missing`), no se borra. No se tocan propietario ni autorización. Reservada, vendida o alquilada no vuelve a disponible sola. `feed_lock: true` en el registro congela esa ficha.
+- Si el XML trae más de 1500 avisos se trunca y **no se pausa** nada: no vimos el resto.
+- Publicar en portales no ofrece el feed: es solo de entrada.
+- Hace falta la migración `20261125180000_feed_provider.sql` (suma `feed` al check de `provider`). Sin ella, guardar responde el motivo y no escribe.
+

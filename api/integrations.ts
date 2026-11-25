@@ -4,6 +4,7 @@ import { allowMethod, fail, json } from "./_lib/http.js";
 import { routeByAction } from "./_lib/router.js";
 import { supabaseAdmin } from "./_lib/supabaseAdmin.js";
 import { saveArgenpropCredentials } from "./_lib/integrations/adapters/argenprop.js";
+import { runFeedSync, saveFeedUrl } from "./_lib/integrations/adapters/feed.js";
 import { runEngine } from "./_lib/integrations/engine.js";
 import { ADAPTERS, PORTAL_IDS, adapterFor } from "./_lib/integrations/registry.js";
 import { parseReturnTarget } from "./_lib/integrations/returnTo.js";
@@ -24,7 +25,9 @@ import { feedCreate, feedPush, feedRevoke, feedRotate, feedServe, feedStatus } f
  *   GET  list         estado de cada portal para la agencia del usuario (sin secretos)
  *   POST connect      { portal, return? }        solo admins → { url } (OAuth) | { form: true }
  *   POST disconnect   { portal }                 solo admins
- *   POST credentials  { portal: "argenprop", … } solo admins (credenciales emitidas por el portal)
+ *   POST credentials  { portal: "argenprop", credentials } | { portal: "feed", url }
+ *                     solo admins (credenciales del portal, o la URL https del feed)
+ *   POST feed-sync    baja el XML conectado y actualiza el stock de la inmobiliaria (solo admins)
  *   POST check        { propertyId, portals, inputs }  valida por portal
  *   POST publish      { propertyId, portals, inputs }  publica por portal
  *                     (o { crmPropertyId, … } si la propiedad solo vive en el CRM: pesos o sin sincronizar)
@@ -125,6 +128,12 @@ async function credentials(req: VercelRequest, res: VercelResponse) {
     const ctx = await requireAgencyAdmin(req, res);
     if (!ctx) return;
     const b = body(req);
+    if (b.portal === "feed") {
+      const r = await saveFeedUrl(ctx, b.url);
+      if (r.ok) return json(res, 200, { ok: true, host: r.host });
+      const http = r.code === "invalid" ? 422 : r.code === "in_use" || r.code === "disabled" ? 409 : 500;
+      return json(res, http, { error: r.code, message: r.message });
+    }
     if (b.portal !== "argenprop") return fail(res, 400, "unknown_portal");
     const r = await saveArgenpropCredentials(ctx, b.credentials);
     if (r.ok) return json(res, 200, { ok: true });
@@ -271,11 +280,25 @@ async function watermarkPhotosAction(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+async function feedSync(req: VercelRequest, res: VercelResponse) {
+  if (!allowMethod(req, res, "POST")) return;
+  try {
+    const ctx = await requireAgencyAdmin(req, res);
+    if (!ctx) return;
+    const r = await runFeedSync(ctx);
+    if (!r.ok) return json(res, r.http, { error: r.error, message: r.message });
+    json(res, 200, r.data);
+  } catch {
+    fail(res, 500, "server_error");
+  }
+}
+
 export default routeByAction("integrations", {
   list,
   connect,
   disconnect,
   credentials,
+  "feed-sync": feedSync,
   check: engine("check"),
   publish: engine("publish"),
   import: importAction("list"),

@@ -9,7 +9,7 @@
  * "claves técnicas". Sin imports (lo usan también las pruebas).
  */
 
-export type PortalId = "mercadolibre" | "meta" | "argenprop" | "zonaprop";
+export type PortalId = "mercadolibre" | "meta" | "argenprop" | "zonaprop" | "feed";
 export type PortalAuthMethod = "oauth" | "credentials" | "api_key" | "feed";
 export type PortalAvailability = "available" | "needs_approval" | "coming_soon";
 
@@ -100,6 +100,23 @@ export const PORTALS: PortalMeta[] = [
       "Necesitás una cuenta de Zonaprop con un plan de publicación activo.",
       "Cuando esté disponible, vas a pedirle a Zonaprop que habilite la integración con PropMatch y después conectar tu cuenta con un clic.",
     ],
+  },
+  {
+    id: "feed",
+    name: "Feed XML",
+    short: "XML",
+    color: "#111827",
+    ink: "#FFFFFF",
+    description: "Traé a PropMatch los avisos de un XML que ya publica tu inmobiliaria.",
+    authMethod: "feed",
+    channels: ["feed"],
+    availability: "available",
+    help: [
+      "Pegá la dirección https del XML de tu inmobiliaria (el que ya le mandás a un portal, o uno propio).",
+      "Tocá «Traer avisos». Se crean o se actualizan en PropMatch. Si un aviso desaparece del XML, queda pausado: no se borra.",
+      "Solo entran avisos de esa dirección. No lee el mercado de otras inmobiliarias.",
+    ],
+    warning: "Si el aviso cambia en el feed, se actualizan precio, texto y fotos. No se tocan el propietario ni la autorización. Una propiedad reservada, vendida o alquilada no vuelve a disponible sola.",
   },
 ];
 

@@ -5,6 +5,7 @@
  * logos en src/lib/integrations/registry.ts.
  */
 import { ArgenpropAdapter } from "./adapters/argenprop.js";
+import { FeedAdapter } from "./adapters/feed.js";
 import { MercadoLibreAdapter } from "./adapters/mercadolibre.js";
 import { MetaAdapter } from "./adapters/meta.js";
 import { ZonapropAdapter } from "./adapters/zonaprop.js";
@@ -15,6 +16,7 @@ export const ADAPTERS: Record<PortalId, PortalAdapter> = {
   meta: MetaAdapter,
   argenprop: ArgenpropAdapter,
   zonaprop: ZonapropAdapter,
+  feed: FeedAdapter,
 };
 
 export const PORTAL_IDS = Object.keys(ADAPTERS) as PortalId[];

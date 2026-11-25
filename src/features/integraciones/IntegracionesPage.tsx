@@ -18,6 +18,7 @@ import { MetaConnectButton } from "@/features/propiedades/MetaConnectButton";
 import { integrationsApi, type PortalStatus } from "./api";
 import { usePortalConnections } from "./usePortalConnections";
 import { ArgenpropCredentialsForm } from "./ArgenpropCredentialsForm";
+import { FeedSyncButton, FeedUrlForm } from "./FeedUrlForm";
 import { PortalLogo } from "./PortalLogo";
 import { MeliImportButton } from "./MeliImportDialog";
 import { LABEL, stateLabel } from "./labels";
@@ -167,7 +168,7 @@ function PortalCard({
 
   const connect = async () => {
     setError(null);
-    if (p.id === "argenprop") return setForm(true);
+    if (p.id === "argenprop" || p.id === "feed") return setForm(true);
     setBusy(true);
     const r = await integrationsApi.connect(p.id, "integraciones");
     if (!r.ok) {
@@ -184,9 +185,11 @@ function PortalCard({
 
   const disconnect = async () => {
     const text =
-      p.id === "argenprop"
-        ? `¿Desconectar ${p.name}? Borramos las credenciales guardadas. Lo que ya está publicado sigue publicado.`
-        : `¿Desconectar ${p.name}? Lo que ya está publicado sigue publicado, pero no vas a poder publicar ni actualizar desde PropMatch hasta volver a conectar.`;
+      p.id === "feed"
+        ? "¿Desconectar el feed? Dejamos de traer avisos. Los que ya están en el CRM siguen."
+        : p.id === "argenprop"
+          ? `¿Desconectar ${p.name}? Borramos las credenciales guardadas. Lo que ya está publicado sigue publicado.`
+          : `¿Desconectar ${p.name}? Lo que ya está publicado sigue publicado, pero no vas a poder publicar ni actualizar desde PropMatch hasta volver a conectar.`;
     if (!window.confirm(text)) return;
     setError(null);
     setBusy(true);
@@ -224,7 +227,7 @@ function PortalCard({
           {!isMeta && s.connectedAt && s.state !== "not_connected" && (
             <div className="flex gap-1.5"><dt style={{ color: MUTED }}>Conectada el</dt><dd>{fmtDate(s.connectedAt)}</dd></div>
           )}
-          {s.lastError && s.state !== "connected" && (
+          {s.lastError && (s.state !== "connected" || p.id === "feed") && (
             <div className="px-3 py-2 rounded-lg mt-1" style={{ background: "#FFF1F2", color: "#BE123C" }}>
               <dt className="sr-only">Último problema</dt>
               <dd>{s.lastError}</dd>
@@ -292,8 +295,20 @@ function PortalCard({
         />
       )}
 
+      {p.id === "feed" && connected && !reconnect && !loading && canManage && <FeedSyncButton onDone={onChanged} />}
+
       {form && p.id === "argenprop" && (
         <ArgenpropCredentialsForm
+          onCancel={() => setForm(false)}
+          onSaved={async () => {
+            setForm(false);
+            await onChanged();
+          }}
+        />
+      )}
+
+      {form && p.id === "feed" && (
+        <FeedUrlForm
           onCancel={() => setForm(false)}
           onSaved={async () => {
             setForm(false);

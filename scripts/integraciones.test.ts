@@ -266,7 +266,7 @@ test("Argenprop: valida el usuario @api.com y los ids; enmascara la cuenta", () 
 
 test("registro del cliente: un portal por adapter del servidor, sin claves técnicas a la vista", () => {
   const ids = PORTALS.map((p) => p.id).sort();
-  assert.deepEqual(ids, ["argenprop", "mercadolibre", "meta", "zonaprop"]);
+  assert.deepEqual(ids, ["argenprop", "feed", "mercadolibre", "meta", "zonaprop"]);
   for (const p of PORTALS) {
     assert.ok(p.description.length > 20, `${p.id} sin descripción`);
     assert.doesNotMatch(`${p.description} ${p.help.join(" ")}`, /\b(token|client_id|secret|api key)\b/i, `${p.id}: lenguaje técnico`);

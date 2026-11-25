@@ -111,7 +111,7 @@ export function PublishToPortalsDialog({
   const mlIssues = validateMeliListing(ml.listing, publicPhotos).filter((i) => !(mlLive && i.field === "location"));
 
   const publishable = (id: PortalId, s: PortalStatus | null) =>
-    !!s && s.availability.state === "available" && s.state === "connected" && id !== "meta";
+    !!s && s.availability.state === "available" && s.state === "connected" && id !== "meta" && id !== "feed";
   const chosen = selected.filter((id) => publishable(id, statusOf(id)));
   const blocked = chosen.includes("mercadolibre") && !isPublishable(mlIssues);
 
@@ -194,7 +194,7 @@ export function PublishToPortalsDialog({
           )}
 
           <ul className="flex flex-col gap-3">
-            {PORTALS.map((p) => (
+            {PORTALS.filter((p) => p.id !== "feed").map((p) => (
               <PortalRow
                 key={p.id}
                 meta={p}
