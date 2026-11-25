@@ -109,6 +109,13 @@ export const integrationsApi = {
   disconnect: (portal: PortalId) => call<{ ok: true }>("disconnect", { method: "POST", body: { portal } }),
   saveCredentials: (portal: "argenprop", credentials: Record<string, string>) =>
     call<{ ok: true }>("credentials", { method: "POST", body: { portal, credentials } }),
+  saveFeed: (url: string) => call<{ ok: true; host: string }>("credentials", { method: "POST", body: { portal: "feed", url } }),
+  /** Lee el XML conectado y actualiza el stock de la inmobiliaria. Solo admins. */
+  feedSync: () =>
+    call<{ created: number; updated: number; paused: number; unchanged: number; locked: number; skipped: number; truncated: boolean }>("feed-sync", {
+      method: "POST",
+      body: {},
+    }),
   check: (body: EngineBody) => call<{ results: PortalResult[] }>("check", { method: "POST", body }),
   publish: (body: EngineBody) => call<{ results: PortalResult[] }>("publish", { method: "POST", body }),
   /** Una página de avisos de la cuenta de ML conectada (repetir con `next` hasta null). */

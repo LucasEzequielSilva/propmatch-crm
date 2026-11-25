@@ -17,7 +17,7 @@
  * Este archivo es solo tipos (lo importan también las pruebas sin red).
  */
 
-export type PortalId = "mercadolibre" | "meta" | "argenprop" | "zonaprop";
+export type PortalId = "mercadolibre" | "meta" | "argenprop" | "zonaprop" | "feed";
 
 /** Coincide con el check `auth_method` de agency_integrations (migración 20261006120000). */
 export type AuthMethod = "oauth" | "credentials" | "api_key" | "feed";
